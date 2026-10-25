@@ -2,6 +2,8 @@
 	import { T, useStage, useTask, useThrelte } from '@threlte/core';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { Group, PerspectiveCamera, Ray, Vector3 } from 'three';
+	import { ATLAS_SOURCE } from '../avatar/catalog.ts';
+	import type { AvatarProfile } from '../data/local-save.ts';
 	import type { GameBridge } from '../../abi.ts';
 	import { AvatarAnimator, createAvatarInput, readCharacter } from '../animation/avatar-animator.ts';
 	import { AVATAR_LAYOUT, BLOCKY_RIG } from '../animation/joints.ts';
@@ -30,7 +32,7 @@
 		type PlacementArrays,
 		type Quality
 	} from '../render/index.ts';
-	import { disposeModel, loadAvatar } from './avatar.ts';
+	import { loadAvatar, type AvatarInstance } from './avatar.ts';
 	import { loadForest } from './forest.ts';
 	import type { ForestKind } from './forest-layout.ts';
 	import { createGrayboxVisual } from './graybox-visual.ts';
@@ -43,6 +45,7 @@
 		input,
 		level,
 		forestPlacements,
+		avatarProfile,
 		bridge,
 		onHud,
 		onFrame,
@@ -53,6 +56,7 @@
 		input: InputModel;
 		level: Graybox;
 		forestPlacements: PlacementArrays<ForestKind>;
+		avatarProfile: AvatarProfile;
 		bridge: GameBridge;
 		onHud: (state: HudState) => void;
 		onFrame: () => void;
@@ -90,6 +94,18 @@
 	const animationInput = createAvatarInput();
 	let rig: RigBinding | undefined;
 	let avatar: Group | undefined;
+	let avatarInstance: AvatarInstance | undefined;
+	let appearanceGeneration = 0;
+	let currentProfile: AvatarProfile | undefined;
+	export async function setAvatarProfile(profile: AvatarProfile) {
+		if (!avatarInstance) throw new Error('avatar-not-ready');
+		const generation = ++appearanceGeneration;
+		await avatarInstance.appearance.apply(profile);
+		if (generation === appearanceGeneration) {
+			currentProfile = profile;
+			invalidate();
+		}
+	}
 	let ready = $state(false);
 	let hidden = $state(document.hidden);
 	let contextLost = $state(false);
@@ -135,6 +151,10 @@
 			grounded: controller.frame.grounded,
 			checkpoint: controller.checkpoints?.current.id ?? 'start',
 			animation: animator.state,
+			avatarStyle: currentProfile?.style ?? avatarProfile.style,
+			avatarSkin: currentProfile?.kenneySkin ?? avatarProfile.kenneySkin,
+			avatarTextureVersion: avatarInstance?.appearance.texture.version ?? 0,
+			avatarAtlasSource: ATLAS_SOURCE,
 			proxyDraws: proxies.object.children.length,
 			floraDraws: forest?.pools.drawCalls ?? 0,
 			floraInstances: forestPlacements.count,
@@ -190,7 +210,7 @@
 		);
 		if (debug) globalThis.__gameDebug = readDebug;
 		void Promise.all([
-			loadAvatar(abort.signal).then((model) => {
+			loadAvatar(abort.signal, avatarProfile).then((instance) => {
 				if (abort.signal.aborted) {
 					disposeModel(model);
 					return;
@@ -335,7 +355,8 @@
 	);
 	onDestroy(() => {
 		forest?.dispose();
-		if (avatar) disposeModel(avatar);
+		appearanceGeneration++;
+		avatarInstance?.dispose();
 		proxies.dispose();
 		shadows.dispose();
 		budget.dispose();

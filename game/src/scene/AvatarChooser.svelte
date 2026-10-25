@@ -8,12 +8,8 @@
 	} from '../data/local-save.ts';
 	import { ACCENT, RAMPS } from '../style/palette.ts';
 	import HudIcon from './HudIcon.svelte';
+	import type { AvatarPreset } from '../avatar/atlas.ts';
 
-	export interface AvatarPreset {
-		id: string;
-		name: string;
-		colors: AvatarColors;
-	}
 	let {
 		profile,
 		presets,
@@ -24,16 +20,29 @@
 		profile: AvatarProfile;
 		presets: readonly AvatarPreset[];
 		kenneyUrls: Readonly<Record<string, string>>;
-		onapply: (value: AvatarProfile) => void;
+		onapply: (value: AvatarProfile) => Promise<void>;
 		onclose: () => void;
 	} = $props();
 	let draft = $state.raw<AvatarProfile>(untrack(() => ({ ...profile, colors: { ...profile.colors } })));
 	let message = $state('');
+	let busy = $state(false);
+	async function apply() {
+		busy = true;
+		message = '';
+		try {
+			await onapply({ ...draft, colors: { ...draft.colors } });
+		} catch {
+			message = 'Não foi possível trocar o personagem. Tente novamente.';
+		} finally {
+			busy = false;
+		}
+	}
 	const labels: Record<AvatarPart, string> = {
 		skin: 'Pele',
 		hair: 'Cabelo',
 		shirt: 'Camiseta',
-		pants: 'Calça'
+		pants: 'Calça',
+		shoes: 'Sapatos'
 	};
 	const clothing = [
 		...RAMPS.leaf,
@@ -46,7 +55,7 @@
 		ACCENT.ipeRosa
 	];
 	function changeColor(part: AvatarPart, value: string) {
-		if ((part === 'shirt' || part === 'pants') && value.toLowerCase() === ACCENT.gold) {
+		if ((part === 'shirt' || part === 'pants' || part === 'shoes') && value.toLowerCase() === ACCENT.gold) {
 			message = 'O dourado fica reservado aos objetivos da trilha.';
 			return;
 		}
@@ -55,7 +64,7 @@
 	}
 	function selectPreset(preset: AvatarPreset) {
 		message = '';
-		draft = { ...draft, style: 'classic', colors: { ...preset.colors } };
+		draft = { ...draft, style: 'classic', colors: { ...preset.colors }, face: preset.face };
 	}
 	function keydown(event: KeyboardEvent) {
 		event.stopPropagation();
@@ -80,19 +89,23 @@
 	}
 </script>
 
-{#snippet mannequin(colors: AvatarColors)}
+{#snippet mannequin(colors: AvatarColors, face: AvatarProfile['face'])}
 	<svg class="mannequin" viewBox="0 0 64 80" aria-hidden="true">
 		<rect x="22" y="4" width="20" height="21" rx="1" fill={colors.skin} /><path
 			d="M22 4h20v7H22zM22 11h3v4h-3z"
 			fill={colors.hair}
 		/>
-		<path d="M27 15h2v2h-2zm10 0h-2v2h2zM28 20q4 4 8 0" fill="#24382c" stroke="#24382c" stroke-width="1" />
+		<path d="M27 15h2v2h-2zm10 0h-2v2h2z" fill="#24382c" stroke="#24382c" stroke-width="1" />
 		<path d="M16 28h32v24H16z" fill={colors.shirt} /><path
 			d="M7 28h8v25H7zm42 0h8v25h-8z"
 			fill={colors.skin}
 		/>
 		<path d="M17 53h14v24H17zm16 0h14v24H33z" fill={colors.pants} />
-	</svg>
+		<path d={face === 'smile' ? 'M28 20q4 4 8 0' : 'M28 21h8'} fill="none" stroke="#24382c" /><path
+			d="M17 73h14v4H17zm16 0h14v4H33z"
+			fill={colors.shoes}
+		/></svg
+	>
 {/snippet}
 
 <div
@@ -145,12 +158,13 @@
 							type="button"
 							aria-label={preset.name}
 							title={preset.name}
-							aria-pressed={AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
-							onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors)}</button
+							aria-pressed={draft.face === preset.face &&
+								AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
+							onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors, preset.face)}</button
 						>{/each}
 				</div>
 				<div class="custom">
-					<div class="preview">{@render mannequin(draft.colors)}</div>
+					<div class="preview">{@render mannequin(draft.colors, draft.face)}</div>
 					{#each AVATAR_PARTS as part}<label
 							>{labels[part]}<input
 								type="color"
@@ -191,7 +205,8 @@
 			<button type="button" onclick={onclose}>Cancelar</button><button
 				class="apply"
 				type="button"
-				onclick={() => onapply({ ...draft, colors: { ...draft.colors } })}>Usar este personagem</button
+				onclick={apply}
+				disabled={busy}>{busy ? 'Aplicando…' : 'Usar este personagem'}</button
 			>
 		</footer>
 	</div>
@@ -211,6 +226,8 @@
 		box-sizing: border-box;
 	}
 	.panel {
+		touch-action: pan-y;
+		overscroll-behavior: contain;
 		width: min(100%, 52rem);
 		max-height: calc(100dvh - 24px);
 		overflow: auto;
@@ -222,6 +239,10 @@
 	}
 	header,
 	footer {
+		position: sticky;
+		bottom: -16px;
+		background: #173a2b;
+		padding: 12px 0;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -353,6 +374,10 @@
 		color: #f2c94c;
 	}
 	footer {
+		position: sticky;
+		bottom: -16px;
+		background: #173a2b;
+		padding: 12px 0;
 		margin-top: 16px;
 		justify-content: flex-end;
 	}

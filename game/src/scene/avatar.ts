@@ -1,16 +1,9 @@
-import {
-	type Group,
-	type Material,
-	Mesh,
-	MeshLambertMaterial,
-	NearestFilter,
-	SRGBColorSpace,
-	Texture
-} from 'three';
+import { type Group, type Material, Mesh, MeshLambertMaterial, Texture } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import modelUrl from '../assets/models/avatar.glb?url';
-import skinUrl from '../assets/skins/skin-a.webp?url';
+import { createAvatarTexture } from '../avatar/texture.ts';
+import type { AvatarProfile } from '../data/local-save.ts';
 import { ensureVertexColors } from './materials.ts';
 
 /** Own every resource, including ImageBitmaps, so leaving during decoding is safe. */
@@ -48,26 +41,24 @@ export async function loadModel(url: string, signal: AbortSignal): Promise<Group
 	return model;
 }
 
-export async function loadAvatar(signal: AbortSignal): Promise<Group> {
+export interface AvatarInstance {
+	model: Group;
+	appearance: ReturnType<typeof createAvatarTexture>;
+	dispose(): void;
+}
+export async function loadAvatar(signal: AbortSignal, profile: AvatarProfile): Promise<AvatarInstance> {
 	let model: Group | undefined;
-	let bitmap: ImageBitmap | undefined;
+	let appearance: ReturnType<typeof createAvatarTexture> | undefined;
+	let cancel: (() => void) | undefined;
 	try {
 		model = await loadModel(modelUrl, signal);
-		const skin = await fetch(skinUrl, { signal });
-		if (!skin.ok) throw new Error('skin-download');
-		bitmap = await createImageBitmap(await skin.blob(), {
-			imageOrientation: 'none',
-			premultiplyAlpha: 'none'
-		});
+		appearance = createAvatarTexture();
+		const skin = appearance;
+		cancel = () => skin.dispose();
+		signal.addEventListener('abort', cancel, { once: true });
+		await skin.apply(profile);
 		signal.throwIfAborted();
-		const texture = new Texture(bitmap);
-		texture.colorSpace = SRGBColorSpace;
-		texture.flipY = false;
-		texture.magFilter = texture.minFilter = NearestFilter;
-		texture.generateMipmaps = false;
-		texture.needsUpdate = true;
-		const material = new MeshLambertMaterial({ map: texture, flatShading: true, vertexColors: true });
-		// The source embeds a default skin; release it before replacing it.
+		const material = new MeshLambertMaterial({ map: skin.texture, flatShading: true, vertexColors: true });
 		const originals = new Set<Material>();
 		const originalTextures = new Set<Texture>();
 		model.traverse((object) => {
@@ -85,10 +76,21 @@ export async function loadAvatar(signal: AbortSignal): Promise<Group> {
 			if (typeof ImageBitmap !== 'undefined' && old.image instanceof ImageBitmap) old.image.close();
 		}
 		model.scale.setScalar(3 / 2.7);
-		return model;
+		const ownedModel = model;
+		const onAbort = cancel;
+		return {
+			model,
+			appearance: skin,
+			dispose() {
+				signal.removeEventListener('abort', onAbort);
+				skin.dispose();
+				disposeModel(ownedModel);
+			}
+		};
 	} catch (error) {
+		if (cancel) signal.removeEventListener('abort', cancel);
+		appearance?.dispose();
 		if (model) disposeModel(model);
-		bitmap?.close();
 		throw error;
 	}
 }

@@ -5,6 +5,10 @@ export interface GameDebug {
 	triangles: number;
 	dpr: number;
 	quality: string;
+	avatarStyle: string;
+	avatarSkin: string;
+	avatarTextureVersion: number;
+	avatarAtlasSource: string;
 	proxyDraws: number;
 	floraDraws: number;
 	floraInstances: number;
