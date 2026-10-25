@@ -352,7 +352,8 @@
 		}
 
 		.actions .primary {
-			font-size: var(--step-0);
+			padding-inline: 0.5rem;
+			font-size: min(var(--step-0), 9vw);
 		}
 
 		section.closing {
