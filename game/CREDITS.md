@@ -4,7 +4,7 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 
 - **Author:** Kenney Vleugels (https://www.kenney.nl)
 - **License:** CC0 1.0 Universal (http://creativecommons.org/publicdomain/zero/1.0/)
-- **Pipeline script:** `game/scripts/assets.mjs` (`@gltf-transform/cli@4.5.1` + `gltfpack@1.3.0 -cc -kn`)
+- **Pipeline script:** `game/scripts/assets.mjs` (`@gltf-transform/cli@4.5.1` + `gltfpack@1.3.0 -cc -kn -vtf`)
 
 ---
 
@@ -13,7 +13,7 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 | Pack Name | Version | Creation Date (`License.txt`) | License | Official Page URL | Used For |
 |---|---|---|---|---|---|
 | **Blocky Characters** | `2.0` | `10-06-2025 11:19` | CC0 1.0 | https://kenney.nl/assets/blocky-characters | `models/avatar.glb` (`character-a` rig, 6 rigid nodes) and `skins/skin-{a..r}.webp` (18 skins) |
-| **Cube Pets** | `2.0` | `26-03-2026 11:16` | CC0 1.0 | https://kenney.nl/assets/cube-pets | `models/{monkey,tiger,parrot,koala}.glb` and `skins/palette-pets.png` (bases for Atlantic Forest fauna) |
+| **Cube Pets** | `2.0` | `26-03-2026 11:16` | CC0 1.0 | https://kenney.nl/assets/cube-pets | `models/{monkey,tiger,parrot,koala}.glb`, `skins/palette-pets.png`, and 7 Atlantic Forest species palettes (`skins/palette-*.png`) |
 | **Nature Kit** | `2.1` | `29-04-2020 01:02` | CC0 1.0 | https://kenney.nl/assets/nature-kit | `models/kit-flora.glb` (18 merged flora/terrain props: trees, palms, bushes, rocks, logs, grass, seedlings, sign) |
 | **Platformer Kit** | `4.1` | `02-04-2026 11:29` | CC0 1.0 | https://kenney.nl/assets/platformer-kit | `models/kit-props.glb` (`platform`, `platform-ramp`, `platform-fortified`, `block-grass`, `block-grass-large`, `flag`, `coin-gold`) |
 | **Food Kit** | `2.0` | `26-06-2024 01:23` | CC0 1.0 | https://kenney.nl/assets/food-kit | `models/kit-props.glb` (`soda-bottle`, `soda-can`, `soda-can-crushed`, `bag`) |
@@ -25,14 +25,21 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 
 | File | Triangles | Vertices | Raw Bytes | Gzip (`-9`) | Brotli (`-q 11`) | Notes |
 |---|---:|---:|---:|---:|---:|---|
-| `src/assets/models/avatar.glb` | 72 | 143 | 7,332 B | 2,427 B | 2,043 B | 6 rigid nodes (`leg-left`, `leg-right`, `torso`, `arm-left`, `arm-right`, `head`), 0 clips |
-| `src/assets/models/kit-flora.glb` | 2,507 | 4,498 | 46,252 B | 26,524 B | 24,515 B | 18 named flora nodes, 1 shared palette material (`64×4`, `NEAREST`) |
-| `src/assets/models/kit-props.glb` | 1,978 | 2,642 | 40,436 B | 20,813 B | 18,939 B | 18 named obby/trash/cabin nodes, 3 kit palettes (`64×64`, `NEAREST`) |
-| `src/assets/models/koala.glb` | 594 | 464 | 18,624 B | 6,960 B | 6,232 B | Recolor base for sloth; 5 rigid nodes + 5 clips (`idle,walk,run,eat,gesture-positive`) |
-| `src/assets/models/monkey.glb` | 918 | 638 | 22,168 B | 9,285 B | 8,461 B | Recolor base for golden lion tamarin, howler & muriqui; 6 rigid nodes + 5 clips |
-| `src/assets/models/parrot.glb` | 530 | 434 | 21,060 B | 8,333 B | 7,462 B | Base for green-billed toucan & birds; 7 rigid nodes + 5 clips |
-| `src/assets/models/tiger.glb` | 951 | 720 | 22,920 B | 9,771 B | 8,913 B | Recolor base for jaguar; 6 rigid nodes + 5 clips |
+| `src/assets/models/avatar.glb` | 72 | 143 | 7,100 B | 2,326 B | 1,952 B | 6 rigid nodes (`leg-left`, `leg-right`, `torso`, `arm-left`, `arm-right`, `head`), 0 clips |
+| `src/assets/models/kit-flora.glb` | 2,507 | 4,498 | 46,008 B | 26,489 B | 24,286 B | 18 named flora nodes, 1 shared palette material (`64×4`, `NEAREST`) |
+| `src/assets/models/kit-props.glb` | 1,978 | 2,642 | 39,500 B | 20,292 B | 18,509 B | 18 named obby/trash/cabin nodes, 3 kit palettes (`64×64`, `NEAREST`) |
+| `src/assets/models/koala.glb` | 594 | 464 | 18,388 B | 6,840 B | 6,132 B | Recolor base for sloth; 5 rigid nodes + 5 clips (`idle,walk,run,eat,gesture-positive`) |
+| `src/assets/models/monkey.glb` | 918 | 638 | 21,932 B | 9,173 B | 8,376 B | Recolor base for golden lion tamarin, howler & muriqui; 6 rigid nodes + 5 clips |
+| `src/assets/models/parrot.glb` | 530 | 434 | 20,808 B | 8,246 B | 7,395 B | Base for green-billed toucan & birds; 7 rigid nodes + 5 clips |
+| `src/assets/models/tiger.glb` | 951 | 720 | 22,648 B | 9,625 B | 8,805 B | Recolor base for jaguar; 6 rigid nodes + 5 clips |
+| `src/assets/skins/palette-bugio-ruivo.png` | — | — | 369 B | 392 B | 373 B | `64×64` `NEAREST` PNG-8 for *Alouatta guariba clamitans* (adult male) on `monkey.glb` |
+| `src/assets/skins/palette-mico-leao-dourado.png` | — | — | 374 B | 397 B | 378 B | `64×64` `NEAREST` PNG-8 for *Leontopithecus rosalia* on `monkey.glb` |
+| `src/assets/skins/palette-muriqui.png` | — | — | 374 B | 397 B | 378 B | `64×64` `NEAREST` PNG-8 for *Brachyteles arachnoides* on `monkey.glb` |
+| `src/assets/skins/palette-onca-melanica.png` | — | — | 385 B | 408 B | 389 B | `64×64` `NEAREST` PNG-8 for melanistic *Panthera onca* on `tiger.glb` |
+| `src/assets/skins/palette-onca-pintada.png` | — | — | 338 B | 361 B | 342 B | `64×64` `NEAREST` PNG-8 for *Panthera onca* on `tiger.glb` |
 | `src/assets/skins/palette-pets.png` | — | — | 1,194 B | 1,217 B | 1,198 B | `64×64` `NEAREST` PNG-8 base colormap for Cube Pets |
+| `src/assets/skins/palette-preguica-de-coleira.png` | — | — | 331 B | 354 B | 335 B | `64×64` `NEAREST` PNG-8 for *Bradypus torquatus* on `koala.glb` |
+| `src/assets/skins/palette-tucano-de-bico-verde.png` | — | — | 575 B | 598 B | 579 B | `64×64` `NEAREST` PNG-8 for *Ramphastos dicolorus* on `parrot.glb` |
 | `src/assets/skins/skin-a.webp` | — | — | 2,816 B | 2,839 B | 2,817 B | Default avatar skin (`256×256` `NEAREST` lossless WebP) |
 | `src/assets/skins/skin-b.webp` | — | — | 2,080 B | 2,101 B | 2,063 B | Optional skin B (`256×256` lossless WebP) |
 | `src/assets/skins/skin-c.webp` | — | — | 1,710 B | 1,726 B | 1,679 B | Optional skin C (`256×256` lossless WebP) |
@@ -51,5 +58,5 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 | `src/assets/skins/skin-p.webp` | — | — | 2,326 B | 2,349 B | 2,326 B | Optional skin P (`256×256` lossless WebP) |
 | `src/assets/skins/skin-q.webp` | — | — | 2,114 B | 2,137 B | 2,100 B | Optional skin Q (`256×256` lossless WebP) |
 | `src/assets/skins/skin-r.webp` | — | — | 1,842 B | 1,865 B | 1,846 B | Optional skin R (`256×256` lossless WebP) |
-| **Subtotal: Models + Default Skin (`skin-a`)** | **7,550** | **9,539** | **182,802 B** | **88,169 B** | **80,580 B** | Initial pack payload (without the 17 on-demand skins) |
-| **TOTAL (All 26 Files)** | **7,550** | **9,539** | **220,686 B** | **126,395 B** | **118,314 B** | Complete asset directory (`215.5 KiB` raw / `115.5 KiB` br) |
+| **Subtotal: Models + All 8 Palettes + `skin-a`** | **7,550** | **9,539** | **183,140 B** | **89,954 B** | **82,244 B** | Initial pack payload (without the 17 on-demand skins) |
+| **TOTAL (All 33 Files)** | **7,550** | **9,539** | **221,024 B** | **128,180 B** | **119,978 B** | Complete asset directory (`215.8 KiB` raw / `117.2 KiB` br) |
