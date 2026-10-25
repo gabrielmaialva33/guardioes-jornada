@@ -464,7 +464,15 @@ try {
 	result.offlineAtCUsesA = true;
 	console.info('A still opens offline at C');
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
+	const updateButton = page.getByRole('button', { name: 'Baixar versão mais recente', exact: true });
+	const offlineHint = await page.evaluate(() => navigator.onLine);
+	result.offlineNavigatorOnline = offlineHint;
+	console.info(`Offline navigator.onLine: ${offlineHint}; update buttons: ${await updateButton.count()}`);
+	if (!offlineHint) assert.equal(await updateButton.count(), 0);
 	await setOffline(false);
+	await updateButton.waitFor({ state: 'visible' });
+	result.updateVisibleAfterReconnect = true;
 	let arrived: () => void = () => {};
 	const downloading = new Promise<void>((done) => {
 		arrived = done;
