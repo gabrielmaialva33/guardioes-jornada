@@ -17,14 +17,15 @@
 	import { applyToRig, bindRig, type RigBinding } from '../animation/rig.ts';
 	import { applyCameraPose } from '../engine/camera.ts';
 	import { placeObject } from '../engine/character.ts';
-	import { CAMERA_FOV, CAMERA_MAX_DISTANCE, CAMERA_NEAR } from '../engine/constants.ts';
+	import { CAMERA_FOV, CAMERA_NEAR } from '../engine/constants.ts';
 	import type { PlayerController } from '../engine/controller.ts';
 	import { proxyGeometry, type Graybox } from '../engine/graybox.ts';
 	import { attachInput, type InputModel } from '../engine/input.ts';
 	import { disposeModel, loadAvatar } from './avatar.ts';
+	import { horizontalFov, verticalFov } from './projection.ts';
 	import { FrameStats } from './frame-stats.ts';
 	import { ensureVertexColors, paletteMaterial, proxyColor } from './materials.ts';
-	import { LIGHT, RAMPS } from '../style/palette.ts';
+	import { LIGHT, RAMPS, VIEW } from '../style/palette.ts';
 	import type { GameDebug, HudState } from './types.ts';
 
 	let {
@@ -34,7 +35,8 @@
 		level,
 		bridge,
 		onHud,
-		onFrame
+		onFrame,
+		paused
 	}: {
 		wrapper: HTMLElement;
 		controller: PlayerController;
@@ -43,9 +45,10 @@
 		bridge: GameBridge;
 		onHud: (state: HudState) => void;
 		onFrame: () => void;
+		paused: boolean;
 	} = $props();
 	const { renderer, renderStage } = useThrelte();
-	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, 160);
+	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, VIEW.low.far);
 	const visual = new Group();
 	const actor = new Group();
 	const materials = new Map<string, MeshLambertMaterial>();
@@ -96,6 +99,8 @@
 			dpr: renderer.getPixelRatio(),
 			quality: 'low',
 			ready,
+			verticalFov: camera.fov,
+			horizontalFov: horizontalFov(camera.fov, camera.aspect),
 			geometries: renderer.info.memory.geometries,
 			textures: renderer.info.memory.textures,
 			programs: renderer.info.programs?.length ?? 0,
@@ -152,6 +157,12 @@
 		(delta) => {
 			const frameInput = input.sample(delta);
 			lens.aspect = camera.aspect;
+			const fov = verticalFov(camera.aspect);
+			if (camera.fov !== fov) {
+				camera.fov = fov;
+				camera.updateProjectionMatrix();
+			}
+			lens.fov = fov;
 			const frame = controller.update(delta, frameInput, lens);
 			placeObject(actor, frame.position, frame.yaw);
 			applyCameraPose(camera, frame.pose);
@@ -177,7 +188,7 @@
 				}
 			}
 			if (frameInput.actionPressed)
-				notice = 'Explore rampas e troncos. As plataformas amarelas ficam em frente à base.';
+				notice = 'Explore rampas e troncos. As plataformas de madeira ficam em frente à base.';
 			shadowRay.origin.copy(frame.position);
 			shadowRay.origin.y += 0.1;
 			const hit = controller.world.raycast(shadowRay, 12);
@@ -189,7 +200,7 @@
 			stats.add(delta);
 			onFrame();
 		},
-		{ running: () => ready && !hidden }
+		{ running: () => ready && !hidden && !paused }
 	);
 
 	const afterRender = useStage(Symbol('game-statistics'), { after: renderStage });
@@ -227,7 +238,7 @@
 
 <T is={camera} makeDefault />
 
-<T.Fog attach="fog" args={[LIGHT.daylight.horizon, CAMERA_MAX_DISTANCE * 0.3, CAMERA_MAX_DISTANCE]} />
+<T.Fog attach="fog" args={[LIGHT.daylight.horizon, VIEW.low.fogNear, VIEW.low.far]} />
 <T.HemisphereLight
 	intensity={1}
 	color={LIGHT.daylight.hemisphereSky}
