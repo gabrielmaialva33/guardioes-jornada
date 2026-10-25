@@ -47,7 +47,7 @@ export interface RigConfig<J extends string = string> {
 	readonly height?: number;
 }
 
-/** Kenney Blocky Characters 2.0 (character-a … character-r share the rig). */
+/** Kenney Blocky Characters 2.0 (checked on character-a and -b; the 18 skins are textures). */
 export const BLOCKY_RIG: RigConfig<AvatarJoint> = {
 	nodes: {
 		root: 'root',
