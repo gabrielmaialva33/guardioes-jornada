@@ -172,7 +172,11 @@
 	.certificates {
 		display: grid;
 		gap: 2rem;
-		width: min(100% - 2 * var(--gutter), 66rem);
+		/* The gutters also clear a notch or camera cutout when the phone is sideways. */
+		width: min(
+			100% - max(var(--gutter), env(safe-area-inset-left)) - max(var(--gutter), env(safe-area-inset-right)),
+			66rem
+		);
 		margin-inline: auto;
 	}
 	.certificate {
@@ -283,6 +287,8 @@
 		margin: 10mm;
 	}
 	@media print {
+		/* The page's dark background would print as a frame when "background graphics" is on. */
+		:global(html),
 		:global(body) {
 			margin: 0;
 			background: white;

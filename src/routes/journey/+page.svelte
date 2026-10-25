@@ -24,6 +24,16 @@
 
 	const session = $derived(sessions.find(page.url.searchParams.get('id')));
 	const journey = $derived(session ? sessions.journeyOf(session) : null);
+	// Participants read the opening story before joining, so their journey starts
+	// at the first mission and "back" must not undo that.
+	const firstStep = $derived(
+		session?.participant && journey
+			? Math.max(
+					0,
+					journey.steps.findIndex((s) => s.kind !== 'opening')
+				)
+			: 0
+	);
 	const step = $derived(session && journey ? currentStep(session, journey) : null);
 	const progress = $derived(session && journey ? progressOf(session, journey) : { missions: 0, oath: false });
 	const finished = $derived(session && journey ? isFinished(session, journey) : false);
@@ -120,6 +130,7 @@
 	</div>
 
 	<main class="page">
+		<h1 class="visually-hidden">{session.participant ? `Jornada de ${session.participant}` : 'Jornada'}</h1>
 		<div class="panel" role="tabpanel" aria-label="Jornada" hidden={tab !== 'journey'}>
 			<ClassPanel {session} {journey} missions={progress.missions} />
 			{#if step}
@@ -211,7 +222,7 @@
 					class="button quiet back"
 					type="button"
 					onclick={back}
-					disabled={!sessions.ready || (session.step === 0 && !session.revealed)}
+					disabled={!sessions.ready || (session.step <= firstStep && !session.revealed)}
 					aria-label="Voltar uma etapa"
 				>
 					<Icon name="undo" />
@@ -265,17 +276,32 @@
 		font-family: var(--font-story);
 		font-size: var(--step-0);
 		font-weight: 700;
-		white-space: nowrap;
+		/* Two balanced lines on narrow phones instead of running under the buttons. */
+		line-height: 1.1;
+		text-align: center;
+		text-wrap: balance;
 	}
 
 	.tabs {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.25rem;
+		/* Same edges as the cards below: .page's gutters, but this bar paints its own background. */
+		width: calc(
+			min(100%, var(--measure)) - max(var(--gutter), env(safe-area-inset-left)) -
+				max(var(--gutter), env(safe-area-inset-right))
+		);
 		margin-block: 0.25rem 1rem;
 		padding: 0.3rem;
 		border-radius: var(--radius-m);
 		background: var(--surface-sunken);
+	}
+
+	/* Large system text on a phone: three tabs side by side no longer fit, so they stack. */
+	@media (max-width: 19.5em) {
+		.tabs {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 
 	[role='tab'] {
@@ -301,9 +327,19 @@
 	}
 
 	main {
+		/* Height of the fixed action bar: its border, the status strip (2.75rem), the buttons and the inset. */
+		--action-bar: calc(1px + 2.75rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1rem;
-		padding-bottom: 7rem;
+		padding-bottom: calc(var(--action-bar) + 1.25rem);
+	}
+
+	/* Large system text on a phone: the status strip wraps onto a second row. */
+	@media (max-width: 19.5em) {
+		main {
+			--action-bar: calc(1px + 5.5rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
+		}
 	}
 
 	/* All panels stay mounted so a running timer survives a look at the scoreboard. */
@@ -332,12 +368,25 @@
 		inset: auto 0 0;
 		z-index: 5;
 		display: grid;
-		gap: 0.35rem;
-		padding-block: 0.35rem max(0.75rem, env(safe-area-inset-bottom));
+		/* The status strip's 2.75rem row already spaces it from the border and the buttons. */
+		padding-block: 0 max(0.75rem, env(safe-area-inset-bottom));
 		border-top: 1px solid var(--border);
 		background: color-mix(in oklab, var(--bg) 82%, transparent);
 		-webkit-backdrop-filter: blur(12px);
 		backdrop-filter: blur(12px);
+	}
+
+	/* A phone held sideways has little height: status and buttons share one row. */
+	@media (orientation: landscape) and (max-height: 30em) {
+		main {
+			--action-bar: calc(1px + 0.5rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
+		}
+
+		.action-bar {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: center;
+			padding-top: 0.5rem;
+		}
 	}
 
 	.actions {
@@ -467,11 +516,12 @@
 		text-align: left;
 	}
 
+	/* Place, group and points in one row; the points drop to their own line only when they do not fit. */
 	.standings li {
-		display: grid;
-		grid-template-columns: auto 1fr auto;
+		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.25rem 0.75rem;
 		padding: 0.75rem 1rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-s);
@@ -481,8 +531,13 @@
 
 	.standings .name {
 		display: inline-flex;
+		flex: 1 1 auto;
 		align-items: center;
 		gap: 0.6rem;
+	}
+
+	.standings strong {
+		margin-left: auto;
 	}
 
 	.standings .place {

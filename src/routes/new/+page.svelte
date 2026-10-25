@@ -3,7 +3,7 @@
 	then the group. Nothing else is asked: no school, no class.
 -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, pushState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Calling from '#lib/components/Calling.svelte';
@@ -19,21 +19,39 @@
 	const opening = journey.steps.find((s) => s.kind === 'opening');
 
 	// Coming from the home screen, the call has already been read.
-	let stage = $state<Stage>(page.url.searchParams.get('etapa') === 'nome' || !opening ? 'name' : 'calling');
-	let name = $state('');
+	const entry: Stage = page.url.searchParams.get('etapa') === 'nome' || !opening ? 'name' : 'calling';
+	// Every later stage is a history entry (shallow routing): the phone's back
+	// button and the header arrow both return to the previous stage.
+	// The name rides along in the history entry, so a reload on the group stage
+	// keeps it; without a name, the group stage falls back to asking for it.
+	let name = $state(page.state.name ?? '');
+	const trimmed = $derived(name.trim());
+	const stage = $derived<Stage>(
+		page.state.stage === 'group' && !trimmed ? 'name' : (page.state.stage ?? entry)
+	);
+	// The entry stage never takes focus on load; after a change, the new
+	// heading does, so screen readers announce where the person is.
+	let moved = false;
+	const focusHeading = (node: HTMLElement) => {
+		if (moved) node.focus();
+	};
 	let groupIndex = $state<number | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
 
-	const trimmed = $derived(name.trim());
+	function go(next: Stage) {
+		moved = true;
+		pushState('', { stage: next, name: trimmed });
+	}
 
 	function back() {
-		stage = stage === 'group' ? 'name' : 'calling';
+		moved = true;
+		history.back();
 	}
 
 	function toGroup(event: SubmitEvent) {
 		event.preventDefault();
-		if (trimmed) stage = 'group';
+		if (trimmed) go('group');
 	}
 
 	async function start(event: SubmitEvent) {
@@ -65,7 +83,7 @@
 </svelte:head>
 
 <header class="bar page">
-	{#if stage === 'calling' || (stage === 'name' && !opening)}
+	{#if !page.state.stage}
 		<a class="icon-button" href={resolve('/')} aria-label="Voltar para o início"><Icon name="back" /></a>
 	{:else}
 		<button class="icon-button" type="button" aria-label="Voltar" onclick={back}><Icon name="back" /></button>
@@ -76,11 +94,11 @@
 
 <main class="page">
 	{#if stage === 'calling' && opening}
-		<Calling {opening} onaccept={() => (stage = 'name')} />
+		<Calling {opening} onaccept={() => go('name')} />
 	{:else if stage === 'name'}
 		<form class="card step" onsubmit={toGroup}>
 			<div class="emblem" aria-hidden="true"><Icon name="user" weight="duotone" size={40} /></div>
-			<h1>Como devemos te chamar?</h1>
+			<h1 tabindex="-1" {@attach focusHeading}>Como devemos te chamar?</h1>
 			<label for="{uid}-name">Seu nome</label>
 			<input
 				id="{uid}-name"
@@ -99,7 +117,7 @@
 	{:else}
 		<form class="card step" onsubmit={start}>
 			<div class="emblem" aria-hidden="true"><Icon name="users" weight="duotone" size={40} /></div>
-			<h1>Escolha seu grupo</h1>
+			<h1 tabindex="-1" {@attach focusHeading}>Escolha seu grupo</h1>
 			<p class="lead">{trimmed}, cada guardião caminha com um grupo. Qual será o seu?</p>
 			<fieldset>
 				<legend class="visually-hidden">Grupos</legend>
@@ -141,11 +159,15 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
+		/* Two balanced lines on narrow phones instead of pushing the theme button off screen. */
+		min-width: 0;
 		color: var(--accent-strong);
 		font-family: var(--font-story);
 		font-size: var(--step-0);
 		font-weight: 700;
-		white-space: nowrap;
+		line-height: 1.1;
+		text-align: center;
+		text-wrap: balance;
 	}
 
 	main {
@@ -181,6 +203,11 @@
 		text-align: center;
 	}
 
+	/* Focus is moved here by script to announce the stage, not for keyboard use. */
+	h1:focus {
+		outline: none;
+	}
+
 	.lead {
 		color: var(--text-soft);
 		font-size: var(--step-1);
@@ -191,7 +218,9 @@
 		font-weight: 700;
 	}
 
+	/* An explicit width: the default (20 characters at this size) is wider than a 320px phone. */
 	input:not([type='radio']) {
+		width: 100%;
 		min-height: var(--tap);
 		padding: 0 0.875rem;
 		border: 2px solid var(--border);
@@ -218,9 +247,11 @@
 		border: 0;
 	}
 
+	/* With large text the name drops below the mark rather than shrinking to a few letters. */
 	.group {
 		position: relative;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.875rem;
 		padding: 0.875rem 1rem;
@@ -254,6 +285,7 @@
 
 	.group span {
 		display: grid;
+		flex: 1 1 9rem;
 	}
 
 	.group strong {

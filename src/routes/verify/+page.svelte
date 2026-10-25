@@ -6,7 +6,7 @@
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 	import { journeys } from '#lib/content/mata-atlantica.ts';
 	import { formatDate, normalizeCertificateCode } from '#lib/session.ts';
-	import { supabase } from '#lib/supabase/client.ts';
+	import { cloudAvailable, getSupabase } from '#lib/supabase/client.ts';
 	import type { Database, Json } from '#lib/supabase/database.types.ts';
 
 	type Certificate = Database['public']['Functions']['verify_certificate']['Returns'][number];
@@ -18,7 +18,7 @@
 	}
 
 	let input = $state('');
-	let status = $state<Status>(supabase ? 'idle' : 'unavailable');
+	let status = $state<Status>(cloudAvailable ? 'idle' : 'unavailable');
 	let certificate = $state<Certificate | null>(null);
 	let errorMessage = $state('');
 	let request = 0;
@@ -52,7 +52,7 @@
 		const code = normalizeCertificateCode(value);
 		input = code;
 		certificate = null;
-		if (!supabase) {
+		if (!cloudAvailable) {
 			status = 'unavailable';
 			return;
 		}
@@ -70,7 +70,10 @@
 		controller = pending;
 		const timeout = window.setTimeout(() => pending.abort(), 15000);
 		try {
-			const { data, error } = await supabase.rpc('verify_certificate', { code }).abortSignal(pending.signal);
+			const client = await getSupabase();
+			if (current !== request) return;
+			if (!client) throw new Error('Cloud unavailable');
+			const { data, error } = await client.rpc('verify_certificate', { code }).abortSignal(pending.signal);
 			if (current !== request) return;
 			if (error) throw error;
 			certificate = data?.[0] ?? null;
@@ -92,7 +95,7 @@
 		else {
 			cancelRequest();
 			certificate = null;
-			status = !supabase ? 'unavailable' : navigator.onLine ? 'idle' : 'offline';
+			status = !cloudAvailable ? 'unavailable' : navigator.onLine ? 'idle' : 'offline';
 		}
 		return cancelRequest;
 	});
@@ -101,19 +104,19 @@
 		cancelRequest();
 		input = value;
 		certificate = null;
-		status = !supabase ? 'unavailable' : navigator.onLine ? 'idle' : 'offline';
+		status = !cloudAvailable ? 'unavailable' : navigator.onLine ? 'idle' : 'offline';
 	}
 
 	function offline() {
 		cancelRequest();
 		certificate = null;
-		status = supabase ? 'offline' : 'unavailable';
+		status = cloudAvailable ? 'offline' : 'unavailable';
 	}
 
 	function online() {
 		if (status === 'offline') {
 			if (input.trim()) void verify(input);
-			else status = supabase ? 'idle' : 'unavailable';
+			else status = cloudAvailable ? 'idle' : 'unavailable';
 		}
 	}
 </script>
@@ -160,7 +163,7 @@
 			/>
 		</div>
 		<p id="{uid}-hint" class="hint">São 8 caracteres. Não é preciso entrar em uma conta.</p>
-		<button class="button wide" type="submit" disabled={status === 'loading' || !supabase}>
+		<button class="button wide" type="submit" disabled={status === 'loading' || !cloudAvailable}>
 			<Icon name="seal" weight="duotone" size={20} />
 			{status === 'loading' ? 'Verificando…' : 'Verificar certificado'}
 		</button>
@@ -278,15 +281,22 @@
 
 	main {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.25rem;
 		padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
 	}
 
+	/* Emblem beside the text; with large text the text moves below it instead of shrinking. */
 	.intro {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.875rem;
 		color: var(--text-soft);
+	}
+
+	.intro p {
+		flex: 1 1 10rem;
 	}
 
 	.emblem {
@@ -425,7 +435,8 @@
 
 	dl {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+		/* One column when even a single 12rem column does not fit (large text on a phone). */
+		grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
 		gap: 0.75rem;
 		margin: 0;
 		padding: 1rem;

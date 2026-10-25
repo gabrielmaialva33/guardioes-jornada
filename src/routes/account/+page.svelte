@@ -228,13 +228,15 @@
 
 	main {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.25rem;
 		padding-bottom: max(2rem, env(safe-area-inset-bottom));
 	}
 
+	/* Emblem beside the text; with large text the text moves below it instead of shrinking. */
 	.explain {
-		display: grid;
-		grid-template-columns: auto 1fr;
+		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1rem;
 		padding: 1.25rem;
@@ -243,6 +245,7 @@
 	.emblem {
 		display: grid;
 		place-items: center;
+		flex: none;
 		width: 3.75rem;
 		height: 3.75rem;
 		border: 1px solid var(--border);
@@ -254,6 +257,7 @@
 	}
 
 	.lead {
+		flex: 1 1 10rem;
 		color: var(--text-soft);
 	}
 

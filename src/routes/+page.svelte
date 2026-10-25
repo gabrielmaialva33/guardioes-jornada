@@ -42,10 +42,9 @@
 	let deleteOpen = $state(false);
 
 	const opening = mataAtlantica.steps.find((s) => s.kind === 'opening');
-	// First visit: the call to adventure comes before anything else.
-	const firstVisit = $derived(
-		sessions.loaded && sessions.list.length === 0 && sessions.quarantine.length === 0
-	);
+	// First visit: the call to adventure comes before anything else. Checked
+	// across accounts, so a signed-in guardian never sees it while sync starts.
+	const firstVisit = $derived(sessions.loaded && !sessions.error && sessions.empty);
 
 	/** The most recent unfinished journey: one tap to get back into it. */
 	const ongoing = $derived(sessions.list.find((s) => !isFinished(s, sessions.journeyOf(s))) ?? null);
@@ -75,10 +74,6 @@
 	function subtitle(session: Session) {
 		const group = session.groups.find((g) => g.id === session.myGroupId);
 		return group ? `Grupo ${group.name}, ${formatDate(session.date)}` : formatDate(session.date);
-	}
-
-	function groupOf(session: Session) {
-		return session.groups.find((g) => g.id === session.myGroupId) ?? null;
 	}
 
 	function askDelete(session: Session) {
@@ -240,9 +235,21 @@
 	}
 
 	main {
+		/* Height of the fixed status bar below: one 2.75rem row of chips, its border and the inset. */
+		--status-bar: calc(2.75rem + 1px + env(safe-area-inset-bottom));
+		/* Calling's sticky button stops above the status bar instead of under it. */
+		--sticky-bottom: calc(var(--status-bar) + 0.75rem);
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.25rem;
-		padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+		padding-bottom: calc(var(--status-bar) + 1.25rem);
+	}
+
+	/* Large system text on a phone: the two status chips wrap onto a second row. */
+	@media (max-width: 19.5em) {
+		main {
+			--status-bar: calc(5.5rem + 1px + env(safe-area-inset-bottom));
+		}
 	}
 
 	.continue {
@@ -359,10 +366,9 @@
 		color: var(--text);
 	}
 
+	/* The whole name, on as many lines as it needs: two journeys must never look alike. */
 	.text strong {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		text-wrap: pretty;
 	}
 
 	.text span {
@@ -385,7 +391,8 @@
 		position: fixed;
 		inset: auto 0 0;
 		z-index: 5;
-		padding-block: 0.35rem max(0.35rem, env(safe-area-inset-bottom));
+		/* The chips are 2.75rem tall tap targets, so the bar needs no padding of its own. */
+		padding-block: 0 env(safe-area-inset-bottom);
 		border-top: 1px solid var(--border);
 		background: color-mix(in oklab, var(--bg) 85%, transparent);
 		-webkit-backdrop-filter: blur(12px);
