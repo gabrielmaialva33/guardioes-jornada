@@ -1,16 +1,7 @@
 <script lang="ts">
 	import { T, useStage, useTask, useThrelte } from '@threlte/core';
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import {
-		CircleGeometry,
-		Group,
-		Mesh,
-		MeshBasicMaterial,
-		MeshLambertMaterial,
-		PerspectiveCamera,
-		Ray,
-		Vector3
-	} from 'three';
+	import { Group, PerspectiveCamera, Ray, Vector3 } from 'three';
 	import type { GameBridge } from '../../abi.ts';
 	import { AvatarAnimator, createAvatarInput, readCharacter } from '../animation/avatar-animator.ts';
 	import { AVATAR_LAYOUT, BLOCKY_RIG } from '../animation/joints.ts';
@@ -19,13 +10,31 @@
 	import { placeObject } from '../engine/character.ts';
 	import { CAMERA_FOV, CAMERA_NEAR } from '../engine/constants.ts';
 	import type { PlayerController } from '../engine/controller.ts';
-	import { proxyGeometry, type Graybox } from '../engine/graybox.ts';
+	import type { Graybox } from '../engine/graybox.ts';
 	import { attachInput, type InputModel } from '../engine/input.ts';
+	import {
+		BlockGrid,
+		DprGovernor,
+		FrameBudget,
+		QUALITY,
+		ShadowRig,
+		applyFog,
+		createHemisphere,
+		debugSnapshot,
+		dprLimit,
+		fogSettings,
+		lodProfilesFor,
+		pickQuality,
+		readCapabilities,
+		watchContextLoss,
+		type PlacementArrays,
+		type Quality
+	} from '../render/index.ts';
 	import { disposeModel, loadAvatar } from './avatar.ts';
+	import { loadForest } from './forest.ts';
+	import type { ForestKind } from './forest-layout.ts';
+	import { createGrayboxVisual } from './graybox-visual.ts';
 	import { horizontalFov, verticalFov } from './projection.ts';
-	import { FrameStats } from './frame-stats.ts';
-	import { ensureVertexColors, paletteMaterial, proxyColor } from './materials.ts';
-	import { LIGHT, RAMPS, VIEW } from '../style/palette.ts';
 	import type { GameDebug, HudState } from './types.ts';
 
 	let {
@@ -33,6 +42,7 @@
 		controller,
 		input,
 		level,
+		forestPlacements,
 		bridge,
 		onHud,
 		onFrame,
@@ -42,95 +52,145 @@
 		controller: PlayerController;
 		input: InputModel;
 		level: Graybox;
+		forestPlacements: PlacementArrays<ForestKind>;
 		bridge: GameBridge;
 		onHud: (state: HudState) => void;
 		onFrame: () => void;
 		paused: boolean;
 	} = $props();
-	const { renderer, renderStage } = useThrelte();
-	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, VIEW.low.far);
-	const visual = new Group();
-	const actor = new Group();
-	const materials = new Map<string, MeshLambertMaterial>();
-	for (const proxy of untrack(() => level.proxies)) {
-		const color = proxyColor(proxy.name, proxy.kind);
-		let material = materials.get(color);
-		if (!material) {
-			material = paletteMaterial(color);
-			materials.set(color, material);
-		}
-		const geometry = proxyGeometry(proxy);
-		ensureVertexColors(geometry);
-		visual.add(new Mesh(geometry, material));
-	}
-	visual.add(actor);
-	const blob = new Mesh(
-		new CircleGeometry(0.68, 16),
-		new MeshBasicMaterial({ color: RAMPS.leaf[0], transparent: true, opacity: 0.3, depthWrite: false })
+	const { renderer, scene, dpr, mainStage, renderStage, invalidate } = useThrelte();
+	const context = renderer.getContext();
+	const choice = pickQuality(
+		readCapabilities(
+			context instanceof WebGL2RenderingContext ? context : null,
+			navigator,
+			matchMedia('(pointer: coarse)').matches
+		),
+		{ mobileMedium: false }
 	);
-	blob.rotation.x = -Math.PI / 2;
-	visual.add(blob);
-	const shadowRay = new Ray(new Vector3(), new Vector3(0, -1, 0));
+	let quality: Quality = choice.quality;
+	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, fogSettings(quality).far);
+	const visual = new Group();
+	const proxies = untrack(() => createGrayboxVisual(level));
+	const actor = new Group();
+	visual.add(proxies.object, actor, createHemisphere());
+	const shadows = new ShadowRig(renderer, { blobs: 48 });
+	visual.add(shadows.object);
+	shadows.addReceiver(proxies.object);
+	shadows.addCaster(proxies.object, 'static');
+	const avatarBlob = shadows.blobs.add('actor');
+	const grid = BlockGrid.covering(-40, -30, 40, 80);
+	let forest: Awaited<ReturnType<typeof loadForest>> | undefined;
+	const budget = new FrameBudget(renderer, { quality });
+	const preset = QUALITY[quality];
+	const governor = new DprGovernor({ start: preset.dprStart, max: preset.dprMax });
 	const lens = { fov: CAMERA_FOV, aspect: 1, near: CAMERA_NEAR };
+	const shadowRay = new Ray(new Vector3(), new Vector3(0, -1, 0));
 	const animator = new AvatarAnimator();
 	const animationInput = createAvatarInput();
 	let rig: RigBinding | undefined;
 	let avatar: Group | undefined;
 	let ready = $state(false);
 	let hidden = $state(document.hidden);
+	let contextLost = $state(false);
 	let loadError = '';
-	let notice = 'Siga em frente até as plataformas amarelas. Arraste à direita para olhar.';
+	let notice = 'Siga em frente até as plataformas de madeira. Arraste à direita para olhar.';
 	let lastHud = 0;
-	let sampled = { fps: 0, frameP95Ms: 0 };
-	const stats = new FrameStats();
+	let lastYaw = 0;
 	const debug = new URLSearchParams(location.search).has('debug');
 	const motion = matchMedia('(prefers-reduced-motion: reduce)');
-	const oldReset = renderer.info.autoReset;
-	renderer.info.autoReset = false;
-	renderer.info.reset();
-	let lastCalls = 0;
-	let lastTriangles = 0;
+	function fit() {
+		const preset = QUALITY[quality];
+		governor.setLimit(
+			Math.min(
+				preset.dprMax,
+				dprLimit(wrapper.clientWidth, wrapper.clientHeight, devicePixelRatio, preset.maxPixels)
+			)
+		);
+		dpr.set(governor.dpr);
+	}
+	function setQuality(next: Quality) {
+		quality = next;
+		budget.quality = next;
+		applyFog(scene, camera, fogSettings(next));
+		// The CSS sky is a gradient whose horizon matches the fog. Do not replace it with a flat clear colour.
+		scene.background = null;
+		shadows.setTier(next, scene);
+		if (forest) for (const pool of forest.pools.pools.values()) pool.lod = lodProfilesFor(next).tree;
+		governor.reset();
+		budget.reset();
+		fit();
+	}
 	const readDebug = (): GameDebug => {
 		const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
 		return {
-			...sampled,
-			drawCalls: lastCalls,
-			triangles: lastTriangles,
-			dpr: renderer.getPixelRatio(),
-			quality: 'low',
+			...debugSnapshot(),
 			ready,
 			verticalFov: camera.fov,
 			horizontalFov: horizontalFov(camera.fov, camera.aspect),
-			geometries: renderer.info.memory.geometries,
-			textures: renderer.info.memory.textures,
-			programs: renderer.info.programs?.length ?? 0,
 			...(memory ? { heapMB: memory.usedJSHeapSize / 1048576 } : {}),
 			x: controller.frame.position.x,
 			y: controller.frame.position.y,
 			z: controller.frame.position.z,
 			grounded: controller.frame.grounded,
 			checkpoint: controller.checkpoints?.current.id ?? 'start',
-			animation: animator.state
+			animation: animator.state,
+			proxyDraws: proxies.object.children.length,
+			floraDraws: forest?.pools.drawCalls ?? 0,
+			floraInstances: forestPlacements.count,
+			qualityReason: choice.reason,
+			shadowRenders: shadows.renders,
+			fogNear: fogSettings(quality).near,
+			fogFar: camera.far
 		};
 	};
 	onMount(() => {
 		const abort = new AbortController();
+		setQuality(quality);
 		const detach = attachInput(wrapper, input, {
 			wantsPointerLock: () => input.shiftLock || controller.camera.firstPerson
 		});
 		wrapper.focus({ preventScroll: true });
+		const reset = () => {
+			controller.resume();
+			governor.reset();
+			budget.reset();
+			fit();
+		};
+		const resize = new ResizeObserver(reset);
+		resize.observe(wrapper);
 		document.addEventListener(
 			'visibilitychange',
 			() => {
 				hidden = document.hidden;
-				controller.resume();
-				stats.reset();
+				reset();
+			},
+			{ signal: abort.signal }
+		);
+		const stopLoss = watchContextLoss(
+			renderer.domElement,
+			{
+				lost() {
+					contextLost = true;
+					input.releaseAll();
+					notice = 'Recarregando gráficos…';
+				},
+				restored() {
+					shadows.invalidate();
+					reset();
+					contextLost = false;
+					notice = 'Os gráficos estão prontos.';
+					invalidate();
+				},
+				failed() {
+					bridge.exit();
+				}
 			},
 			{ signal: abort.signal }
 		);
 		if (debug) globalThis.__gameDebug = readDebug;
-		void loadAvatar(abort.signal)
-			.then((model) => {
+		void Promise.all([
+			loadAvatar(abort.signal).then((model) => {
 				if (abort.signal.aborted) {
 					disposeModel(model);
 					return;
@@ -138,21 +198,54 @@
 				avatar = model;
 				rig = bindRig(model, AVATAR_LAYOUT, BLOCKY_RIG);
 				actor.add(model);
-				ready = true;
+				shadows.addCaster(actor, 'actor');
+				shadows.addReceiver(actor);
+			}),
+			loadForest(grid, quality, forestPlacements, abort.signal).then((value) => {
+				if (abort.signal.aborted) {
+					value.dispose();
+					return;
+				}
+				forest = value;
+				visual.add(value.pools.object);
+				shadows.addCaster(value.pools.object, 'static');
+				shadows.addReceiver(value.pools.object);
+			})
+		])
+			.then(async () => {
+				if (abort.signal.aborted) return;
+				await renderer.compileAsync(scene, camera);
+				if (!abort.signal.aborted) {
+					ready = true;
+					invalidate();
+				}
 			})
 			.catch(() => {
 				if (!abort.signal.aborted) {
-					loadError = 'Não foi possível abrir o personagem. Saia e tente novamente.';
+					loadError = 'Não foi possível abrir a clareira. Saia e tente novamente.';
 					onHud({ notice: loadError, shiftLock: false, ready: false, debug: debug ? readDebug() : null });
 				}
 			});
 		return () => {
 			abort.abort();
 			detach();
+			resize.disconnect();
+			stopLoss();
 			if (globalThis.__gameDebug === readDebug) delete globalThis.__gameDebug;
 		};
 	});
-
+	const budgetStage = useStage(Symbol('game-budget'), { before: mainStage });
+	useTask(
+		(delta) => {
+			budget.beginFrame(performance.now());
+			if (governor.sample(delta * 1000)) dpr.set(governor.dpr);
+			if (governor.saturated >= 3 && quality !== 'low') {
+				setQuality(quality === 'high' ? 'medium' : 'low');
+				void renderer.compileAsync(scene, camera);
+			}
+		},
+		{ stage: budgetStage, autoInvalidate: false, running: () => ready && !hidden && !paused && !contextLost }
+	);
 	useTask(
 		(delta) => {
 			const frameInput = input.sample(delta);
@@ -175,6 +268,16 @@
 			if (frameInput.emotePressed)
 				notice = animator.playEmote('wave') ? 'Um aceno para a floresta.' : 'Pare um instante para acenar.';
 			if (rig) applyToRig(animator.update(delta, animationInput), rig);
+			if (
+				frame.speed > 0.01 ||
+				!frame.grounded ||
+				frame.jumped ||
+				frame.landed ||
+				animator.state === 'emote' ||
+				Math.abs(frame.yaw - lastYaw) > 0.001
+			)
+				shadows.markMoved();
+			lastYaw = frame.yaw;
 			for (const event of frame.events) {
 				if (event.type === 'respawn') {
 					animator.reset();
@@ -192,27 +295,35 @@
 			shadowRay.origin.copy(frame.position);
 			shadowRay.origin.y += 0.1;
 			const hit = controller.world.raycast(shadowRay, 12);
-			blob.visible = hit !== null;
-			if (hit !== null) {
-				blob.position.set(frame.position.x, shadowRay.origin.y - hit + 0.025, frame.position.z);
-				blob.scale.setScalar(Math.max(0.45, 1 - hit * 0.04));
-			}
-			stats.add(delta);
+			if (hit === null) shadows.blobs.hide(avatarBlob);
+			else
+				shadows.blobs.set(
+					avatarBlob,
+					frame.position.x,
+					shadowRay.origin.y - hit,
+					frame.position.z,
+					0.68,
+					Math.max(0, hit - 0.1)
+				);
 			onFrame();
 		},
-		{ running: () => ready && !hidden && !paused }
+		{ running: () => ready && !hidden && !paused && !contextLost }
 	);
-
-	const afterRender = useStage(Symbol('game-statistics'), { after: renderStage });
+	const cullStage = useStage(Symbol('game-cull'), { after: mainStage, before: renderStage });
 	useTask(
 		() => {
-			// autoReset=false includes every render pass; reset once, after the final stage.
-			lastCalls = renderer.info.render.calls;
-			lastTriangles = renderer.info.render.triangles;
-			renderer.info.reset();
+			grid.update(camera);
+			shadows.blobs.sync();
+			const p = controller.frame.position;
+			shadows.update(p.x, p.y, p.z);
+		},
+		{ stage: cullStage, autoInvalidate: false, running: () => ready && !hidden && !contextLost }
+	);
+	const hudStage = useStage(Symbol('game-hud'), { after: renderStage });
+	useTask(
+		() => {
 			if (performance.now() - lastHud < 250) return;
 			lastHud = performance.now();
-			sampled = stats.read();
 			onHud({
 				notice: loadError || notice,
 				shiftLock: input.shiftLock,
@@ -220,33 +331,17 @@
 				debug: debug ? readDebug() : null
 			});
 		},
-		{ stage: afterRender, autoInvalidate: false }
+		{ stage: hudStage, autoInvalidate: false }
 	);
-
 	onDestroy(() => {
+		forest?.dispose();
 		if (avatar) disposeModel(avatar);
-		for (const child of visual.children) if (child instanceof Mesh) child.geometry.dispose();
-		for (const material of materials.values()) {
-			material.map?.dispose();
-			material.dispose();
-		}
-		blob.material.dispose();
-		renderer.info.autoReset = oldReset;
+		proxies.dispose();
+		shadows.dispose();
+		budget.dispose();
 		visual.clear();
 	});
 </script>
 
 <T is={camera} makeDefault />
-
-<T.Fog attach="fog" args={[LIGHT.daylight.horizon, VIEW.low.fogNear, VIEW.low.far]} />
-<T.HemisphereLight
-	intensity={1}
-	color={LIGHT.daylight.hemisphereSky}
-	groundColor={LIGHT.daylight.hemisphereGround}
-/>
-<T.DirectionalLight
-	intensity={1.6}
-	color={LIGHT.daylight.sun}
-	position={[0, Math.tan((LIGHT.daylight.sunElevationDeg * Math.PI) / 180) * 30, -30]}
-/>
 <T is={visual} dispose={false} />

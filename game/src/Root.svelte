@@ -8,6 +8,7 @@
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
 	import { InputModel, type ButtonRole } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
+	import { forestLayout } from './scene/forest-layout.ts';
 	import HudIcon from './scene/HudIcon.svelte';
 	import { DURATION } from './style/motion.ts';
 	import { LIGHT } from './style/palette.ts';
@@ -30,6 +31,8 @@
 	const showNotice = $derived(!hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
 	const level = createGraybox();
+	const forest = forestLayout();
+	level.proxies.push(...forest.colliders);
 	const world = buildCollisionWorld(level);
 	const checkpoints = new CheckpointTracker(level.start, level.checkpoints, level.killY);
 	const controller = new PlayerController(world, level.start.spawn, { yaw: level.start.yaw, checkpoints });
@@ -89,18 +92,14 @@
 	aria-label="Trilha secreta. Use W A S D para andar, espaço para pular e arraste para olhar."
 >
 	<div class="world">
-		<Canvas
-			dpr={[0.75, 1]}
-			shadows={false}
-			toneMapping={NoToneMapping}
-			colorSpace={SRGBColorSpace}
-			{createRenderer}
+		<Canvas dpr={1} shadows={false} toneMapping={NoToneMapping} colorSpace={SRGBColorSpace} {createRenderer}
 			>{#if wrapper}<Graybox
 					{wrapper}
 					paused={rotate}
 					{controller}
 					{input}
 					{level}
+					forestPlacements={forest.placements}
 					{bridge}
 					onHud={(state) => (hud = state)}
 					onFrame={drawControls}

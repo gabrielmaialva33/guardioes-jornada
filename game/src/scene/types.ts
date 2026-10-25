@@ -5,6 +5,13 @@ export interface GameDebug {
 	triangles: number;
 	dpr: number;
 	quality: string;
+	proxyDraws: number;
+	floraDraws: number;
+	floraInstances: number;
+	qualityReason: string;
+	shadowRenders: number;
+	fogNear: number;
+	fogFar: number;
 	verticalFov: number;
 	horizontalFov: number;
 	ready: boolean;
