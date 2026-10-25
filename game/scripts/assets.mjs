@@ -36,14 +36,8 @@ const RAW_ROOT =
 
 const PACKS = ['blocky-characters', 'cube-pets', 'nature-kit', 'platformer-kit', 'food-kit', 'holiday-kit'];
 
+// Custom Atlantic Forest trees live in custom-*.glb; kit-flora keeps only bushes, rocks, logs, stumps, grass, flowers & props.
 const FLORA_MODELS = [
-	'tree_oak',
-	'tree_detailed',
-	'tree_plateau',
-	'tree_fat',
-	'tree_palmTall',
-	'tree_palmDetailedTall',
-	'tree_palmShort',
 	'plant_bushLarge',
 	'flower_yellowA',
 	'grass_leafsLarge',
