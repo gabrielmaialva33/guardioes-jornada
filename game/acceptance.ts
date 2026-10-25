@@ -9,6 +9,7 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type BrowserContext, chromium } from '@playwright/test';
 import { decodeGameManifest } from './protocol.ts';
+import { createGraybox } from './src/engine/graybox.ts';
 
 const project = fileURLToPath(new URL('../', import.meta.url));
 const output =
@@ -318,7 +319,7 @@ try {
 	// SPA navigation deliberately exercises the diorama's 1.5-second release grace.
 	await page.evaluate(() => {
 		const a = document.createElement('a');
-		a.href = '/secret-trail/';
+		a.href = '/secret-trail/?debug';
 		a.textContent = 'test navigation';
 		document.body.append(a);
 		a.click();
@@ -328,9 +329,41 @@ try {
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor({ timeout: 30000 });
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
-	await page.getByRole('button', { name: 'Conquistar o emblema da prévia' }).click();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+	const obby = createGraybox().obby;
+	await page.evaluate(
+		async (edges) => {
+			await new Promise<void>((done, reject) => {
+				const deadline = performance.now() + 20000;
+				let space = false;
+				const key = (type: string, code: string) => window.dispatchEvent(new KeyboardEvent(type, { code }));
+				key('keydown', 'KeyW');
+				const tick = () => {
+					const state = globalThis.__gameDebug?.();
+					if (space) {
+						key('keyup', 'Space');
+						space = false;
+					}
+					if (state?.checkpoint === 'summit' || performance.now() > deadline) {
+						key('keyup', 'KeyW');
+						if (state?.checkpoint === 'summit') done();
+						else reject(new Error(`Obby traversal failed: ${JSON.stringify(state)}`));
+						return;
+					}
+					if (state?.grounded && edges.some((edge) => state.z > edge - 0.45 && state.z < edge)) {
+						key('keydown', 'Space');
+						space = true;
+					}
+					requestAnimationFrame(tick);
+				};
+				tick();
+			});
+		},
+		[obby.edgeZ, ...obby.platforms.slice(0, -1).map((platform) => platform.to)]
+	);
+	result.grayboxAtSummit = await page.evaluate(() => globalThis.__gameDebug?.());
 	assert.ok(await page.evaluate(() => Number(localStorage.getItem('guardioes-secret-badge')) > 0));
-	await page.getByRole('button', { name: 'Sair da aventura', exact: true }).click();
+	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 	await page.waitForTimeout(200);
 	const metrics = () =>
@@ -361,7 +394,8 @@ try {
 	for (let cycle = 0; cycle < 20; cycle++) {
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 		await page.locator('[data-game-root] canvas').waitFor();
-		await page.getByRole('button', { name: 'Sair da aventura', exact: true }).click();
+		await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+		await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 		await page.waitForTimeout(50);
 		const current = await metrics();
@@ -400,12 +434,13 @@ try {
 	await page.reload();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
 	assert.equal(requests.length, networkBefore);
 	assert.ok(sessions.size > 0);
 	result.offlineAtCUsesA = true;
 	console.info('A still opens offline at C');
-	await page.getByRole('button', { name: 'Sair da aventura', exact: true }).click();
+	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await setOffline(false);
 	let arrived: () => void = () => {};
 	const downloading = new Promise<void>((done) => {
@@ -425,12 +460,14 @@ try {
 	release();
 	hold = undefined;
 	await page.locator('[data-game-root] canvas').waitFor();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
-	await page.getByRole('button', { name: 'Sair da aventura', exact: true }).click();
+	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await setOffline(true);
 	await page.reload();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
 	result.atomicReplacementAndOfflineC = true;
 	assert.deepEqual(errors, []);
