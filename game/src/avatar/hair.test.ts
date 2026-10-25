@@ -20,11 +20,9 @@ it('swaps one head child with shared geometry, tints hair/cap and follows head a
 	const hair = new HairAccessories(source, head, styles);
 	hair.apply('longo', { hair: '#5e4330', shirt: '#2f7fb0' });
 	expect(head.children).toHaveLength(1);
-	expect(hair.mesh.geometry).toBe(
-		source.getObjectByName('hair-long') instanceof Mesh
-			? (source.getObjectByName('hair-long') as Mesh).geometry
-			: null
-	);
+	const long = source.getObjectByName('hair-long');
+	if (!(long instanceof Mesh)) throw new Error('hair-fixture');
+	expect(hair.mesh.geometry).toBe(long.geometry);
 	const material = hair.mesh.material;
 	const old = hair.mesh.geometry;
 	hair.apply('bone', { hair: '#5e4330', shirt: '#2f7fb0' });

@@ -71,3 +71,11 @@ it('saves checkpoints per map checksum without replacing avatar or other section
 	expect(save.avatar()).toEqual(profile);
 	expect(save.setCheckpoint('story:1:123', 'x'.repeat(200))).toBe(false);
 });
+it('v1 avatar saves acquire short painted hair, while v2 stores the accessory id', () => {
+	const { hairStyle: _, ...legacy } = profile;
+	expect(decodeAvatarProfile(legacy)?.hairStyle).toBe('curto');
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	expect(save.setAvatar({ ...profile, hairStyle: 'black-power' })).toBe(true);
+	expect(createLocalSave(profile, disk).avatar().hairStyle).toBe('black-power');
+});
