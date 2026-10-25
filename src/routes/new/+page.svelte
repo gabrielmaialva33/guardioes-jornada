@@ -238,10 +238,15 @@
 		outline-offset: 2px;
 	}
 
+	/* The invisible radio covers the whole card, so a tap anywhere selects it. */
 	.group input {
 		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
 		opacity: 0;
-		pointer-events: none;
+		cursor: pointer;
 	}
 
 	.group span {
