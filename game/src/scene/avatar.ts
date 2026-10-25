@@ -33,20 +33,26 @@ export function disposeModel(model: Group) {
 	model.removeFromParent();
 }
 
+/** Decoders stay inside the pack; caller owns the returned scene and every source texture. */
+export async function loadModel(url: string, signal: AbortSignal): Promise<Group> {
+	const response = await fetch(url, { signal });
+	if (!response.ok) throw new Error('model-download');
+	const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+	const model = (
+		await loader.parseAsync(await response.arrayBuffer(), new URL('.', new URL(url, location.href)).href)
+	).scene;
+	if (signal.aborted) {
+		disposeModel(model);
+		signal.throwIfAborted();
+	}
+	return model;
+}
+
 export async function loadAvatar(signal: AbortSignal): Promise<Group> {
 	let model: Group | undefined;
 	let bitmap: ImageBitmap | undefined;
 	try {
-		const response = await fetch(modelUrl, { signal });
-		if (!response.ok) throw new Error('avatar-download');
-		const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-		model = (
-			await loader.parseAsync(
-				await response.arrayBuffer(),
-				new URL('.', new URL(modelUrl, location.href)).href
-			)
-		).scene;
-		signal.throwIfAborted();
+		model = await loadModel(modelUrl, signal);
 		const skin = await fetch(skinUrl, { signal });
 		if (!skin.ok) throw new Error('skin-download');
 		bitmap = await createImageBitmap(await skin.blob(), {
