@@ -13,6 +13,18 @@ export interface ChecklistItem {
 	label: string;
 }
 
+/** A tree participants meet on the trail. Every statement needs a botanical source. */
+export interface TreeInfo {
+	name: string;
+	scientificName: string;
+	family: string;
+	/** Two or three short sentences, read on a phone. */
+	summary: string;
+	/** Things to notice on the tree itself. */
+	cues: string[];
+	sources: string[];
+}
+
 export interface Step {
 	id: string;
 	kind: StepKind;
@@ -25,6 +37,8 @@ export interface Step {
 	power?: string;
 	/** Drawing rendered by the app (see components/Illustration.svelte). */
 	illustration?: 'canela-and-cedro';
+	/** Trees introduced in this step (shown as cards next to the illustration). */
+	trees?: TreeInfo[];
 	timer?: { seconds: number; label: string };
 	/** Shows the scoreboard inside the mission so the guide can award points on the spot. */
 	scored?: boolean;

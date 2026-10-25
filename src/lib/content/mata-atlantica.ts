@@ -1,4 +1,4 @@
-import type { Journey } from './types.ts';
+import type { Journey, TreeInfo } from './types.ts';
 
 /**
  * The Atlantic Forest journey, written for the guardioes-da-floresta prototype
@@ -6,6 +6,48 @@ import type { Journey } from './types.ts';
  * Atlantic Forest setting. The timers and the checklist are additions that
  * help in the field.
  */
+/*
+ * Tree facts verified on 2026-10-25. Neither species is exclusive to the
+ * Atlantic Forest; the origin of the popular names is not explained by any
+ * reliable source, so the texts do not explain them. The common names are also
+ * used for other species: confirm with a botanist which trees are on the trail.
+ */
+const canelaPreta: TreeInfo = {
+	name: 'Canela-preta',
+	scientificName: 'Ocotea catharinensis',
+	family: 'Lauraceae',
+	summary:
+		'Típica das encostas e morros da Mata Atlântica. Cresce devagar, à sombra da floresta, e seus frutos alimentam aves e mamíferos, como o muriqui. Muito cortada por sua madeira, hoje está ameaçada de extinção.',
+	cues: [
+		'Casca escura, com marcas côncavas onde se soltou em placas.',
+		'Folhas duras e pontudas; embaixo, tufinhos de pelos junto às nervuras.',
+		'Fruto ovalado, metade dentro de uma "tacinha" preta.'
+	],
+	sources: [
+		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1139722/1/Especies-Arboreas-Brasileiras-vol-1-Canela-Preta.pdf',
+		'https://proflora.jbrj.gov.br/html/Ocotea%20catharinensis_2012.html',
+		'https://servicos.jbrj.gov.br/v2/flora/taxon/Ocotea%20catharinensis'
+	]
+};
+
+const cedroRosa: TreeInfo = {
+	name: 'Cedro-rosa',
+	scientificName: 'Cedrela fissilis',
+	family: 'Meliaceae',
+	summary:
+		'Vive na Mata Atlântica e também em outros biomas do Brasil e em outros países. Seus frutos de madeira se abrem e soltam sementes com asas, levadas pelo vento. O corte da madeira e a destruição das florestas o ameaçam.',
+	cues: [
+		'Casca grossa, com rachaduras fundas ao longo do tronco.',
+		'Folhas grandes, com muitos pares de folhinhas (folíolos).',
+		'Frutos de madeira abertos em 5 partes, às vezes ainda presos nos galhos.'
+	],
+	sources: [
+		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1139731/1/Especies-Arboreas-Brasileiras-vol-1-Cedro.pdf',
+		'https://proflora.jbrj.gov.br/html/Cedrela%20fissilis_2012.html',
+		'https://servicos.jbrj.gov.br/v2/flora/taxon/Cedrela%20fissilis'
+	]
+};
+
 export const mataAtlantica: Journey = {
 	// Stable id: sessions saved on phones and in the cloud reference it.
 	id: 'penap',
@@ -74,6 +116,7 @@ Sua jornada começa agora.`
 			instructions:
 				'Observe duas árvores diferentes (como a canela-preta e o cedro-rosa). Descreva suas diferenças e explique sua importância para a floresta.',
 			illustration: 'canela-and-cedro',
+			trees: [canelaPreta, cedroRosa],
 			power: 'Sabedoria Verde'
 		},
 		{
@@ -138,8 +181,8 @@ Sua jornada começa agora.`
 		}
 	],
 	groups: [
-		{ name: 'Canela-preta', color: '#ea9356', hint: 'Árvore de casca escura e madeira aromática' },
-		{ name: 'Cedro-rosa', color: '#ff9fb7', hint: 'Árvore alta de madeira rosada e perfumada' }
+		{ name: 'Canela-preta', color: '#ea9356', hint: 'Típica das encostas e morros da Mata Atlântica' },
+		{ name: 'Cedro-rosa', color: '#ff9fb7', hint: 'Solta sementes com asas, levadas pelo vento' }
 	],
 	areas: [
 		{
