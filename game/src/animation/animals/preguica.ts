@@ -77,7 +77,7 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 		this.branch = options.branch;
 		this.cursor.s = options.start ?? 0;
 		this.branch.locate(this.cursor);
-		this.motion.yaw = this.targetYaw = this.cursor.yaw;
+		this.motion.yaw = this.drive.targetYaw = this.cursor.yaw;
 		const model = MODELS[this.species.model];
 		const scale = this.species.scale;
 		for (let leg = 0; leg < 4; leg++) {
@@ -99,7 +99,7 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 	}
 
 	protected advance(_world: AnimalWorld) {
-		const h = this.h;
+		const h = this.clock.h;
 		if (this.state === 'move') this.#moveLimbs();
 		this.turn();
 		if (this.state === 'idle') {
@@ -122,7 +122,7 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 			case 'move':
 				// The bout ends when its limbs are done (see #moveLimbs); this is a safety net.
 				if (this.moving < 0) this.enter('idle', rng.range(PREGUICA.idle[0], PREGUICA.idle[1]));
-				else this.timer = 1;
+				else this.clock.timer = 1;
 				break;
 			default:
 				this.enter('idle', rng.range(PREGUICA.idle[0], PREGUICA.idle[1]));
@@ -156,7 +156,7 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 			// swap ends of the body (the front limbs now reach the other way).
 			this.cursor.direction = -this.cursor.direction;
 			branch.locate(this.cursor);
-			this.targetYaw = this.cursor.yaw;
+			this.drive.targetYaw = this.cursor.yaw;
 			this.#turning = true;
 			const body = this.cursor.s;
 			for (let leg = 0; leg < 4; leg++) this.holds[leg] = body - (this.holds[leg] - body);
@@ -175,10 +175,10 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 	 * substep, so the timing is exact at any frame rate (and under LOD).
 	 */
 	#moveLimbs() {
-		const h = this.h;
+		const h = this.clock.h;
 		const motion = this.motion;
 		if (this.#turning) {
-			if (Math.abs(wrapAngle(this.targetYaw - motion.yaw)) > 0.02) return;
+			if (Math.abs(wrapAngle(this.drive.targetYaw - motion.yaw)) > 0.02) return;
 			this.#turning = false;
 		}
 		let left = h;

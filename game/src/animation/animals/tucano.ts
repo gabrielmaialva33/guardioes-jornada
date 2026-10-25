@@ -110,7 +110,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 			);
 		});
 		this.perch = Math.min(Math.max(options.start ?? 0, 0), this.perchCount - 1);
-		this.motion.yaw = this.targetYaw = this.perches[this.perch * PERCH_STRIDE + 3];
+		this.motion.yaw = this.drive.targetYaw = this.perches[this.perch * PERCH_STRIDE + 3];
 		this.#placeOnPerch();
 		this.enter('perch', TUCANO.perch[0]);
 	}
@@ -178,7 +178,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		const launching = state === 'fly' && this.progress === 0;
 		motion.flapRate = TUCANO.flapRate;
 		motion.flap = state === 'fly' && !launching ? 1 : 0;
-		motion.wingsClosed = state === 'glide' && this.stateTime < TUCANO.drop ? 1 : 0;
+		motion.wingsClosed = state === 'glide' && this.clock.inState < TUCANO.drop ? 1 : 0;
 		motion.lookYaw = flying ? 0 : this.#lookYaw;
 		motion.lookPitch = flying ? 0 : this.#lookPitch;
 		motion.pitch = flying ? -Math.atan2(this.#vy, Math.max(0.1, this.#vh)) : 0;
@@ -193,27 +193,27 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		this.#hopFrom = this.offset;
 		this.#hopTo = clamp(to, -half, half);
 		const yaw = this.perches[this.perch * PERCH_STRIDE + 3];
-		this.targetYaw = this.#hopTo >= this.#hopFrom ? yaw : wrapAngle(yaw + Math.PI);
+		this.drive.targetYaw = this.#hopTo >= this.#hopFrom ? yaw : wrapAngle(yaw + Math.PI);
 		this.enter('hop', LIMITS.anticipation + TUCANO.hopTime);
 	}
 
 	#hop() {
 		const motion = this.motion;
 		const crouch = LIMITS.anticipation;
-		const t = this.stateTime + this.h;
+		const t = this.clock.inState + this.clock.h;
 		this.turn();
 		if (t < crouch) {
 			motion.crouch = t / crouch;
 			this.#placeOnPerch();
 			return;
 		}
-		if (this.stateTime < crouch) motion.takeoff = 0.5;
+		if (this.clock.inState < crouch) motion.takeoff = 0.5;
 		motion.crouch = 0;
 		const u = Math.min(1, (t - crouch) / TUCANO.hopTime);
 		this.offset = this.#hopFrom + (this.#hopTo - this.#hopFrom) * u;
 		this.#placeOnPerch();
 		motion.y += 4 * TUCANO.hopHeight * u * (1 - u);
-		if (u >= 1 || this.timer <= this.h + 1e-9) {
+		if (u >= 1 || this.clock.timer <= this.clock.h + 1e-9) {
 			motion.landing = 0.4;
 			this.hops++;
 		}
@@ -244,7 +244,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		this.progress = 0;
 		this.#bob = 0;
 		this.flights++;
-		this.targetYaw = Math.atan2(dx, dz);
+		this.drive.targetYaw = Math.atan2(dx, dz);
 		this.#burst();
 	}
 
@@ -256,10 +256,10 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 
 	#fly() {
 		const motion = this.motion;
-		const h = this.h;
+		const h = this.clock.h;
 		// Anticipation crouch on the perch before the first beat.
-		if (this.progress === 0 && this.state === 'fly' && this.stateTime + h <= LIMITS.anticipation) {
-			motion.crouch = (this.stateTime + h) / LIMITS.anticipation;
+		if (this.progress === 0 && this.state === 'fly' && this.clock.inState + h <= LIMITS.anticipation) {
+			motion.crouch = (this.clock.inState + h) / LIMITS.anticipation;
 			this.turn();
 			return;
 		}
@@ -267,7 +267,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		motion.crouch = 0;
 		const before = this.progress;
 		this.progress = Math.min(1, before + (TUCANO.flightSpeed * h) / this.#length);
-		const dropping = this.state === 'glide' && this.stateTime < TUCANO.drop;
+		const dropping = this.state === 'glide' && this.clock.inState < TUCANO.drop;
 		this.#bobRate = this.state === 'fly' ? TUCANO.climbRate : dropping ? -TUCANO.dropRate : -TUCANO.sinkRate;
 		this.#bob = clamp(this.#bob + this.#bobRate * h, -0.6, 0.6);
 		const u = this.progress;
@@ -286,7 +286,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		const mz = motion.z - pz;
 		this.#vh = Math.sqrt(mx * mx + mz * mz) / h;
 		this.#vy = (motion.y - py) / h;
-		if (mx !== 0 || mz !== 0) this.targetYaw = Math.atan2(mx, mz);
+		if (mx !== 0 || mz !== 0) this.drive.targetYaw = Math.atan2(mx, mz);
 		this.turn();
 		if (u >= 1) this.#land();
 	}
@@ -298,7 +298,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		this.#vy = this.#vh = 0;
 		motion.landing = 0.7;
 		this.#placeOnPerch();
-		this.targetYaw = this.perches[this.perch * PERCH_STRIDE + 3];
+		this.drive.targetYaw = this.perches[this.perch * PERCH_STRIDE + 3];
 		this.enter('perch', this.rng.range(TUCANO.perch[0], TUCANO.perch[1]));
 	}
 
@@ -307,7 +307,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 			this.#lookYaw = this.#lookPitch = 0;
 			return;
 		}
-		this.#glance -= this.h;
+		this.#glance -= this.clock.h;
 		if (this.#glance > 0) return;
 		const rng = this.cosmetic;
 		this.#glance = rng.range(TUCANO.glance[0], TUCANO.glance[1]);

@@ -145,7 +145,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 
 	protected sense(world: AnimalWorld) {
 		if (world.playerJumped) this.#jumpLatch = true;
-		const dt = this.frameDt;
+		const dt = this.clock.dt;
 		// Player velocity: the engine's if given, else a smoothed estimate from positions.
 		if (Number.isFinite(world.playerVx) && Number.isFinite(world.playerVz)) {
 			this.#playerVx = world.playerVx;
@@ -195,7 +195,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		const rng = this.rng;
 		if (this.companion) {
 			// Companion states are driven by the player, not by the clock.
-			this.timer = 1e9;
+			this.clock.timer = 1e9;
 			return;
 		}
 		switch (this.state) {
@@ -265,10 +265,10 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 
 		// Face the travel direction while moving; when settled, face the player if far off.
 		const speed = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
-		if (speed > 0.3) this.targetYaw = Math.atan2(this.vx, this.vz);
+		if (speed > 0.3) this.drive.targetYaw = Math.atan2(this.vx, this.vz);
 		else if (this.settled) {
 			const toPlayer = Math.atan2(-nx, -nz);
-			if (Math.abs(wrapAngle(toPlayer - motion.yaw)) > 50 * DEG) this.targetYaw = toPlayer;
+			if (Math.abs(wrapAngle(toPlayer - motion.yaw)) > 50 * DEG) this.drive.targetYaw = toPlayer;
 		}
 		this.turn();
 	}
@@ -276,27 +276,27 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 	#wander() {
 		const motion = this.motion;
 		const route = this.route;
-		this.cruise = this.state === 'move' && route ? this.#cruise : 0;
-		this.rampRate = MICO.wanderAccel;
-		this.speed = this.#speed;
+		this.drive.cruise = this.state === 'move' && route ? this.#cruise : 0;
+		this.drive.rampRate = MICO.wanderAccel;
+		this.drive.speed = this.#speed;
 		this.ramp();
-		this.#speed = this.speed;
+		this.#speed = this.drive.speed;
 		this.vx = this.vz = 0;
-		if (route && this.travel > 0) {
+		if (route && this.drive.travel > 0) {
 			const step = this.#advance;
-			step.distance = this.travel;
+			step.distance = this.drive.travel;
 			route.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
 		}
-		if (route) this.targetYaw = this.cursor.yaw;
+		if (route) this.drive.targetYaw = this.cursor.yaw;
 		this.turn();
 	}
 
 	/** Moves the velocity toward (#tvx, #tvz) at MICO.accel and integrates the position. */
 	#accelerate() {
 		const motion = this.motion;
-		const h = this.h;
+		const h = this.clock.h;
 		let dvx = this.#tvx - this.vx;
 		let dvz = this.#tvz - this.vz;
 		const dv = Math.sqrt(dvx * dvx + dvz * dvz);
@@ -325,7 +325,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 	#hop() {
 		const motion = this.motion;
 		const before = this.hopClock;
-		const clock = before + this.h;
+		const clock = before + this.clock.h;
 		this.hopClock = clock;
 		const crouch = LIMITS.anticipation;
 		const end = crouch + MICO.hopTime;
@@ -354,7 +354,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 			this.#lookPitch = this.state === 'rest' ? -10 * DEG : 0;
 			return;
 		}
-		this.#glance -= this.h;
+		this.#glance -= this.clock.h;
 		if (this.#glance <= 0) {
 			const rng = this.cosmetic;
 			this.#glance = rng.range(MICO.glance[0], MICO.glance[1]);
@@ -387,7 +387,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		const angle = Number.isFinite(back) ? back : motion.yaw;
 		motion.x = world.playerX + Math.sin(angle) * MICO.followDistance;
 		motion.z = world.playerZ + Math.cos(angle) * MICO.followDistance;
-		motion.yaw = this.targetYaw = angle + Math.PI;
+		motion.yaw = this.drive.targetYaw = angle + Math.PI;
 		this.vx = this.vz = this.#speed = 0;
 		this.#ground = Number.isFinite(world.groundY) ? world.groundY : world.playerY;
 		this.settled = false;

@@ -106,7 +106,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.arm = MODELS.monkey.legLength * this.species.limbScale.front * this.species.scale;
 		this.tilt = new DampedSpring(SPRING.body, this.species.tempo);
 		this.#faceAlong();
-		this.motion.yaw = this.targetYaw;
+		this.motion.yaw = this.drive.targetYaw;
 		this.#placeAtAnchor();
 		this.enter('idle', MURIQUI.idle[0]);
 		this.#setIdleEnergy();
@@ -124,7 +124,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 	}
 
 	protected advance(_world: AnimalWorld) {
-		const h = this.h;
+		const h = this.clock.h;
 		this.#accumulator += h;
 		while (this.#accumulator >= PENDULUM_STEP) {
 			this.#accumulator -= PENDULUM_STEP;
@@ -273,7 +273,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.grip = -this.grip;
 		this.switches++;
 		this.lastSwitchTime = this.pendulumTime;
-		this.targetYaw = Math.atan2(fx, fz);
+		this.drive.targetYaw = Math.atan2(fx, fz);
 		this.#handholdsLeft--;
 		if (this.#handholdsLeft <= 0 || after < 0 || after >= this.anchors.count) this.#stop();
 		else this.#aimFor(after);
@@ -333,7 +333,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.#read(next, from);
 		const dx = from[0] - ax;
 		const dz = from[2] - az;
-		if (dx !== 0 || dz !== 0) this.targetYaw = wrapAngle(Math.atan2(dx, dz));
+		if (dx !== 0 || dz !== 0) this.drive.targetYaw = wrapAngle(Math.atan2(dx, dz));
 	}
 
 	#placeAtAnchor() {

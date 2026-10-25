@@ -68,7 +68,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		this.route = options.route;
 		this.cursor.s = options.start ?? 0;
 		this.route.locate(this.cursor);
-		this.motion.yaw = this.targetYaw = this.cursor.yaw;
+		this.motion.yaw = this.drive.targetYaw = this.cursor.yaw;
 		this.#place();
 		this.enter('idle', ONCA.idle[0]);
 	}
@@ -79,7 +79,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 	}
 
 	protected advance(_world: AnimalWorld) {
-		const h = this.h;
+		const h = this.clock.h;
 		const motion = this.motion;
 		const dx = this.#playerX - motion.x;
 		const dz = this.#playerZ - motion.z;
@@ -114,20 +114,20 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 			if (left < ONCA.walkSpeed * 0.5) cruise = 0;
 		}
 		// Wait to finish turning around before walking on.
-		const aligned = Math.abs(wrapAngle(this.targetYaw - motion.yaw)) < 0.35;
-		this.cruise = aligned ? cruise : 0;
-		this.rampRate = ONCA.accel;
+		const aligned = Math.abs(wrapAngle(this.drive.targetYaw - motion.yaw)) < 0.35;
+		this.drive.cruise = aligned ? cruise : 0;
+		this.drive.rampRate = ONCA.accel;
 		this.ramp();
-		this.#speed = this.speed;
-		motion.speed = this.speed;
-		if (this.travel > 0) {
+		this.#speed = this.drive.speed;
+		motion.speed = this.drive.speed;
+		if (this.drive.travel > 0) {
 			const step = this.#advance;
-			step.distance = this.travel;
+			step.distance = this.drive.travel;
 			this.route.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
 		}
-		this.targetYaw = this.cursor.yaw;
+		this.drive.targetYaw = this.cursor.yaw;
 		this.turn();
 		this.#dx = dx;
 		this.#dz = dz;
@@ -185,7 +185,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 			this.#lookYaw = 0;
 			return;
 		}
-		this.#glance -= this.h;
+		this.#glance -= this.clock.h;
 		if (this.#glance <= 0) {
 			this.#glance = this.cosmetic.range(ONCA.glance[0], ONCA.glance[1]);
 			this.#lookYaw = this.cosmetic.range(-ONCA.glanceYaw, ONCA.glanceYaw);

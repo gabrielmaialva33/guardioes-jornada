@@ -67,7 +67,7 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 		this.branch = options.branch;
 		this.cursor.s = options.start ?? 0;
 		this.branch.locate(this.cursor);
-		this.motion.yaw = this.targetYaw = this.cursor.yaw;
+		this.motion.yaw = this.drive.targetYaw = this.cursor.yaw;
 		this.#place();
 		this.enter('idle', BUGIO.idle[0]);
 	}
@@ -80,21 +80,21 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 	}
 
 	protected advance(_world: AnimalWorld) {
-		const h = this.h;
+		const h = this.clock.h;
 		const motion = this.motion;
-		this.cruise = this.state === 'move' ? BUGIO.walkSpeed : 0;
-		this.rampRate = BUGIO.accel;
+		this.drive.cruise = this.state === 'move' ? BUGIO.walkSpeed : 0;
+		this.drive.rampRate = BUGIO.accel;
 		this.ramp();
-		this.#speed = this.speed;
-		motion.speed = this.speed;
-		if (this.travel > 0) {
+		this.#speed = this.drive.speed;
+		motion.speed = this.drive.speed;
+		if (this.drive.travel > 0) {
 			const step = this.#advance;
-			step.distance = this.travel;
+			step.distance = this.drive.travel;
 			this.branch.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
 		}
-		this.targetYaw = this.cursor.yaw;
+		this.drive.targetYaw = this.cursor.yaw;
 		if (this.state !== 'feed-hang') this.turn();
 		// Howl envelope rises while howling and fades after.
 		this.#howl = approach(this.#howl, this.state === 'howl' ? 1 : 0, h / BUGIO.howlRamp);
