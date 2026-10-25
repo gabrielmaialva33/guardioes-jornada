@@ -306,7 +306,7 @@ def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | N
                 links.new(color_out_socket, diff.inputs["Color"])
 
 
-def get_hierarchy_bounds(root_obj: bpy.types.Object) -> tuple[Vector, Vector]:
+def get_hierarchy_bounds(root_obj: bpy.types.Object, ignore_tail: bool = False) -> tuple[Vector, Vector]:
     bpy.context.view_layer.update()
     mins = Vector((float("inf"), float("inf"), float("inf")))
     maxs = Vector((float("-inf"), float("-inf"), float("-inf")))
@@ -314,6 +314,8 @@ def get_hierarchy_bounds(root_obj: bpy.types.Object) -> tuple[Vector, Vector]:
     found = False
     while queue:
         cur = queue.pop(0)
+        if ignore_tail and cur.name.split(".")[0] == "tail":
+            continue
         queue.extend(cur.children)
         if cur.type == "MESH":
             found = True
@@ -338,12 +340,13 @@ def place_and_scale_root(
     target_length: float | None = None,
     uniform_scale: float | None = None,
     yaw_deg: float = 0.0,
+    ignore_tail: bool = False,
 ) -> None:
     root_obj.location = Vector((0.0, 0.0, 0.0))
     root_obj.rotation_mode = "XYZ"
     root_obj.rotation_euler = Euler((0.0, 0.0, math.radians(yaw_deg)), "XYZ")
     root_obj.scale = Vector((1.0, 1.0, 1.0))
-    mins, maxs = get_hierarchy_bounds(root_obj)
+    mins, maxs = get_hierarchy_bounds(root_obj, ignore_tail=ignore_tail)
     size = maxs - mins
 
     s = 1.0
@@ -355,7 +358,7 @@ def place_and_scale_root(
         s = target_length / max(size.x, size.y)
 
     root_obj.scale = Vector((s, s, s))
-    mins, maxs = get_hierarchy_bounds(root_obj)
+    mins, maxs = get_hierarchy_bounds(root_obj, ignore_tail=ignore_tail)
     cx = (mins.x + maxs.x) * 0.5
     cy = (mins.y + maxs.y) * 0.5
     root_obj.location = Vector((pos_xy[0] - cx, pos_xy[1] - cy, -mins.z))
