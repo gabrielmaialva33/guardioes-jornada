@@ -51,6 +51,72 @@ LIGHT_DAYLIGHT = {
 }
 
 
+sys.path.insert(0, str(SCRIPT_DIR))
+import recolor  # noqa: E402
+
+
+def composite_preset_png(regions_spec: dict, preset: dict, out_path: Path) -> Path:
+    rgba = bytearray(64 * 64 * 4)
+
+    def fill_rect(rect: list[int], hex_col: str) -> None:
+        r, g, b = recolor.hex_to_rgb(hex_col)
+        x0, y0, w, h = rect
+        for y in range(y0, min(64, y0 + h)):
+            for x in range(x0, min(64, x0 + w)):
+                p = (y * 64 + x) * 4
+                rgba[p] = r
+                rgba[p + 1] = g
+                rgba[p + 2] = b
+                rgba[p + 3] = 255
+
+    fill_rect([0, 0, 64, 64], "#1e4d36")
+    R = regions_spec["regions"]
+    fill_rect(R["head"]["all"], preset["skin"])
+    fill_rect(R["armRight"]["bottom"], preset["skin"])
+    fill_rect(R["armRight"]["forearm"], preset["skin"])
+    fill_rect(R["armLeft"]["bottom"], preset["skin"])
+    fill_rect(R["armLeft"]["forearm"], preset["skin"])
+    for rect in R["head"]["hair"]:
+        fill_rect(rect, preset["hair"])
+    fill_rect(R["torso"]["all"], preset["shirt"])
+    fill_rect(R["armRight"]["top"], preset["shirt"])
+    fill_rect(R["armRight"]["sleeve"], preset["shirt"])
+    fill_rect(R["armLeft"]["top"], preset["shirt"])
+    fill_rect(R["armLeft"]["sleeve"], preset["shirt"])
+    fill_rect(R["legRight"]["top"], preset["pants"])
+    fill_rect(R["legRight"]["pants"], preset["pants"])
+    fill_rect(R["legRight"]["bottom"], preset["shoes"])
+    fill_rect(R["legRight"]["shoe"], preset["shoes"])
+    fill_rect(R["legLeft"]["top"], preset["pants"])
+    fill_rect(R["legLeft"]["pants"], preset["pants"])
+    fill_rect(R["legLeft"]["bottom"], preset["shoes"])
+    fill_rect(R["legLeft"]["shoe"], preset["shoes"])
+
+    face_spec = regions_spec["faces"].get(preset.get("face", "smile"), regions_spec["faces"]["smile"])
+    fx0, fy0 = regions_spec["faces"]["targetRect64"][:2]
+    for px in face_spec["pixels8x8"]:
+        # Blender's glTF importer flips V (1 - v), while external images loaded via bpy.data.images.load
+        # are not flipped by the importer; flip Y inside the 64x64 texture for direct bpy.data.images.load
+        fill_rect([fx0 + px["x"], fy0 + px["y"], 1, 1], px["color"])
+
+    # Flip rows vertically so bpy.data.images.load matches Blender's glTF-imported (1 - v) UVs
+    flipped = bytearray(64 * 64 * 4)
+    for y in range(64):
+        src_row = y * 64 * 4
+        dst_row = (63 - y) * 64 * 4
+        flipped[dst_row : dst_row + 64 * 4] = rgba[src_row : src_row + 64 * 4]
+
+    out_path.write_bytes(recolor.encode_png8(64, 64, flipped))
+    return out_path
+
+
+def flip_image_for_blender_uvs(src_path: Path, tmp_dir: Path) -> Path:
+    out_p = tmp_dir / f"vflip-{src_path.stem}.png"
+    if not out_p.exists():
+        subprocess.run(["magick", str(src_path), "-flip", f"PNG8:{out_p}"], check=True)
+    return out_p
+
+
 def hex_to_linear_rgba(hex_str: str, alpha: float = 1.0) -> tuple[float, float, float, float]:
     v = int(hex_str.lstrip("#"), 16)
     r, g, b = ((v >> 16) & 255) / 255.0, ((v >> 8) & 255) / 255.0, (v & 255) / 255.0
@@ -88,8 +154,12 @@ def configure_scene_and_art_light() -> None:
     for dev in prefs.devices:
         dev.use = dev.type in ("OPTIX", "CUDA")
     scene.cycles.device = "GPU"
-    scene.cycles.samples = 48
-    scene.cycles.use_denoising = False
+    scene.cycles.samples = 128
+    scene.cycles.use_denoising = True
+    try:
+        scene.cycles.denoiser = "OPTIX"
+    except Exception:
+        pass
     scene.cycles.max_bounces = 2
     scene.cycles.diffuse_bounces = 1
     scene.cycles.glossy_bounces = 0
@@ -380,122 +450,139 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp_str:
         tmp_dir = Path(tmp_str)
 
-        # 1. Scale bar (1.0 u + 3.0 u) & Grey card at front-left (-11.5, 5.5)
-        build_reference_bars_and_grey_card((-11.5, 5.5))
+        # 1. Scale bar (1.0 u + 3.0 u) & Grey card at front-left (-12.5, 5.5)
+        build_reference_bars_and_grey_card((-12.5, 5.5))
 
-        # 2. Avatar (3.0 u tall, in 3 skins: skin-a, skin-c, skin-k)
-        for idx, skin_id in enumerate(("skin-a", "skin-c", "skin-k")):
+        regions_spec = json.loads((SKINS_DIR / "avatar-regions.json").read_text(encoding="utf-8"))
+
+        # 2. Avatar (3.0 u tall, in 3 Roblox-classic flat-colour presets: Iara, Dandara, Bento)
+        for idx, preset_idx in enumerate((0, 2, 3)):
+            preset = regions_spec["presets"][preset_idx]
+            preset_png = composite_preset_png(regions_spec, preset, tmp_dir / f"av-{preset['id']}.png")
             roots = import_single_glb(MODELS_DIR / "avatar.glb", tmp_dir)
             if roots:
                 av = roots[0]
-                convert_to_flat_lambert(av, SKINS_DIR / f"{skin_id}.webp")
-                # Rotate 165 deg so the front (+Y after glTF import) faces the camera at +Y
-                place_and_scale_root(av, (-9.2 + idx * 1.6, 5.5), target_height=3.0, yaw_deg=165.0)
+                convert_to_flat_lambert(av, preset_png)
+                place_and_scale_root(av, (-10.2 + idx * 1.6, 5.5), target_height=3.0, yaw_deg=165.0)
 
-        # 3. 7 Atlantic Forest Animals at true ART.md §3 scale (front row y = 5.5)
+        # 3. 7 Atlantic Forest Animals at true ART.md §3 scale (front row y = 5.5) + custom attachments
         animal_specs = [
-            ("monkey.glb", "palette-mico-leao-dourado.png", (-4.2, 5.5), 0.9, None),
-            ("parrot.glb", "palette-tucano-de-bico-verde.png", (-2.7, 5.5), 0.9, None),
-            ("monkey.glb", "palette-bugio-ruivo.png", (-1.0, 5.5), 1.4, None),
-            ("koala.glb", "palette-preguica-de-coleira.png", (0.9, 5.5), 1.4, None),
-            ("monkey.glb", "palette-muriqui.png", (3.0, 5.5), 1.7, None),
-            ("tiger.glb", "palette-onca-pintada.png", (5.8, 5.5), None, 3.0),
-            ("tiger.glb", "palette-onca-melanica.png", (9.2, 5.5), None, 3.0),
+            ("monkey.glb", "palette-mico-leao-dourado.png", (-4.8, 5.5), 0.9, None, "custom-juba-mico.glb"),
+            ("parrot.glb", "palette-tucano-de-bico-verde.png", (-3.1, 5.5), 0.9, None, "custom-bico-tucano.glb"),
+            ("monkey.glb", "palette-bugio-ruivo.png", (-1.3, 5.5), 1.4, None, None),
+            ("koala.glb", "palette-preguica-de-coleira.png", (0.7, 5.5), 1.4, None, None),
+            ("monkey.glb", "palette-muriqui.png", (2.8, 5.5), 1.7, None, None),
+            ("tiger.glb", "palette-onca-pintada.png", (5.6, 5.5), None, 3.0, "custom-rosetas-onca.glb"),
+            ("tiger.glb", "palette-onca-melanica.png", (9.0, 5.5), None, 3.0, None),
         ]
-        for model_name, pal_name, xy, th, tl in animal_specs:
+        for model_name, pal_name, xy, th, tl, attach_glb in animal_specs:
             roots = import_single_glb(MODELS_DIR / model_name, tmp_dir)
             if roots:
                 pet = roots[0]
-                convert_to_flat_lambert(pet, SKINS_DIR / pal_name)
+                if model_name == "parrot.glb":
+                    # Remove cockatoo crest ('Group') so the toucan has a smooth black crown
+                    for ch in list(pet.children_recursive):
+                        if ch.name.startswith("Group"):
+                            bpy.data.objects.remove(ch, do_unlink=True)
+                flipped_pal = flip_image_for_blender_uvs(SKINS_DIR / pal_name, tmp_dir)
+                convert_to_flat_lambert(pet, flipped_pal)
+                if attach_glb and (MODELS_DIR / attach_glb).exists():
+                    att_roots = import_single_glb(MODELS_DIR / attach_glb, tmp_dir)
+                    for ar in att_roots:
+                        convert_to_flat_lambert(ar)
+                        ar.parent = pet
                 place_and_scale_root(pet, xy, target_height=th, target_length=tl, yaw_deg=160.0)
 
-        # 4. Props, Obby & Cabin from kit-props.glb (middle row y = 1.2)
+        # 4. Props, Obby & Cabin from kit-props.glb (middle row y = 1.5)
         props_roots = import_single_glb(MODELS_DIR / "kit-props.glb", tmp_dir)
         props_by_name = {o.name.split(".")[0]: o for o in props_roots}
         for r in props_roots:
             convert_to_flat_lambert(r)
 
         prop_placements = [
-            # Trash & small props (ART.md §3: bottle 0.5 u, can 0.3 u)
-            ("soda-bottle", (-11.0, 1.8), 0.5, None),
-            ("soda-can", (-10.2, 1.8), 0.3, None),
-            ("soda-can-crushed", (-9.5, 1.8), 0.25, None),
-            ("bag", (-8.6, 1.8), 0.65, None),
-            ("coin-gold", (-7.4, 1.8), 0.75, None),
-            ("flag", (-6.0, 1.8), 2.2, None),
-            # Obby platforms (ART.md §3: 2x2 u and 3x3 u)
-            ("platform", (-3.8, 1.5), None, 2.0),
-            ("platform-ramp", (-1.2, 1.5), None, 2.0),
-            ("platform-fortified", (1.4, 1.5), None, 2.0),
-            ("block-grass", (4.0, 1.5), None, 2.0),
-            ("block-grass-large", (7.0, 1.5), None, 3.0),
-            # Ranger cabin pieces (assembled/arranged on the right of middle row)
-            ("cabin-wall", (10.5, 2.2), 3.2, None),
-            ("cabin-doorway", (12.6, 2.2), 3.2, None),
-            ("cabin-window-a", (14.7, 2.2), 3.2, None),
-            ("cabin-corner", (16.5, 2.2), 3.2, None),
-            ("cabin-roof", (11.5, -0.5), None, 2.8),
-            ("cabin-roof-point", (14.5, -0.5), None, 2.8),
-            ("floor-wood", (17.2, -0.5), None, 2.2),
+            ("soda-bottle", (-11.5, 1.8), 0.5, None),
+            ("soda-can", (-10.7, 1.8), 0.3, None),
+            ("soda-can-crushed", (-10.0, 1.8), 0.25, None),
+            ("bag", (-9.1, 1.8), 0.65, None),
+            ("coin-gold", (-7.9, 1.8), 0.75, None),
+            ("flag", (-6.5, 1.8), 2.2, None),
+            ("platform", (-4.2, 1.5), None, 2.0),
+            ("platform-ramp", (-1.6, 1.5), None, 2.0),
+            ("platform-fortified", (1.0, 1.5), None, 2.0),
+            ("block-grass", (3.6, 1.5), None, 2.0),
+            ("block-grass-large", (6.6, 1.5), None, 3.0),
+            ("cabin-wall", (10.2, 2.2), 3.2, None),
+            ("cabin-doorway", (12.3, 2.2), 3.2, None),
+            ("cabin-window-a", (14.4, 2.2), 3.2, None),
+            ("cabin-corner", (16.2, 2.2), 3.2, None),
+            ("cabin-roof", (11.2, -0.5), None, 2.8),
+            ("cabin-roof-point", (14.2, -0.5), None, 2.8),
+            ("floor-wood", (16.9, -0.5), None, 2.2),
         ]
         for p_name, xy, th, tl in prop_placements:
             obj = props_by_name.get(p_name)
             if obj:
                 place_and_scale_root(obj, xy, target_height=th, target_length=tl, yaw_deg=-15.0)
 
-        # 5. Flora & Trees from kit-flora.glb (back row y = -4.5 for shrubs/rocks, y = -9.5 for trees)
+        # 5. Understorey Flora & Rocks from kit-flora.glb (row y = -2.8)
         flora_roots = import_single_glb(MODELS_DIR / "kit-flora.glb", tmp_dir)
         flora_by_name = {o.name.split(".")[0]: o for o in flora_roots}
         for r in flora_roots:
             convert_to_flat_lambert(r)
 
         flora_placements = [
-            # Understorey props & rocks (y = -3.2)
-            ("sign", (-11.5, -2.8), 2.2, None),
-            ("campfire_logs", (-9.6, -2.8), 0.6, None),
-            ("pot_large", (-8.0, -2.8), 0.9, None),
-            ("crops_leafsStageA", (-6.6, -2.8), 0.7, None),
-            ("flower_yellowA", (-5.2, -2.8), 0.8, None),
-            ("grass_leafsLarge", (-3.8, -2.8), 0.9, None),
-            ("hanging_moss", (-2.2, -2.8), 1.4, None),
-            ("plant_bushLarge", (-0.2, -2.8), 1.6, None),
-            ("stump_old", (2.0, -2.8), 1.1, None),
-            ("log_large", (4.5, -2.8), None, 2.6),
-            ("rock_largeA", (7.8, -2.8), 2.4, None),
-            # Trees at true ART.md §3 heights (understorey 6–8 u, canopy 10–14 u, emergent jequitibá 18 u)
-            ("tree_palmShort", (-13.0, -8.5), 6.0, None),
-            ("tree_fat", (-9.0, -8.5), 7.5, None),
-            ("tree_oak", (-4.5, -8.5), 11.0, None),
-            ("tree_palmTall", (0.0, -8.5), 12.0, None),
-            ("tree_plateau", (5.0, -8.5), 13.0, None),
-            ("tree_palmDetailedTall", (10.0, -8.5), 13.5, None),
-            ("tree_detailed", (15.5, -8.5), 18.0, None),
+            ("sign", (-12.0, -2.8), 2.2, None),
+            ("campfire_logs", (-10.2, -2.8), 0.6, None),
+            ("pot_large", (-8.6, -2.8), 0.9, None),
+            ("crops_leafsStageA", (-7.2, -2.8), 0.7, None),
+            ("flower_yellowA", (-5.8, -2.8), 0.8, None),
+            ("grass_leafsLarge", (-4.4, -2.8), 0.9, None),
+            ("hanging_moss", (-2.8, -2.8), 1.4, None),
+            ("plant_bushLarge", (-0.8, -2.8), 1.6, None),
+            ("stump_old", (1.4, -2.8), 1.1, None),
+            ("log_large", (3.9, -2.8), None, 2.6),
+            ("rock_largeA", (7.2, -2.8), 2.4, None),
         ]
         for f_name, xy, th, tl in flora_placements:
             obj = flora_by_name.get(f_name)
             if obj:
                 place_and_scale_root(obj, xy, target_height=th, target_length=tl, yaw_deg=12.0)
 
-        # Also place any custom-*.glb models at their native 1:1 ART scale
-        custom_glbs = sorted(MODELS_DIR.glob("custom-*.glb"))
-        tree_idx = 0
-        prop_idx = 0
-        for c_glb in custom_glbs:
-            c_roots = import_single_glb(c_glb, tmp_dir)
-            for cr in c_roots:
-                convert_to_flat_lambert(cr)
-                mins, maxs = get_hierarchy_bounds(cr)
-                if (maxs.z - mins.z) > 4.0:
-                    place_and_scale_root(cr, (-17.5 + tree_idx * 5.2, -13.5), uniform_scale=1.0, yaw_deg=15.0)
-                    tree_idx += 1
-                else:
-                    place_and_scale_root(cr, (11.5 + prop_idx * 2.0, 5.5), uniform_scale=1.0, yaw_deg=155.0)
-                    prop_idx += 1
+        # 6. Custom Atlantic Forest Trees (back row y = -8.5) & Custom Props/Signs/Bromeliads
+        custom_tree_layout = [
+            ("custom-xaxim.glb", (-13.5, -8.5)),
+            ("custom-palmeira-jucara.glb", (-9.2, -8.5)),
+            ("custom-embauba.glb", (-4.6, -8.5)),
+            ("custom-ipe-amarelo.glb", (0.2, -8.5)),
+            ("custom-ipe-rosa.glb", (5.4, -8.5)),
+            ("custom-araucaria.glb", (11.0, -8.5)),
+            ("custom-jequitiba-rosa.glb", (17.2, -8.5)),
+        ]
+        for c_name, xy in custom_tree_layout:
+            if (MODELS_DIR / c_name).exists():
+                for cr in import_single_glb(MODELS_DIR / c_name, tmp_dir):
+                    convert_to_flat_lambert(cr)
+                    place_and_scale_root(cr, xy, uniform_scale=1.0, yaw_deg=15.0)
 
-        # Render 1: Master Lineup Overview (2560x1440) — pulled back to show full 18 u emergent tree height
+        custom_prop_layout = [
+            ("custom-bromelia.glb", (11.8, 5.5)),
+            ("custom-bromelia-centro-vermelho.glb", (13.2, 5.5)),
+            ("custom-arapuca.glb", (14.8, 5.5)),
+            ("custom-laco.glb", (16.4, 5.5)),
+            ("custom-placa-nao-jogue-lixo.glb", (-13.8, -2.8)),
+            ("custom-placa-proibido-cacar.glb", (-15.6, -2.8)),
+            ("custom-placa-area-de-soltura.glb", (-17.4, -2.8)),
+        ]
+        for c_name, xy in custom_prop_layout:
+            if (MODELS_DIR / c_name).exists():
+                for cr in import_single_glb(MODELS_DIR / c_name, tmp_dir):
+                    convert_to_flat_lambert(cr)
+                    place_and_scale_root(cr, xy, uniform_scale=1.0, yaw_deg=165.0)
+
+        # Render 1: Master Lineup Overview (2560x1440)
         render_camera_view(
-            cam_pos=(1.8, 35.0, 14.5),
-            look_at=(1.8, -2.5, 5.8),
+            cam_pos=(1.5, 36.0, 14.5),
+            look_at=(1.5, -2.5, 5.5),
             out_file=OUT_DIR / "lineup.png",
             res=(2560, 1440),
             fov_deg=48.0,
@@ -503,29 +590,53 @@ def main() -> None:
 
         # Render 2: Close-up Sheet — Avatars (3 skins), 1 u Scale Bar, Grey Card & 7 Animals
         render_camera_view(
-            cam_pos=(-1.0, 18.2, 3.8),
-            look_at=(-1.0, 5.5, 1.3),
+            cam_pos=(0.5, 19.5, 3.8),
+            look_at=(0.5, 5.5, 1.3),
             out_file=OUT_DIR / "closeup-avatars-animals.png",
             res=(1920, 1080),
-            fov_deg=44.0,
+            fov_deg=45.0,
         )
 
         # Render 3: Close-up Sheet — Props, Obby Platforms, Checkpoint Flag & Ranger Cabin
         render_camera_view(
-            cam_pos=(3.0, 18.5, 5.2),
-            look_at=(3.0, 1.2, 1.4),
+            cam_pos=(2.5, 19.0, 5.2),
+            look_at=(2.5, 1.2, 1.4),
             out_file=OUT_DIR / "closeup-props-obby-cabin.png",
             res=(1920, 1080),
             fov_deg=48.0,
         )
 
-        # Render 4: Close-up Sheet — Trees (6 u to 18 u) & Understorey Flora
+        # Render 4: Close-up Sheet — Custom Atlantic Forest Trees (6 u to 18 u) & Understorey Flora
         render_camera_view(
-            cam_pos=(1.5, 29.0, 12.5),
-            look_at=(1.5, -7.5, 7.0),
+            cam_pos=(1.5, 30.0, 12.5),
+            look_at=(1.5, -7.5, 6.8),
             out_file=OUT_DIR / "closeup-trees-flora.png",
             res=(1920, 1080),
             fov_deg=48.0,
+        )
+
+        # Render 5: 18 Roblox-Classic Flat-Colour Avatar Presets Sheet (6x3 grid in lineup light)
+        configure_scene_and_art_light()
+        for idx, preset in enumerate(regions_spec["presets"]):
+            col = idx % 6
+            row = idx // 6
+            preset_png = composite_preset_png(regions_spec, preset, tmp_dir / f"sheet-{preset['id']}.png")
+            roots = import_single_glb(MODELS_DIR / "avatar.glb", tmp_dir)
+            if roots:
+                av = roots[0]
+                convert_to_flat_lambert(av, preset_png)
+                place_and_scale_root(
+                    av,
+                    (-6.25 + col * 2.5, 3.5 - row * 3.5),
+                    target_height=3.0,
+                    yaw_deg=165.0,
+                )
+        render_camera_view(
+            cam_pos=(0.0, 16.5, 6.2),
+            look_at=(0.0, 0.0, 1.5),
+            out_file=OUT_DIR / "avatar-presets-18.png",
+            res=(1920, 1080),
+            fov_deg=42.0,
         )
 
     print(f"[lineup.py] Rendered master lineup and 3 category sheets to {OUT_DIR}")
