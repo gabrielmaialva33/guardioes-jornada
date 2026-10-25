@@ -35,7 +35,7 @@ export async function loadForest(
 	};
 
 	try {
-		await Promise.all(
+		const loads = await Promise.allSettled(
 			FOREST_KINDS.map(async (name) => {
 				if (source.getObjectByName(name)) return;
 				const model = await loadModel(customFiles[name], signal);
@@ -43,6 +43,7 @@ export async function loadForest(
 				source.add(model);
 			})
 		);
+		for (const load of loads) if (load.status === 'rejected') throw load.reason;
 		signal.throwIfAborted();
 		const scale = new Map<ForestKind, number>();
 		for (const name of FOREST_KINDS) {
