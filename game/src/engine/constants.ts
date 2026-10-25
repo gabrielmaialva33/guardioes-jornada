@@ -65,8 +65,11 @@ export const CAMERA_FOCUS_HEIGHT = 4.5 * STUD;
 export const CAMERA_DEFAULT_DISTANCE = 12.5 * STUD;
 /** CameraMinZoomDistance 0.5 studs, also ZoomController MIN_FOCUS_DIST [PM]. */
 export const CAMERA_MIN_DISTANCE = 0.5 * STUD;
-/** CameraMaxZoomDistance 128 studs in current Studio templates [PM]; lower it per level if the far view costs draws. */
-export const CAMERA_MAX_DISTANCE = 128 * STUD;
+/**
+ * 24 u. Roblox Studio templates allow 128 studs [PM], but on the entry phones the
+ * far view would draw most of the forest; 40 studs keeps the 200-draw budget.
+ */
+export const CAMERA_MAX_DISTANCE = 40 * STUD;
 /** Zoom goals below 1 stud enter first person [PM] (FIRST_PERSON_DISTANCE_THRESHOLD). */
 export const FIRST_PERSON_THRESHOLD = 1 * STUD;
 /** First person keeps the camera 0.5 studs from the pivot [PM] (FIRST_PERSON_DISTANCE_MIN). */
