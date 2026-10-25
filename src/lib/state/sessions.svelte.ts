@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { journeys, penap } from '#lib/content/penap.ts';
+import { journeys, mataAtlantica } from '#lib/content/mata-atlantica.ts';
 import type { Journey } from '#lib/content/types.ts';
 import { decodeSession } from '#lib/data/session-schema.ts';
 import { clearJournalEntry, clearJournalRecord, journalRecord, readJournal } from '#lib/data/journal.ts';
@@ -96,9 +96,25 @@ export class Sessions {
 				).length
 			: 0;
 	}
+	get syncablePendingCount() {
+		return this.ownerId
+			? this.#records.filter(
+					(r) =>
+						r.ownerId === this.ownerId &&
+						!r.quarantine &&
+						!r.syncBlocked &&
+						(r.rev > r.ackedRev || r.inflight)
+				).length
+			: 0;
+	}
+	get blockedSyncError() {
+		return this.#records.find((r) => r.ownerId === this.ownerId && r.syncBlocked)?.syncBlocked ?? null;
+	}
 	setOwner(ownerId: string | null) {
+		const previous = this.blockedSyncError;
 		this.ownerId = ownerId;
 		this.#identityReady = true;
+		if (this.blockedSyncError || (previous && this.error === previous)) this.error = this.blockedSyncError;
 	}
 	onChange(listener: (change: SessionChange) => void) {
 		this.#listeners.add(listener);
@@ -149,7 +165,7 @@ export class Sessions {
 			if (!this.readOnly) await this.#recoverJournal();
 			this.#readOK = true;
 			this.#healthy = true;
-			this.error = null;
+			this.error = this.blockedSyncError;
 			if (!this.readOnly) await this.#cleanup();
 		} catch {
 			this.#healthy = false;
@@ -233,7 +249,10 @@ export class Sessions {
 			session: v.unknown(),
 			inflight: v.optional(v.unknown()),
 			quarantine: v.optional(v.object({ reason: v.string(), raw: v.unknown() })),
-			cleanupPhotos: v.optional(v.boolean())
+			cleanupPhotos: v.optional(v.boolean()),
+			certificateRegenerations: v.optional(v.pipe(integer, v.maxValue(5))),
+			conflictForks: v.optional(v.pipe(integer, v.maxValue(5))),
+			syncBlocked: v.optional(v.pipe(v.string(), v.minLength(1)))
 		});
 		const result = v.safeParse(schema, raw);
 		if (!result.success) {
@@ -310,7 +329,7 @@ export class Sessions {
 		return !journeys[session.journeyId];
 	}
 	journeyOf(session: Session): Journey {
-		return journeys[session.journeyId] ?? penap;
+		return journeys[session.journeyId] ?? mataAtlantica;
 	}
 
 	#commit(records: LocalRecord[], kind: SessionChange['kind']) {
@@ -343,7 +362,7 @@ export class Sessions {
 				this.#healthy = true;
 				if (this.#writeFailed) {
 					this.#writeFailed = false;
-					this.error = null;
+					this.error = this.blockedSyncError;
 				}
 			} catch (error) {
 				this.#healthy = false;
@@ -398,11 +417,13 @@ export class Sessions {
 		const session = this.find(id);
 		if (!session || !this.#current(session)) return;
 		const r = this.#record(id)!;
+		if (r.syncBlocked && this.error === r.syncBlocked) this.error = null;
 		const rev = r.rev + 1;
 		this.#commit(
 			[
 				{
 					...r,
+					syncBlocked: undefined,
 					rev,
 					deleted: true,
 					session: r.ownerId === null ? null : { ...$state.snapshot(session), rev },
@@ -523,7 +544,8 @@ export class Sessions {
 		await this.flush();
 		if (!this.ready || !this.ownerId) return null;
 		const r = this.#records.find(
-			(r) => r.ownerId === this.ownerId && !r.quarantine && (r.rev > r.ackedRev || r.inflight)
+			(r) =>
+				r.ownerId === this.ownerId && !r.quarantine && !r.syncBlocked && (r.rev > r.ackedRev || r.inflight)
 		);
 		if (!r) return null;
 		const operation = r.inflight ?? {
@@ -537,6 +559,54 @@ export class Sessions {
 		await this.flush();
 		return { id: r.id, operation: $state.snapshot(operation) };
 	}
+	async #blockSync(record: LocalRecord, message: string) {
+		const rev = record.rev + 1;
+		this.#commit(
+			[
+				{
+					...record,
+					rev,
+					session: record.session ? { ...record.session, rev } : null,
+					inflight: undefined,
+					syncBlocked: message
+				}
+			],
+			'remote'
+		);
+		this.error = message;
+		await this.flush();
+	}
+	async regenerateCertificate(id: string, operation: Operation) {
+		const r = this.#record(id);
+		if (!this.ready || !r || r.inflight?.mutationId !== operation.mutationId) return;
+		if (r.deleted) {
+			this.#commit([{ ...r, inflight: undefined }], 'remote');
+			await this.flush();
+			return;
+		}
+		if (!r.session) return;
+		if ((r.certificateRegenerations ?? 0) >= 5) {
+			await this.#blockSync(
+				r,
+				'Não foi possível reservar um código de certificado após cinco tentativas. A jornada está salva neste aparelho; a sincronização desta jornada foi pausada.'
+			);
+			return;
+		}
+		const rev = r.rev + 1;
+		this.#commit(
+			[
+				{
+					...r,
+					rev,
+					inflight: undefined,
+					certificateRegenerations: (r.certificateRegenerations ?? 0) + 1,
+					session: { ...r.session, rev, certificateCode: newCertificateCode(), updatedAt: Date.now() }
+				}
+			],
+			'remote'
+		);
+		await this.flush();
+	}
 	async acknowledge(id: string, operation: Operation, serverRev: number) {
 		const r = this.#record(id);
 		if (!r || r.inflight?.mutationId !== operation.mutationId) return;
@@ -548,6 +618,8 @@ export class Sessions {
 					ackedRev: Math.max(r.ackedRev, operation.rev),
 					serverRev,
 					inflight: undefined,
+					certificateRegenerations: undefined,
+					syncBlocked: undefined,
 					...(done ? { session: null, cleanupPhotos: true } : {})
 				}
 			],
@@ -592,6 +664,13 @@ export class Sessions {
 		const duplicateId = crypto.randomUUID();
 		let r = this.#record(id);
 		if (!r || !isCurrent()) return;
+		if (!remote && (r.conflictForks ?? 0) >= 5) {
+			await this.#blockSync(
+				r,
+				'A nuvem recusou os identificadores desta jornada repetidamente. Os dados estão salvos neste aparelho; a sincronização desta jornada foi pausada.'
+			);
+			return;
+		}
 		let copy: Session | null = null;
 		while (r.session) {
 			const snapshot = $state.snapshot(r.session),
@@ -632,7 +711,7 @@ export class Sessions {
 		};
 		this.#commit(
 			[
-				original,
+				// Journal the preserved copy before retiring/replacing its source.
 				...(copy
 					? [
 							{
@@ -641,11 +720,13 @@ export class Sessions {
 								rev: 1,
 								ackedRev: 0,
 								serverRev: 0,
+								conflictForks: remote ? 0 : (r.conflictForks ?? 0) + 1,
 								deleted: false,
 								session: copy
 							}
 						]
-					: [])
+					: []),
+				original
 			],
 			'saved'
 		);

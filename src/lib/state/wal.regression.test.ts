@@ -260,3 +260,42 @@ it('still works when accessing the localStorage property itself throws', async (
 	expect(store.ready).toBe(true);
 	expect(((await disk.read()) as LocalRecord[])[0].id).toBe(visit.id);
 });
+it('preserves the journey if interrupted between the fork and retirement journal writes', async () => {
+	const name = 'wal-partial-fork-' + crypto.randomUUID(),
+		disk = new IndexedRepository(name),
+		entered = deferred();
+	let blocked = false;
+	const store = create({
+		read: () => disk.read(),
+		close: () => disk.close(),
+		write: (rows) => {
+			if (blocked) {
+				entered.resolve();
+				return new Promise(() => {});
+			}
+			return disk.write(rows);
+		}
+	});
+	await store.load();
+	const visit = store.create(input);
+	store.advance(visit);
+	store.advance(visit);
+	await store.flush();
+	const storage = localStorage,
+		write = storage.setItem.bind(storage);
+	let wrote = false;
+	storage.setItem = (key, value) => {
+		if (!wrote) {
+			write(key, value);
+			wrote = true;
+		}
+	};
+	blocked = true;
+	void store.resolveConflict(visit.id, null);
+	await entered.promise;
+	store.close();
+	storage.setItem = write;
+	const recovered = create(new IndexedRepository(name));
+	await recovered.load();
+	expect(recovered.list.some((session) => session.revealed)).toBe(true);
+});

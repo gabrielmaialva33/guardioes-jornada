@@ -195,6 +195,14 @@ export class CloudSync {
 					)
 						throw new Error('The deletion was not confirmed');
 					if (reply.status === 'ok') await this.#store.acknowledge(id, operation, reply.rev);
+					else if (
+						operation.kind === 'push' &&
+						operation.baseRev === 0 &&
+						reply.rev === 0 &&
+						!reply.server_doc &&
+						reply.reason === 'certificate_code_taken'
+					)
+						await this.#store.regenerateCertificate(id, operation);
 					else await this.#store.resolveConflict(id, reply.server_doc, current);
 					if (!current()) return;
 				}
@@ -206,12 +214,17 @@ export class CloudSync {
 						await this.#store.receive(row, current);
 					}
 				}
-			} while (current() && (this.#again || this.#needsPull || this.pending > 0) && ++rounds < 10);
+			} while (
+				current() &&
+				(this.#again || this.#needsPull || this.#store.syncablePendingCount > 0) &&
+				++rounds < 10
+			);
 			if (current()) {
 				this.#attempt = 0;
 				this.lastSyncAt = Date.now();
-				this.status = 'idle';
-				if (this.pending) this.#schedule(this.#retryBase);
+				this.status = this.#store.blockedSyncError ? 'error' : 'idle';
+				if (this.#store.syncablePendingCount) this.#schedule(this.#retryBase);
+				else clearTimeout(this.#timer);
 			}
 		} catch {
 			if (current()) {

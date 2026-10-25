@@ -20,6 +20,9 @@ export interface LocalRecord {
 	inflight?: Operation;
 	quarantine?: { reason: string; raw: unknown };
 	cleanupPhotos?: boolean;
+	certificateRegenerations?: number;
+	conflictForks?: number;
+	syncBlocked?: string;
 }
 export interface Repository {
 	read(): Promise<unknown[]>;

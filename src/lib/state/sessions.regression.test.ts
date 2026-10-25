@@ -616,3 +616,176 @@ describe('persistent CAS outbox', () => {
 		expect(s.list[0].scores).toHaveLength(1);
 	});
 });
+
+describe('hardened RPC conflicts', () => {
+	it('regenerates a taken certificate code on the same session ID and retries the latest revision', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s);
+		const visit = s.create(input);
+		const originalCode = visit.certificateCode,
+			push = cloud.push,
+			calls: Session[] = [];
+		cloud.push = async (session, base, mutation) => {
+			calls.push(structuredClone(session));
+			if (calls.length === 1) {
+				s.score(visit, visit.groups[0].id, 1, null);
+				return { status: 'conflict', rev: 0, server_doc: null, reason: 'certificate_code_taken' };
+			}
+			return push(session, base, mutation);
+		};
+		await sync.run();
+		expect(calls).toHaveLength(2);
+		expect(s.list).toHaveLength(1);
+		expect(calls[1].id).toBe(visit.id);
+		expect(calls[1].rev).toBeGreaterThan(calls[0].rev);
+		expect(calls[1].certificateCode).not.toBe(originalCode);
+		expect(calls[1].certificateCode).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
+		expect(calls[1].scores).toHaveLength(1);
+		expect(sync.pending).toBe(0);
+	});
+	it('caps certificate regenerations durably without forking, losing the session or retrying forever', async () => {
+		const name = 'certificate-cap-' + crypto.randomUUID(),
+			s = store(A, new IndexedRepository(name));
+		const { sync, cloud } = await connected(s);
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		const visit = s.create(input);
+		let calls = 0;
+		cloud.push = async () => {
+			calls++;
+			return { status: 'conflict', rev: 0, server_doc: null, reason: 'certificate_code_taken' };
+		};
+		await sync.run();
+		expect(calls).toBe(6);
+		expect(s.list).toHaveLength(1);
+		expect(s.find(visit.id)).not.toBeNull();
+		expect(s.error).toBeTruthy();
+		expect(sync.status).toBe('error');
+		expect(sync.pending).toBe(1);
+		await vi.advanceTimersByTimeAsync(120000);
+		expect(calls).toBe(6);
+		await sync.run();
+		expect(calls).toBe(6);
+		sync.dispose();
+		s.close();
+		const restored = store(A, new IndexedRepository(name));
+		const next = await connected(restored, cloud);
+		expect(calls).toBe(6);
+		expect(restored.find(visit.id)).not.toBeNull();
+		expect(restored.error).toBeTruthy();
+		expect(next.sync.status).toBe('error');
+	});
+	it('honors deletion made while the rejected certificate upload was in flight', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s),
+			visit = s.create(input);
+		let pushes = 0;
+		cloud.push = async () => {
+			pushes++;
+			await s.remove(visit.id);
+			return { status: 'conflict', rev: 0, server_doc: null, reason: 'certificate_code_taken' };
+		};
+		await sync.run();
+		expect(pushes).toBe(1);
+		expect(s.list).toHaveLength(0);
+		expect(sync.pending).toBe(0);
+	});
+	it('continues syncing other sessions and permits removing a paused session', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s),
+			visit = s.create(input),
+			push = cloud.push;
+		cloud.push = async (session, base, mutation) =>
+			session.id === visit.id
+				? { status: 'conflict', rev: 0, server_doc: null, reason: 'certificate_code_taken' }
+				: push(session, base, mutation);
+		await sync.run();
+		const other = s.create(input);
+		await sync.run();
+		expect(cloud.rows.has(other.id)).toBe(true);
+		expect(sync.pending).toBe(1);
+		expect(s.find(visit.id)).not.toBeNull();
+		await s.remove(visit.id);
+		await sync.run();
+		expect(sync.pending).toBe(0);
+		expect(sync.status).toBe('idle');
+		expect(s.error).toBeNull();
+	});
+	it('forks a foreign-owned ID, retires its old local record and pushes the preserved journey once', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s),
+			visit = s.create(input);
+		s.score(visit, visit.groups[0].id, 1, null);
+		const push = cloud.push;
+		let collisions = 0;
+		const foreign = {
+			id: visit.id,
+			owner_id: B,
+			rev: 1,
+			doc: { secret: 'synthetic foreign data' },
+			deleted_at: null
+		};
+		cloud.rows.set(visit.id, foreign);
+		cloud.push = async (session, base, mutation) => {
+			if (session.id === visit.id) {
+				collisions++;
+				return { status: 'conflict', rev: 0, server_doc: null };
+			}
+			return push(session, base, mutation);
+		};
+		await sync.run();
+		expect(s.find(visit.id)).toBeNull();
+		expect(s.list).toHaveLength(1);
+		const copy = s.list[0];
+		expect(copy.id).not.toBe(visit.id);
+		expect(copy.ownerId).toBe(A);
+		expect(copy.scores).toHaveLength(1);
+		expect(cloud.rows.get(visit.id)).toEqual(foreign);
+		expect(cloud.rows.get(copy.id)?.owner_id).toBe(A);
+		expect(sync.pending).toBe(0);
+		await sync.run({ pull: true });
+		expect(collisions).toBe(1);
+		expect(s.list).toHaveLength(1);
+	});
+	it('treats an unknown reason as a generic server conflict', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s),
+			visit = s.create(input);
+		const push = cloud.push;
+		const server = {
+			id: visit.id,
+			owner_id: A,
+			rev: 1,
+			doc: { ...visit, school: 'Server school' },
+			deleted_at: null
+		};
+		cloud.rows.set(visit.id, server);
+		cloud.push = async (session, base, mutation) =>
+			session.id === visit.id
+				? { status: 'conflict', rev: 1, server_doc: server, reason: 'future_reason' }
+				: push(session, base, mutation);
+		await sync.run();
+		expect(s.find(visit.id)?.school).toBe('Server school');
+		expect(s.list).toHaveLength(2);
+		expect(s.list.find((entry) => entry.id !== visit.id)?.school).toBe(
+			input.school + ' (cópia deste celular)'
+		);
+		expect(sync.pending).toBe(0);
+	});
+	it('bounds repeated anonymous conflicts instead of endlessly making fresh IDs', async () => {
+		const s = store(),
+			{ sync, cloud } = await connected(s);
+		s.create(input);
+		let calls = 0;
+		cloud.push = async () => {
+			calls++;
+			return { status: 'conflict', rev: 0, server_doc: null, reason: 'future_reason' };
+		};
+		await sync.run();
+		expect(calls).toBe(6);
+		expect(s.list).toHaveLength(1);
+		expect(s.error).toBeTruthy();
+		expect(sync.status).toBe('error');
+		await sync.run();
+		expect(calls).toBe(6);
+	});
+});
