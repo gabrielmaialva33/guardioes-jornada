@@ -90,7 +90,13 @@ const PROP_MODELS = [
 	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'coin-gold', tex: 'Textures/colormap.png' },
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-bottle', tex: 'Textures/colormap.png' },
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-can', tex: 'Textures/colormap.png' },
-	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-can-crushed', tex: 'Textures/colormap.png' },
+	{
+		pack: 'food-kit',
+		dir: 'Models/GLB format',
+		name: 'soda-can-crushed',
+		tex: 'Textures/colormap.png',
+		simplifyRatio: 0.88
+	},
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'bag', tex: 'Textures/colormap.png' },
 	{ pack: 'holiday-kit', dir: 'Models/GLB format', name: 'cabin-wall', tex: 'Textures/colormap.png' },
 	{ pack: 'holiday-kit', dir: 'Models/GLB format', name: 'cabin-doorway', tex: 'Textures/colormap.png' },
@@ -1034,10 +1040,19 @@ function main() {
 
 		// 4. Flora: merge 18 Nature Kit models -> prune unused TEXCOORD_0 -> palette() -> snap to ART ramps -> gltfpack
 		{
-			const items = FLORA_MODELS.map((name) => ({
-				name,
-				path: path.join(RAW_ROOT, 'nature-kit', 'Models', 'GLTF format', `${name}.glb`)
-			}));
+			const items = FLORA_MODELS.map((name) => {
+				const rawPath = path.join(RAW_ROOT, 'nature-kit', 'Models', 'GLTF format', `${name}.glb`);
+				if (name === 'tree_detailed') {
+					const simpPath = path.join(workDir, 'tree_detailed-simp.glb');
+					execFileSync(
+						'pnpm',
+						['dlx', 'gltfpack@1.3.0', '-i', rawPath, '-o', simpPath, '-noq', '-kn', '-si', '0.95'],
+						{ stdio: 'pipe' }
+					);
+					return { name, path: simpPath };
+				}
+				return { name, path: rawPath };
+			});
 			const mergedPath = path.join(workDir, 'flora-merged.glb');
 			const prunedPath = path.join(workDir, 'flora-pruned.glb');
 			const palPath = path.join(workDir, 'flora-pal.glb');
@@ -1076,8 +1091,28 @@ function main() {
 		{
 			const palCache = new Map();
 			const items = PROP_MODELS.map((entry) => {
-				const modelPath = path.join(RAW_ROOT, entry.pack, entry.dir, `${entry.name}.glb`);
-				const texPath = path.resolve(path.dirname(modelPath), entry.tex);
+				const rawModelPath = path.join(RAW_ROOT, entry.pack, entry.dir, `${entry.name}.glb`);
+				const texPath = path.resolve(path.dirname(rawModelPath), entry.tex);
+				let modelPath = rawModelPath;
+				if (entry.simplifyRatio) {
+					modelPath = path.join(workDir, `${entry.name}-simp.glb`);
+					execFileSync(
+						'pnpm',
+						[
+							'dlx',
+							'gltfpack@1.3.0',
+							'-i',
+							rawModelPath,
+							'-o',
+							modelPath,
+							'-noq',
+							'-kn',
+							'-si',
+							String(entry.simplifyRatio)
+						],
+						{ stdio: 'pipe' }
+					);
+				}
 				let paletteBytes = palCache.get(entry.pack);
 				if (!paletteBytes) {
 					paletteBytes = buildRecoloredKitPalette(entry.pack, texPath);
