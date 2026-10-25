@@ -5,7 +5,7 @@
  * update() once per rendered frame, then copies `position`/`yaw` to the avatar
  * (placeObject) and `pose` to the three camera (applyCameraPose).
  */
-import { Vector3 } from 'three';
+import type { Vector3 } from 'three';
 import { type CameraLens, type CameraPose, DEFAULT_LENS, OrbitCamera } from './camera.ts';
 import {
 	Character,

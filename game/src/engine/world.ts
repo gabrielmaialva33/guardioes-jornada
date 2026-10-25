@@ -33,7 +33,7 @@ import {
 	BufferAttribute,
 	BufferGeometry,
 	DoubleSide,
-	Matrix4,
+	type Matrix4,
 	Mesh,
 	type Object3D,
 	type Ray,
