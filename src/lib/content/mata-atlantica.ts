@@ -4,7 +4,7 @@ import type { Journey, TreeInfo } from './types.ts';
  * The Atlantic Forest journey, written for the guardioes-da-floresta prototype
  * on Replit. It was first designed on a trail at PENAP but works in any
  * Atlantic Forest setting. The timers and the checklist are additions that
- * help in the field.
+ * help in the field. The id stays 'penap' because stored sessions reference it.
  */
 /*
  * Tree facts verified on 2026-10-25. Neither species is exclusive to the
