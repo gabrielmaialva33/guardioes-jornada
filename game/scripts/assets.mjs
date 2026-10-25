@@ -24,7 +24,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { brotliCompressSync, constants as zlibConstants, deflateSync, gzipSync } from 'node:zlib';
+import { brotliCompressSync, deflateSync, gzipSync, constants as zlibConstants } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_ROOT = path.resolve(__dirname, '..');
@@ -34,14 +34,7 @@ const RAW_ROOT =
 	process.env.KENNEY_RAW_DIR ??
 	path.join(os.homedir(), '.cache', 'agents', '2026-10-25-trilha-secreta', 'kenney-raw');
 
-const PACKS = [
-	'blocky-characters',
-	'cube-pets',
-	'nature-kit',
-	'platformer-kit',
-	'food-kit',
-	'holiday-kit'
-];
+const PACKS = ['blocky-characters', 'cube-pets', 'nature-kit', 'platformer-kit', 'food-kit', 'holiday-kit'];
 
 const FLORA_MODELS = [
 	'tree_oak',
@@ -64,14 +57,37 @@ const FLORA_MODELS = [
 	'sign'
 ];
 
+const COLOR_MAP_PATH = path.join(__dirname, 'blender', 'color-map.json');
+const COLOR_MAP = JSON.parse(fs.readFileSync(COLOR_MAP_PATH, 'utf8'));
+
+function srgbByteToLinear(b) {
+	const u = b / 255;
+	return u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4;
+}
+
+function hexToLinearFactor(hex) {
+	const [r, g, b] = parseHex(hex);
+	return [srgbByteToLinear(r), srgbByteToLinear(g), srgbByteToLinear(b), 1];
+}
+
 const PROP_MODELS = [
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'platform', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'platform-ramp', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'platform-fortified', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'block-grass', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'block-grass-large', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'flag', tex: '../Textures/variation-a.png' },
-	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'coin-gold', tex: '../Textures/variation-a.png' },
+	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'platform', tex: 'Textures/colormap.png' },
+	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'platform-ramp', tex: 'Textures/colormap.png' },
+	{
+		pack: 'platformer-kit',
+		dir: 'Models/GLB format',
+		name: 'platform-fortified',
+		tex: 'Textures/colormap.png'
+	},
+	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'block-grass', tex: 'Textures/colormap.png' },
+	{
+		pack: 'platformer-kit',
+		dir: 'Models/GLB format',
+		name: 'block-grass-large',
+		tex: 'Textures/colormap.png'
+	},
+	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'flag', tex: 'Textures/colormap.png' },
+	{ pack: 'platformer-kit', dir: 'Models/GLB format', name: 'coin-gold', tex: 'Textures/colormap.png' },
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-bottle', tex: 'Textures/colormap.png' },
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-can', tex: 'Textures/colormap.png' },
 	{ pack: 'food-kit', dir: 'Models/GLB format', name: 'soda-can-crushed', tex: 'Textures/colormap.png' },
@@ -171,7 +187,7 @@ function cleanMaterialsAndAttributes(json, { replaceImages = [] } = {}, bin) {
 		);
 		if (json.extensionsUsed.length === 0) delete json.extensionsUsed;
 	}
-	if (json. materials) {
+	if (json.materials) {
 		for (const mat of json.materials) {
 			if (mat.extensions) {
 				delete mat.extensions.KHR_materials_unlit;
@@ -188,7 +204,7 @@ function cleanMaterialsAndAttributes(json, { replaceImages = [] } = {}, bin) {
 			}
 		}
 	}
-	if (json. meshes) {
+	if (json.meshes) {
 		for (const mesh of json.meshes) {
 			for (const prim of mesh.primitives || []) {
 				if (prim.attributes?.TANGENT !== undefined) {
@@ -356,14 +372,18 @@ function mergeStaticGlbs(items, outPath) {
 				}
 				matMap.set(mIdx, sharedMatIdx);
 			} else {
-				const colorKey = JSON.stringify(mat.pbrMetallicRoughness?.baseColorFactor || [1, 1, 1, 1]);
+				const mappedEntry = COLOR_MAP.natureKitMaterials?.[mat.name];
+				const targetFactor = mappedEntry
+					? hexToLinearFactor(mappedEntry.targetHex)
+					: mat.pbrMetallicRoughness?.baseColorFactor || [1, 1, 1, 1];
+				const colorKey = mappedEntry ? mappedEntry.targetHex : JSON.stringify(targetFactor);
 				let sharedMatIdx = matIndexByKey.get(colorKey);
 				if (sharedMatIdx === undefined) {
 					sharedMatIdx = merged.materials.length;
 					merged.materials.push({
 						name: mat.name || `color-${sharedMatIdx}`,
 						pbrMetallicRoughness: {
-							baseColorFactor: mat.pbrMetallicRoughness?.baseColorFactor || [1, 1, 1, 1],
+							baseColorFactor: targetFactor,
 							metallicFactor: 0,
 							roughnessFactor: 1
 						}
@@ -462,10 +482,116 @@ function resizeNearestWebp(inFile, outFile, size) {
 	);
 }
 
-/** Parse '#rrggbb' into [r, g, b]. */
 function parseHex(hex) {
 	const v = parseInt(hex.slice(1), 16);
 	return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+function rgbToLab([r, g, b]) {
+	const R = srgbByteToLinear(r);
+	const G = srgbByteToLinear(g);
+	const B = srgbByteToLinear(b);
+	const X = (R * 0.4124564 + G * 0.3575761 + B * 0.1804375) / 0.95047;
+	const Y = (R * 0.2126729 + G * 0.7151522 + B * 0.072175) / 1.0;
+	const Z = (R * 0.0193339 + G * 0.119192 + B * 0.9503041) / 1.08883;
+	const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+	const fx = f(X);
+	const fy = f(Y);
+	const fz = f(Z);
+	return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+function buildRampLabList(includeAccent = false) {
+	const list = [];
+	for (const hexes of Object.values(COLOR_MAP.ramps)) {
+		for (const hx of hexes) {
+			const rgb = parseHex(hx);
+			list.push({ hex: hx, rgb, lab: rgbToLab(rgb) });
+		}
+	}
+	if (includeAccent) {
+		for (const hx of Object.values(COLOR_MAP.accent)) {
+			const rgb = parseHex(hx);
+			list.push({ hex: hx, rgb, lab: rgbToLab(rgb) });
+		}
+	}
+	return list;
+}
+
+function nearestRampRgb(rgb, rampList) {
+	const lab = rgbToLab(rgb);
+	let best = rampList[0].rgb;
+	let bestD = Infinity;
+	for (const entry of rampList) {
+		const d = Math.hypot(lab[0] - entry.lab[0], lab[1] - entry.lab[1], lab[2] - entry.lab[2]);
+		if (d < bestD) {
+			bestD = d;
+			best = entry.rgb;
+		}
+	}
+	return best;
+}
+
+/** Build a 64x64 NEAREST PNG-8 kit palette remapped to ART.md ramps via color-map.json. */
+function buildRecoloredKitPalette(packName, srcPngPath) {
+	const rgba = Buffer.from(
+		execFileSync('magick', [srcPngPath, '-filter', 'point', '-resize', '64x64', '-depth', '8', 'rgba:-'])
+	);
+	const rampList = buildRampLabList(false);
+	const leafShadow = parseHex(COLOR_MAP.ramps.leaf[0]);
+	for (let i = 0; i < 64 * 64; i++) {
+		const r = rgba[i * 4];
+		const g = rgba[i * 4 + 1];
+		const b = rgba[i * 4 + 2];
+		const nr = r === 0 && g === 0 && b === 0 ? leafShadow : nearestRampRgb([r, g, b], rampList);
+		rgba[i * 4] = nr[0];
+		rgba[i * 4 + 1] = nr[1];
+		rgba[i * 4 + 2] = nr[2];
+		rgba[i * 4 + 3] = 255;
+	}
+	const overrides = COLOR_MAP.kitPropsSwatches?.[packName] || {};
+	for (const [keyStr, spec] of Object.entries(overrides)) {
+		const [cStr, bStr] = keyStr.replace(/[()]/g, '').split(',');
+		const col = Number(cStr);
+		const band = Number(bStr);
+		const hexes = spec.targetHexes;
+		const x0 = col * 8;
+		const y0 = band * 16;
+		for (let r = 0; r < 16; r++) {
+			const rgb = parseHex(hexes[Math.min(3, Math.floor(r / 4))]);
+			for (let dx = 0; dx < 8; dx++) {
+				const p = ((y0 + r) * 64 + (x0 + dx)) * 4;
+				rgba[p] = rgb[0];
+				rgba[p + 1] = rgb[1];
+				rgba[p + 2] = rgb[2];
+				rgba[p + 3] = 255;
+			}
+		}
+	}
+	return encodePng(64, 64, rgba);
+}
+
+/** Snap every pixel in an embedded PNG buffer to the nearest ART ramp/accent colour. */
+function snapPalettePngToArtRamps(pngBytes, workDir) {
+	const tmpIn = path.join(workDir, 'snap-in.png');
+	fs.writeFileSync(tmpIn, pngBytes);
+	const dims = execFileSync('magick', ['identify', '-format', '%w %h', tmpIn], {
+		encoding: 'utf8'
+	})
+		.trim()
+		.split(/\s+/)
+		.map(Number);
+	const [w, h] = dims;
+	const rgba = Buffer.from(execFileSync('magick', [tmpIn, '-depth', '8', 'rgba:-']));
+	const rampList = buildRampLabList(true);
+	for (let i = 0; i < w * h; i++) {
+		const nr = nearestRampRgb([rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]], rampList);
+		rgba[i * 4] = nr[0];
+		rgba[i * 4 + 1] = nr[1];
+		rgba[i * 4 + 2] = nr[2];
+		rgba[i * 4 + 3] = 255;
+	}
+	return encodePng(w, h, rgba);
 }
 
 /** Linearly interpolate two '#rrggbb' colors at t in [0, 1]. */
@@ -605,8 +731,7 @@ function remapPetUvsForSpecies(petName, json, bin) {
 			const uvBase = (uvBv.byteOffset || 0) + (uvAcc.byteOffset || 0);
 			const uvStride = uvBv.byteStride || 8;
 			const idxBase = (idxBv.byteOffset || 0) + (idxAcc.byteOffset || 0);
-			const idxBytes =
-				idxAcc.componentType === 5121 ? 1 : idxAcc.componentType === 5123 ? 2 : 4;
+			const idxBytes = idxAcc.componentType === 5121 ? 1 : idxAcc.componentType === 5123 ? 2 : 4;
 
 			const readIdx = (i) =>
 				idxBytes === 1
@@ -703,11 +828,7 @@ function paintSwatch(rgba, col, band, spec) {
  * colormap. Each species overrides specific 8x16 (col, band) swatches used by its base model
  * and reserves auxiliary swatches for procedural attachments (mane, rosettes, toucan bill).
  */
-function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
-	const baseRgba = Buffer.from(
-		execFileSync('magick', [basePetPngPath, '-depth', '8', 'rgba:-'])
-	);
-
+function generateSpeciesPalettes(outSkinsDir) {
 	const SPECIES_PALETTES = {
 		// 1. Mico-leão-dourado (Leontopithecus rosalia) — base: monkey.glb
 		// Golden-orange silky pelage, deeper fiery-gold mane swatch, bare dark purplish-grey face/muzzle.
@@ -717,7 +838,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 0, band: 3, spec: ['#59434a', '#3f2e34'] }, // Muzzle tip / nose / lips: dark slate-plum
 			{ col: 1, band: 2, spec: ['#fffdf5', '#d9d0c1'] }, // Eye sclera / highlight
 			{ col: 7, band: 3, spec: ['#261c1a', '#140e0d'] }, // Pupils / nostrils / dark accents
-			{ col: 3, band: 2, spec: ['#ff8818', '#b84a08'] }  // Reserved cell for golden lion mane geometry
+			{ col: 3, band: 2, spec: ['#ff8818', '#b84a08'] } // Reserved cell for golden lion mane geometry
 		],
 
 		// 2. Bugio-ruivo (Alouatta guariba clamitans, adult male) — base: monkey.glb
@@ -728,7 +849,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 0, band: 3, spec: ['#3d2b28', '#261a18'] }, // Muzzle / nose / lips: deep brownish-black
 			{ col: 1, band: 2, spec: ['#f7efe6', '#cbbba8'] }, // Eye sclera / highlight
 			{ col: 7, band: 3, spec: ['#1f1716', '#120d0c'] }, // Pupils / dark facial contours
-			{ col: 3, band: 2, spec: ['#7a220c', '#4d1305'] }  // Reserved cell for prominent hyoid beard geometry
+			{ col: 3, band: 2, spec: ['#7a220c', '#4d1305'] } // Reserved cell for prominent hyoid beard geometry
 		],
 
 		// 3. Muriqui-do-sul (Brachyteles arachnoides) — base: monkey.glb
@@ -739,7 +860,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 0, band: 3, spec: ['#2b292d', '#1b191c'] }, // Muzzle / nose: deep black (with subtle pink in B. hypoxanthus)
 			{ col: 1, band: 2, spec: ['#fcfaf5', '#d4cfc4'] }, // Eye sclera / highlight
 			{ col: 7, band: 3, spec: ['#18171a', '#0d0c0e'] }, // Pupils / nostrils
-			{ col: 3, band: 2, spec: ['#c4b59b', '#96876f'] }  // Reserved cell for prehensile tail underside / hands
+			{ col: 3, band: 2, spec: ['#c4b59b', '#96876f'] } // Reserved cell for prehensile tail underside / hands
 		],
 
 		// 4. Onça-pintada (Panthera onca) — base: tiger.glb
@@ -750,7 +871,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 5, band: 3, spec: ['#26201e', '#14100f'] }, // Eyes, nose & outer rosette ring geometry: jet-black
 			{ col: 2, band: 3, spec: ['#f7d399', '#dfb06b'] }, // Paws & inner ear tufts: warm buff-gold
 			{ col: 1, band: 2, spec: ['#fffaf0', '#dfd5c5'] }, // Belly, chest, muzzle cheeks & eye sclera: cream-white
-			{ col: 3, band: 2, spec: ['#b85d19', '#8a3f0b'] }  // Inner rosette center geometry: rusty-ochre
+			{ col: 3, band: 2, spec: ['#b85d19', '#8a3f0b'] } // Inner rosette center geometry: rusty-ochre
 		],
 
 		// 5. Onça-preta / Melânica (Panthera onca melanistic variant) — base: tiger.glb
@@ -761,7 +882,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 5, band: 3, spec: ['#121015', '#08070a'] }, // Eyes, nose & subtle ghost-rosette rings: deep velvet-black
 			{ col: 2, band: 3, spec: ['#302c36', '#211e26'] }, // Paws & inner ears: subtle dark slate
 			{ col: 1, band: 2, spec: ['#46414f', '#2f2b36'] }, // Muzzle cheeks, underbelly & eye sclera: muted dark pewter
-			{ col: 3, band: 2, spec: ['#221f26', '#161419'] }  // Inner ghost-rosette center geometry
+			{ col: 3, band: 2, spec: ['#221f26', '#161419'] } // Inner ghost-rosette center geometry
 		],
 
 		// 6. Preguiça-de-coleira (Bradypus torquatus) — base: koala.glb
@@ -779,7 +900,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 0, band: 2, spec: ['#ede0c8', '#c7b293'] }, // Long curved sloth claws (feet tips) & pale chest/ear ruff
 			{ col: 7, band: 3, spec: ['#382f2b', '#211b18'] }, // Dark brownish-black facial mask, nose & eyes
 			{ col: 1, band: 2, spec: ['#faf5eb', '#d4c9b8'] }, // Eye sclera / highlight
-			{ col: 5, band: 3, spec: ['#241f1c', '#120f0e'] }  // Dedicated cell for extra black mane / collar geometry
+			{ col: 5, band: 3, spec: ['#241f1c', '#120f0e'] } // Dedicated cell for extra black mane / collar geometry
 		],
 
 		// 7. Tucano-de-bico-verde (Ramphastos dicolorus) — base: parrot.glb
@@ -809,7 +930,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 				}
 			},
 			{ col: 6, band: 2, spec: ['#bce84c', '#7cb820'] }, // Dedicated cell for enlarged green toucan bill geometry
-			{ col: 4, band: 3, spec: ['#e6392e', '#b32018'] }  // Dedicated cell for red breast band / undertail / bill base
+			{ col: 4, band: 3, spec: ['#e6392e', '#b32018'] } // Dedicated cell for red breast band / undertail / bill base
 		]
 	};
 
@@ -831,27 +952,29 @@ function main() {
 
 	const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guardioes-assets-'));
 	try {
-		// 1. Skins: 18 player skins (skin-a.webp .. skin-r.webp) at 256x256 NEAREST lossless WebP
+		// 1. Skins: 18 player skins (skin-a.webp .. skin-r.webp) at 128x128 NEAREST lossless WebP (ART.md §6)
 		const blockyTexDir = path.join(RAW_ROOT, 'blocky-characters', 'Models', 'GLB format', 'Textures');
 		for (let code = 97; code <= 114; code++) {
 			const letter = String.fromCharCode(code);
 			const srcPng = path.join(blockyTexDir, `texture-${letter}.png`);
 			const dstWebp = path.join(OUT_SKINS, `skin-${letter}.webp`);
-			resizeNearestWebp(srcPng, dstWebp, 256);
+			resizeNearestWebp(srcPng, dstWebp, 128);
 		}
 
 		// Base 64x64 NEAREST palettes for Cube Pets + 7 Atlantic Forest species recolor palettes
 		const petsPalPath = path.join(OUT_SKINS, 'palette-pets.png');
-		const petsPalBytes = resizeNearestPng(
+		resizeNearestPng(
 			path.join(RAW_ROOT, 'cube-pets', 'Models', 'GLB format', 'Textures', 'colormap.png'),
 			petsPalPath,
 			64
 		);
-		generateSpeciesPalettes(petsPalPath, OUT_SKINS);
-		const skinAPlaceholderBytes = resizeNearestPng(
-			path.join(blockyTexDir, 'texture-a.png'),
-			path.join(workDir, 'skin-a-4.png'),
-			4
+		generateSpeciesPalettes(OUT_SKINS);
+		// Enforce ART.md lightness bounds [0.12, 0.90] on all species palettes and 128x128 skins
+		execFileSync('python3', [path.join(__dirname, 'blender', 'recolor.py')], { stdio: 'inherit' });
+		const boundedPetsPalBytes = fs.readFileSync(petsPalPath);
+		const skinAPlaceholderBytes = snapPalettePngToArtRamps(
+			resizeNearestPng(path.join(blockyTexDir, 'texture-a.png'), path.join(workDir, 'skin-a-4.png'), 4),
+			workDir
 		);
 
 		// 2. Avatar: character-a.glb -> strip animations, normalize head scale to [1,1,1], keep 6 named nodes
@@ -860,11 +983,7 @@ function main() {
 			const { json, bin } = readGlb(rawAvatar);
 			delete json.animations;
 			normalizeAvatarHeadScale(json, bin);
-			const nextBin = cleanMaterialsAndAttributes(
-				json,
-				{ replaceImages: [skinAPlaceholderBytes] },
-				bin
-			);
+			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [skinAPlaceholderBytes] }, bin);
 			const step1 = path.join(workDir, 'avatar-step1.glb');
 			const step2 = path.join(workDir, 'avatar-step2.glb');
 			writeGlb(step1, json, nextBin);
@@ -880,7 +999,7 @@ function main() {
 				json.animations = json.animations.filter((a) => PET_KEEP_ANIMS.has(a.name));
 			}
 			remapPetUvsForSpecies(pet, json, bin);
-			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [petsPalBytes] }, bin);
+			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [boundedPetsPalBytes] }, bin);
 			const step1 = path.join(workDir, `${pet}-step1.glb`);
 			const step2 = path.join(workDir, `${pet}-step2.glb`);
 			writeGlb(step1, json, nextBin);
@@ -888,7 +1007,7 @@ function main() {
 			runGltfpack(step2, path.join(OUT_MODELS, `${pet}.glb`), ['-vpf']);
 		}
 
-		// 4. Flora: merge 18 Nature Kit models -> prune unused TEXCOORD_0 -> palette() -> NEAREST sampler -> gltfpack -cc -kn
+		// 4. Flora: merge 18 Nature Kit models -> prune unused TEXCOORD_0 -> palette() -> snap to ART ramps -> gltfpack
 		{
 			const items = FLORA_MODELS.map((name) => ({
 				name,
@@ -900,14 +1019,35 @@ function main() {
 			mergeStaticGlbs(items, mergedPath);
 			runGltfTransform(['prune', mergedPath, prunedPath]);
 			runGltfTransform(['palette', prunedPath, palPath, '--min', '2']);
-			// Ensure NEAREST sampler on the generated palette texture
+			// Snap the generated palette PNG to exact ART.md ramp colours and set NEAREST sampler
 			const palGlb = readGlb(palPath);
-			const nextBin = cleanMaterialsAndAttributes(palGlb.json, {}, palGlb.bin);
+			const imgBv = palGlb.json.bufferViews[palGlb.json.images[0].bufferView];
+			const rawPalPng = palGlb.bin.subarray(
+				imgBv.byteOffset || 0,
+				(imgBv.byteOffset || 0) + imgBv.byteLength
+			);
+			const snappedPalPng = snapPalettePngToArtRamps(rawPalPng, workDir);
+			const nextBin = cleanMaterialsAndAttributes(
+				palGlb.json,
+				{ replaceImages: [snappedPalPng] },
+				palGlb.bin
+			);
 			writeGlb(palPath, palGlb.json, nextBin);
-			runGltfpack(palPath, path.join(OUT_MODELS, 'kit-flora.glb'));
+			execFileSync(
+				'/usr/sbin/blender',
+				[
+					'--background',
+					'--python',
+					path.join(__dirname, 'blender', 'bake.py'),
+					'--',
+					palPath,
+					path.join(OUT_MODELS, 'kit-flora.glb')
+				],
+				{ stdio: 'inherit' }
+			);
 		}
 
-		// 5. Props: merge Platformer 4.1 + Food 2.0 + Holiday 2.0 with 64x64 NEAREST palettes -> gltfpack -cc -kn
+		// 5. Props: merge Platformer 4.1 + Food 2.0 + Holiday 2.0 with ART-remapped 64x64 NEAREST palettes -> bake -> gltfpack
 		{
 			const palCache = new Map();
 			const items = PROP_MODELS.map((entry) => {
@@ -915,11 +1055,7 @@ function main() {
 				const texPath = path.resolve(path.dirname(modelPath), entry.tex);
 				let paletteBytes = palCache.get(entry.pack);
 				if (!paletteBytes) {
-					paletteBytes = resizeNearestPng(
-						texPath,
-						path.join(workDir, `pal-${entry.pack}.png`),
-						64
-					);
+					paletteBytes = buildRecoloredKitPalette(entry.pack, texPath);
 					palCache.set(entry.pack, paletteBytes);
 				}
 				return {
@@ -933,7 +1069,30 @@ function main() {
 			const prunedPath = path.join(workDir, 'props-pruned.glb');
 			mergeStaticGlbs(items, mergedPath);
 			runGltfTransform(['prune', mergedPath, prunedPath]);
-			runGltfpack(prunedPath, path.join(OUT_MODELS, 'kit-props.glb'));
+			execFileSync(
+				'/usr/sbin/blender',
+				[
+					'--background',
+					'--python',
+					path.join(__dirname, 'blender', 'bake.py'),
+					'--',
+					prunedPath,
+					path.join(OUT_MODELS, 'kit-props.glb')
+				],
+				{ stdio: 'inherit' }
+			);
+		}
+
+		// 6. Custom raw GLBs (if any exist in ~/.cache/agents/2026-10-25-trilha-secreta/custom-raw/)
+		const customRawDir =
+			process.env.CUSTOM_RAW_DIR ??
+			path.join(os.homedir(), '.cache', 'agents', '2026-10-25-trilha-secreta', 'custom-raw');
+		if (fs.existsSync(customRawDir) && fs.readdirSync(customRawDir).some((f) => f.endsWith('.glb'))) {
+			execFileSync(
+				'/usr/sbin/blender',
+				['--background', '--python', path.join(__dirname, 'blender', 'bake.py'), '--', '--custom-only'],
+				{ stdio: 'inherit' }
+			);
 		}
 	} finally {
 		fs.rmSync(workDir, { recursive: true, force: true });
@@ -941,8 +1100,14 @@ function main() {
 
 	// Print summary BOM
 	const allFiles = [
-		...fs.readdirSync(OUT_MODELS).sort().map((f) => path.join(OUT_MODELS, f)),
-		...fs.readdirSync(OUT_SKINS).sort().map((f) => path.join(OUT_SKINS, f))
+		...fs
+			.readdirSync(OUT_MODELS)
+			.sort()
+			.map((f) => path.join(OUT_MODELS, f)),
+		...fs
+			.readdirSync(OUT_SKINS)
+			.sort()
+			.map((f) => path.join(OUT_SKINS, f))
 	];
 	let totalRaw = 0;
 	let totalGz = 0;

@@ -1,0 +1,873 @@
+"""
+Shared helpers for the custom Atlantic Forest models of the Secret Trail (game/ART.md).
+
+Every generator in this folder is a standalone, reproducible Blender script:
+
+    /usr/sbin/blender -b --factory-startup -P game/scripts/blender/models/<asset>.py [-- --no-render]
+
+It rebuilds its asset from nothing, exports a raw GLB with COLOR_0 vertex colours and
+renders a preview PNG in the standard ART light. Outputs go outside the repo, to
+$CUSTOM_RAW_DIR (default ~/.cache/agents/2026-10-25-trilha-secreta/custom-raw).
+
+Conventions (ART.md sections 1-6):
+- Blender is Z-up; the exporter writes glTF Y-up, so the model's front (glTF +Z, the
+  direction the Cube Pets and the avatar face) is Blender -Y.
+- One unit = one game unit (u, about 0.47 m; avatar 3.0 u).
+- Colours come only from RAMPS/ACCENT in game/src/style/palette.ts (parsed at run
+  time, never copied) or from the documented SPECIES colours below.
+- Flat shading, no modifiers, transforms applied (rotation and scale identity; a
+  node's translation is its pivot), origin at the trunk base or the attach point.
+- One material that multiplies a white base by COLOR_0; the only image texture in
+  the set is the sign face.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import struct
+import sys
+from pathlib import Path
+
+import bpy
+from mathutils import Matrix, Vector
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[3]
+GAME = REPO / "game"
+PALETTE_TS = GAME / "src" / "style" / "palette.ts"
+SKINS = GAME / "src" / "assets" / "skins"
+CACHE = Path.home() / ".cache" / "agents" / "2026-10-25-trilha-secreta"
+OUT = Path(os.environ.get("CUSTOM_RAW_DIR", str(CACHE / "custom-raw")))
+KENNEY = Path(os.environ.get("KENNEY_RAW_DIR", str(CACHE / "kenney-raw")))
+NATURE_KIT = KENNEY / "nature-kit" / "Models" / "GLTF format"
+CUBE_PETS = KENNEY / "cube-pets" / "Models" / "GLB format"
+FONT_LABEL = Path("/usr/share/fonts/noto/NotoSans-Bold.ttf")
+
+
+def argv_flags() -> list[str]:
+    return sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+
+
+# --------------------------------------------------------------------------- palette
+
+
+def _load_palette() -> tuple[dict[str, list[str]], dict[str, str]]:
+    src = PALETTE_TS.read_text(encoding="utf-8")
+    ramps_src = re.search(r"RAMPS\s*=\s*\{(.*?)\}\s*as const", src, re.S).group(1)
+    accent_src = re.search(r"ACCENT\s*=\s*\{(.*?)\}\s*as const", src, re.S).group(1)
+    ramps = {
+        name: re.findall(r"'(#[0-9a-fA-F]{6})'", body)
+        for name, body in re.findall(r"(\w+):\s*\[([^\]]*)\]", ramps_src)
+    }
+    accent = dict(re.findall(r"(\w+):\s*'(#[0-9a-fA-F]{6})'", accent_src))
+    assert all(len(v) == 4 for v in ramps.values()) and len(accent) == 3, "palette.ts changed shape"
+    return ramps, accent
+
+
+RAMPS, ACCENT = _load_palette()
+
+# Documented species colours (ART.md section 2: allowed outside the ramps when they are
+# the species' real colours, lightness inside the world's range). Sources in the report
+# (custom-models.md) and next to each use. The animal-attachment colours are the top row
+# of the cells reserved for them in game/src/assets/skins/palette-*.png (assets-report.md
+# section 3.2), so the vertex-colour and palette routes agree.
+SPECIES = {
+    # Euterpe edulis: ripe fruit black-violet (Embrapa; Flora e Funga do Brasil).
+    "jucaraFruto": "#4a2a55",
+    "jucaraFrutoLuz": "#6a3d78",
+    # Cecropia: whitish-silver abaxial (under) leaf face (Flora e Funga do Brasil).
+    "embaubaPrata": "#c5d3c9",
+    # Red centre of a flowering tank bromeliad (Neoregelia / Nidularium; Flora e Funga).
+    "bromeliaVermelho": "#c4453b",
+    # Ramphastos dicolorus bill, tucano palette cell (6,2) top row (WikiAves).
+    "tucanoBico": "#bce84c",
+    # Jaguar rosette ring and its darker-than-coat centre, onca palette cells (5,3), (3,2).
+    "oncaRoseta": "#26201e",
+    "oncaRosetaMiolo": "#b85d19",
+    # Golden lion tamarin mane, mico palette cell (3,2) top row (ICMBio).
+    "micoJuba": "#ff8818",
+    "micoJubaSombra": "#d6650f",
+}
+
+# Helper colours used only in previews (never exported).
+PREVIEW = {"avatar": "#8c8c8c", "rodDark": "#3b3b3b", "rodLight": "#d9d9d9"}
+
+
+def ramp(name: str, i: int) -> str:
+    return RAMPS[name][i]
+
+
+def hex_rgb(h: str) -> tuple[float, float, float]:
+    h = h.lstrip("#")
+    return tuple(int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def srgb_to_linear(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def linear_to_srgb(c: float) -> float:
+    c = max(0.0, min(1.0, c))
+    return c * 12.92 if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+
+
+def hex_linear(h: str) -> tuple[float, float, float, float]:
+    return (*(srgb_to_linear(c) for c in hex_rgb(h)), 1.0)
+
+
+def colour_source(h: str) -> str:
+    """Where a colour comes from: 'leaf[1]', 'ACCENT.ipeRosa' or 'SPECIES.jucaraFruto'."""
+    h = h.lower()
+    for name, values in RAMPS.items():
+        for i, v in enumerate(values):
+            if v.lower() == h:
+                return f"{name}[{i}]"
+    for name, v in ACCENT.items():
+        if v.lower() == h:
+            return f"ACCENT.{name}"
+    for name, v in SPECIES.items():
+        if v.lower() == h:
+            return f"SPECIES.{name}"
+    return "UNLISTED"
+
+
+# --------------------------------------------------------------------------- geometry
+
+
+def V(*p) -> Vector:
+    return Vector(p[0] if len(p) == 1 else p)
+
+
+def rot_z(a: float) -> Matrix:
+    return Matrix.Rotation(a, 3, "Z")
+
+
+def frame(axis: Vector, up_hint: Vector | None = None) -> Matrix:
+    """3x3 basis whose Z column is `axis` (normalised)."""
+    z = Vector(axis).normalized()
+    hint = up_hint or (Vector((0, 0, 1)) if abs(z.z) < 0.95 else Vector((1, 0, 0)))
+    x = hint.cross(z)
+    if x.length < 1e-6:
+        x = Vector((1, 0, 0)).cross(z)
+    x.normalize()
+    y = z.cross(x)
+    return Matrix((x, y, z)).transposed()
+
+
+class Mesh:
+    """A flat-shaded polygon soup with one colour (and optional UV) per face."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.verts: list[Vector] = []
+        self.faces: list[tuple[int, ...]] = []
+        self.colours: list[str] = []
+        self.uvs: list[tuple[float, float] | None] = []
+
+    # basic
+    def add(self, pts, colour: str, uv=None) -> None:
+        base = len(self.verts)
+        self.verts.extend(Vector(p) for p in pts)
+        self.faces.append(tuple(range(base, base + len(pts))))
+        self.colours.append(colour)
+        self.uvs.append(uv)
+
+    def tris(self) -> int:
+        return sum(len(f) - 2 for f in self.faces)
+
+    def transformed(self, m: Matrix, start: int = 0) -> None:
+        """Apply a 4x4 matrix to the vertices added since index `start` of faces."""
+        idx = {i for f in self.faces[start:] for i in f}
+        for i in idx:
+            self.verts[i] = m @ self.verts[i]
+
+    # primitives
+    def box(self, centre, size, colour, rot: Matrix | None = None, colours: dict | None = None, uv=None, skip=()):
+        """Axis box (optionally rotated about its centre). colours: per side override
+        keyed by 'top','bottom','px','nx','py','ny'. skip: sides to leave open."""
+        c = Vector(centre)
+        sx, sy, sz = (s / 2 for s in size)
+        r = rot or Matrix.Identity(3)
+        p = [c + r @ Vector((x, y, z)) for z in (-sz, sz) for y in (-sy, sy) for x in (-sx, sx)]
+        # index: z0: 0(-,-) 1(+,-) 2(-,+) 3(+,+); z1: 4..7
+        sides = {
+            "bottom": (0, 2, 3, 1),
+            "top": (4, 5, 7, 6),
+            "ny": (0, 1, 5, 4),
+            "py": (2, 6, 7, 3),
+            "nx": (0, 4, 6, 2),
+            "px": (1, 3, 7, 5),
+        }
+        for key, quad in sides.items():
+            if key in skip:
+                continue
+            self.add([p[i] for i in quad], (colours or {}).get(key, colour), uv)
+
+    def prism(self, p0, p1, r0, r1, n, colour, *, twist=0.0, cap0=False, cap1=True, sx=1.0, sy=1.0,
+              colour_cap=None, up_hint=None, uv=None):
+        """Tapered n-sided prism from p0 to p1 (radius r0 -> r1). r1 == 0 makes a cone."""
+        p0, p1 = Vector(p0), Vector(p1)
+        b = frame(p1 - p0, up_hint)
+
+        def ring(p, r):
+            return [p + b @ Vector((math.cos(twist + 2 * math.pi * k / n) * r * sx,
+                                    math.sin(twist + 2 * math.pi * k / n) * r * sy, 0)) for k in range(n)]
+
+        a = ring(p0, r0)
+        if r1 <= 0:
+            for k in range(n):
+                self.add([a[k], a[(k + 1) % n], p1], colour, uv)
+        else:
+            t = ring(p1, r1)
+            for k in range(n):
+                self.add([a[k], a[(k + 1) % n], t[(k + 1) % n], t[k]], colour, uv)
+            if cap1:
+                self.add(t, colour_cap or colour, uv)
+        if cap0:
+            self.add(list(reversed(a)), colour_cap or colour, uv)
+        return a
+
+    def slab(self, centre, rx, ry, h, n, colour, *, twist=0.0, colour_top=None, colour_bottom=None, taper=1.0, rot=None, uv=None):
+        """A flat n-gon plate (a Kenney-style canopy tier): bottom ring rx,ry, top ring
+        scaled by `taper`, height h, centred on `centre` (bottom at centre.z)."""
+        c = Vector(centre)
+        r = rot or Matrix.Identity(3)
+        bot = [c + r @ Vector((math.cos(twist + 2 * math.pi * k / n) * rx, math.sin(twist + 2 * math.pi * k / n) * ry, 0)) for k in range(n)]
+        top = [c + r @ Vector((math.cos(twist + 2 * math.pi * k / n) * rx * taper, math.sin(twist + 2 * math.pi * k / n) * ry * taper, h)) for k in range(n)]
+        for k in range(n):
+            self.add([bot[k], bot[(k + 1) % n], top[(k + 1) % n], top[k]], colour, uv)
+        self.add(top, colour_top or colour, uv)
+        self.add(list(reversed(bot)), colour_bottom or colour, uv)
+
+    def blade(self, root, tip, width, colour, *, thickness=0.0, mid=0.5, bend: Vector | None = None, normal_hint=None, colour_under=None, uv=None):
+        """A leaf/frond: a flat diamond root -> widest at `mid` -> tip, optionally bent by
+        `bend` at the middle. Two-sided (front and back faces) so it never vanishes
+        under back-face culling."""
+        root, tip = Vector(root), Vector(tip)
+        axis = tip - root
+        m = root + axis * mid + (bend or Vector())
+        side = axis.cross(normal_hint or Vector((0, 0, 1)))
+        if side.length < 1e-6:
+            side = axis.cross(Vector((1, 0, 0)))
+        side = side.normalized() * (width / 2)
+        l, r = m + side, m - side
+        up = (l - root).cross(r - root).normalized() * thickness
+        top = [root, l + up, tip, r + up] if thickness else [root, l, tip, r]
+        # quads would be non-planar when bent: split into 2 triangles each side
+        self.add([top[0], top[3], top[2]], colour, uv)
+        self.add([top[0], top[2], top[1]], colour, uv)
+        back = colour_under or colour
+        self.add([top[0], top[1], top[2]], back, uv)
+        self.add([top[0], top[2], top[3]], back, uv)
+
+    def merge(self, other: "Mesh") -> None:
+        base = len(self.verts)
+        self.verts.extend(other.verts)
+        self.faces.extend(tuple(i + base for i in f) for f in other.faces)
+        self.colours.extend(other.colours)
+        self.uvs.extend(other.uvs)
+
+
+# --------------------------------------------------------------------------- blender objects
+
+
+def reset_scene() -> None:
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    for coll in (bpy.data.objects, bpy.data.meshes, bpy.data.materials, bpy.data.images):
+        for item in list(coll):
+            coll.remove(item)
+
+
+def vertex_colour_material(name: str = "mata-vertex-colour") -> bpy.types.Material:
+    """Export material: white, rough, non-metal base multiplied by COLOR_0 (ART.md 5)."""
+    mat = bpy.data.materials.get(name)
+    if mat:
+        return mat
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    attr = nt.nodes.new("ShaderNodeVertexColor")
+    attr.layer_name = "Color"
+    nt.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 1.0
+    bsdf.inputs["Metallic"].default_value = 0.0
+    return mat
+
+
+def build_object(mesh: Mesh, name: str | None = None, parent=None, pivot=(0, 0, 0), material=None,
+                 face_materials: list[int] | None = None, materials: list | None = None):
+    """Create the Blender object. Vertices are given in the asset's space; the object
+    origin is put at `pivot` (in the same space) and the geometry shifted so nothing
+    moves: transforms stay applied (rotation 0, scale 1)."""
+    name = name or mesh.name
+    piv = Vector(pivot)
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([v - piv for v in mesh.verts], [], mesh.faces)
+    me.validate(clean_customdata=False)
+    me.update()
+    assert len(me.polygons) == len(mesh.faces), f"{name}: degenerate faces were dropped"
+    col = me.color_attributes.new("Color", "BYTE_COLOR", "CORNER")
+    for poly, hexc in zip(me.polygons, mesh.colours):
+        rgba = (*hex_rgb(hexc), 1.0)
+        for li in poly.loop_indices:
+            col.data[li].color_srgb = rgba
+    me.color_attributes.active_color = col
+    me.color_attributes.render_color_index = 0
+    if any(uv is not None for uv in mesh.uvs):
+        uvl = me.uv_layers.new(name="UVMap")
+        for poly, uv in zip(me.polygons, mesh.uvs):
+            loops = list(poly.loop_indices)
+            if uv is None:
+                uv = (0.0, 0.0)
+            if isinstance(uv, tuple) and len(uv) == 2 and not isinstance(uv[0], tuple):
+                for li in loops:
+                    uvl.data[li].uv = uv
+            else:  # explicit per-corner list
+                for li, u in zip(loops, uv):
+                    uvl.data[li].uv = u
+    me.polygons.foreach_set("use_smooth", [False] * len(me.polygons))
+    for m in materials or [material or vertex_colour_material()]:
+        me.materials.append(m)
+    if face_materials:
+        me.polygons.foreach_set("material_index", face_materials)
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    if parent is not None:
+        ob.parent = parent
+        ob.location = piv - parent_world_pivot(parent)
+    else:
+        ob.location = piv
+    return ob
+
+
+def parent_world_pivot(ob) -> Vector:
+    p = Vector()
+    while ob is not None:
+        p += ob.location
+        ob = ob.parent
+    return p
+
+
+def empty(name: str, location=(0, 0, 0), parent=None):
+    ob = bpy.data.objects.new(name, None)
+    bpy.context.scene.collection.objects.link(ob)
+    ob.empty_display_size = 0.25
+    if parent is not None:
+        ob.parent = parent
+        ob.location = Vector(location) - parent_world_pivot(parent)
+    else:
+        ob.location = Vector(location)
+    return ob
+
+
+def export_glb(path: Path, root) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    bpy.ops.object.select_all(action="DESELECT")
+    stack = [root]
+    while stack:
+        o = stack.pop()
+        o.select_set(True)
+        stack.extend(o.children)
+    bpy.context.view_layer.objects.active = root
+    bpy.ops.export_scene.gltf(
+        filepath=str(path),
+        export_format="GLB",
+        use_selection=True,
+        export_apply=True,
+        export_yup=True,
+        export_texcoords=True,
+        export_normals=True,
+        export_tangents=False,
+        export_materials="EXPORT",
+        export_vertex_color="MATERIAL",
+        export_all_vertex_colors=False,
+        export_attributes=False,
+        export_extras=False,
+        export_cameras=False,
+        export_lights=False,
+        export_animations=False,
+        export_image_format="AUTO",
+    )
+    return path
+
+
+# --------------------------------------------------------------------------- GLB audit
+
+
+def read_glb(path: Path) -> tuple[dict, bytes]:
+    buf = Path(path).read_bytes()
+    magic, _version, _length = struct.unpack_from("<III", buf, 0)
+    assert magic == 0x46546C67, "not a GLB"
+    jlen, _ = struct.unpack_from("<II", buf, 12)
+    doc = json.loads(buf[20 : 20 + jlen])
+    off = 20 + jlen
+    binc = b""
+    if off < len(buf):
+        blen, _ = struct.unpack_from("<II", buf, off)
+        binc = buf[off + 8 : off + 8 + blen]
+    return doc, binc
+
+
+_COMP = {5120: ("b", 1), 5121: ("B", 1), 5122: ("h", 2), 5123: ("H", 2), 5125: ("I", 4), 5126: ("f", 4)}
+_NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
+
+
+def accessor(doc, binc, i):
+    a = doc["accessors"][i]
+    bv = doc["bufferViews"][a["bufferView"]]
+    fmt, size = _COMP[a["componentType"]]
+    n = _NCOMP[a["type"]]
+    stride = bv.get("byteStride", size * n)
+    base = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+    out = []
+    for k in range(a["count"]):
+        vals = struct.unpack_from("<" + fmt * n, binc, base + k * stride)
+        if a.get("normalized"):
+            mx = {5121: 255, 5123: 65535, 5120: 127, 5122: 32767}[a["componentType"]]
+            vals = tuple(v / mx for v in vals)
+        out.append(vals)
+    return out
+
+
+def audit_glb(path: Path) -> dict:
+    """Numbers for the quality gate, read back from the exported file itself."""
+    doc, binc = read_glb(path)
+    nodes = doc.get("nodes", [])
+
+    def local(n):
+        m = Matrix.Identity(4)
+        if "matrix" in n:
+            m = Matrix([n["matrix"][i::4] for i in range(4)])
+        else:
+            t = n.get("translation", [0, 0, 0])
+            r = n.get("rotation", [0, 0, 0, 1])
+            s = n.get("scale", [1, 1, 1])
+            from mathutils import Quaternion
+            m = Matrix.Translation(t) @ Quaternion((r[3], r[0], r[1], r[2])).to_matrix().to_4x4() @ Matrix.Diagonal((*s, 1))
+        return m
+
+    tris = 0
+    lo = Vector((1e9,) * 3)
+    hi = Vector((-1e9,) * 3)
+    colours: dict[str, int] = {}
+    names = []
+    non_identity = []
+    has_uv = False
+
+    def walk(i, parent_m, depth):
+        nonlocal tris, lo, hi, has_uv
+        n = nodes[i]
+        m = parent_m @ local(n)
+        names.append(("  " * depth) + n.get("name", f"node{i}") + (f"  t={tuple(round(x, 4) for x in n.get('translation', [0, 0, 0]))}" if n.get("translation") else ""))
+        if n.get("rotation", [0, 0, 0, 1]) != [0, 0, 0, 1] or n.get("scale", [1, 1, 1]) != [1, 1, 1]:
+            non_identity.append(n.get("name"))
+        if "mesh" in n:
+            for prim in doc["meshes"][n["mesh"]]["primitives"]:
+                pos = accessor(doc, binc, prim["attributes"]["POSITION"])
+                count = doc["accessors"][prim["indices"]]["count"] if "indices" in prim else len(pos)
+                tris += count // 3
+                for p in pos:
+                    w = m @ Vector(p)
+                    lo = Vector(map(min, lo, w))
+                    hi = Vector(map(max, hi, w))
+                has_uv |= "TEXCOORD_0" in prim["attributes"]
+                if "COLOR_0" in prim["attributes"]:
+                    for c in accessor(doc, binc, prim["attributes"]["COLOR_0"]):
+                        h = "#%02x%02x%02x" % tuple(int(round(linear_to_srgb(x) * 255)) for x in c[:3])
+                        colours[h] = colours.get(h, 0) + 1
+        for c in n.get("children", []):
+            walk(c, m, depth + 1)
+
+    for r in doc["scenes"][doc.get("scene", 0)]["nodes"]:
+        walk(r, Matrix.Identity(4), 0)
+    return {
+        "file": Path(path).name,
+        "bytes": Path(path).stat().st_size,
+        "tris": tris,
+        # glTF is Y-up: height is Y, footprint X/Z.
+        "min": tuple(round(x, 3) for x in lo),
+        "max": tuple(round(x, 3) for x in hi),
+        "height": round(hi.y - lo.y, 3),
+        "colours": {h: colour_source(h) for h in sorted(colours)},
+        "nodes": names,
+        "non_identity_nodes": non_identity,
+        "materials": [m.get("name") for m in doc.get("materials", [])],
+        "images": len(doc.get("images", [])),
+        "texcoord": has_uv,
+        "extensions": doc.get("extensionsUsed", []),
+    }
+
+
+def write_audit(path: Path, budget: int, target: str, extra: dict | None = None) -> dict:
+    a = audit_glb(path)
+    a["budget"] = budget
+    a["target"] = target
+    a.update(extra or {})
+    bad = [h for h, s in a["colours"].items() if s == "UNLISTED"]
+    print(f"[gate] {a['file']}: {a['tris']} tris (budget {budget}), height {a['height']} u (target {target}), "
+          f"colours {a['colours']}, nodes {a['nodes']}")
+    assert a["tris"] <= budget, f"{a['file']} over budget: {a['tris']} > {budget}"
+    assert not bad, f"{a['file']} has colours outside the palette: {bad}"
+    assert not a["non_identity_nodes"], f"{a['file']} has unapplied rotation/scale: {a['non_identity_nodes']}"
+    path.with_suffix(".audit.json").write_text(json.dumps(a, indent=2, ensure_ascii=False), encoding="utf-8")
+    return a
+
+
+# --------------------------------------------------------------------------- preview (ART light)
+
+
+def setup_cycles(samples: int = 96) -> None:
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    prefs.compute_device_type = "OPTIX"
+    prefs.get_devices()
+    gpu = False
+    for d in prefs.devices:
+        d.use = d.type == "OPTIX"
+        gpu |= d.use
+    scene.cycles.device = "GPU" if gpu else "CPU"
+    scene.cycles.samples = samples
+    scene.cycles.use_adaptive_sampling = True
+    scene.cycles.use_denoising = True
+    scene.cycles.max_bounces = 4
+    scene.render.film_transparent = False
+    scene.view_settings.view_transform = "Standard"  # the game renders with NoToneMapping
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+    scene.display_settings.display_device = "sRGB"
+
+
+def art_light(sun_azimuth_deg: float = -35.0) -> None:
+    """ART.md section 5 / palette.ts LIGHT.daylight, matched to the game's three.js setup
+    (src/scene/Graybox.svelte: HemisphereLight intensity 1, DirectionalLight 1.6, no tone
+    mapping). three.js lights a Lambert surface with albedo/pi * irradiance, and a Cycles
+    world of radiance L gives pi*L of irradiance, so the hemisphere becomes a world split
+    at the horizon (sky above, ground below) at strength 1/pi and the sun keeps 1.6."""
+    import mathutils
+
+    ctx_light = _palette_light()
+    scene = bpy.context.scene
+    world = bpy.data.worlds.new("ART daylight")
+    scene.world = world
+    world.use_nodes = True
+    nt = world.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputWorld")
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(tc.outputs["Generated"], sep.inputs[0])
+    up = nt.nodes.new("ShaderNodeMath")
+    up.operation = "GREATER_THAN"
+    up.inputs[1].default_value = 0.0
+    nt.links.new(sep.outputs["Z"], up.inputs[0])
+    hemi = nt.nodes.new("ShaderNodeMix")
+    hemi.data_type = "RGBA"
+    nt.links.new(up.outputs[0], hemi.inputs["Factor"])
+    hemi.inputs["A"].default_value = hex_linear(ctx_light["hemisphereGround"])
+    hemi.inputs["B"].default_value = hex_linear(ctx_light["hemisphereSky"])
+    light_bg = nt.nodes.new("ShaderNodeBackground")
+    light_bg.inputs["Strength"].default_value = 1.0 / math.pi
+    nt.links.new(hemi.outputs["Result"], light_bg.inputs["Color"])
+    # What the camera sees behind the models: the game's sky (horizon -> skyTop).
+    grad = nt.nodes.new("ShaderNodeMapRange")
+    grad.inputs["From Min"].default_value = 0.0
+    grad.inputs["From Max"].default_value = 0.6
+    nt.links.new(sep.outputs["Z"], grad.inputs["Value"])
+    sky = nt.nodes.new("ShaderNodeMix")
+    sky.data_type = "RGBA"
+    nt.links.new(grad.outputs["Result"], sky.inputs["Factor"])
+    sky.inputs["A"].default_value = hex_linear(ctx_light["horizon"])
+    sky.inputs["B"].default_value = hex_linear(ctx_light["skyTop"])
+    cam_bg = nt.nodes.new("ShaderNodeBackground")
+    cam_bg.inputs["Strength"].default_value = 1.0
+    nt.links.new(sky.outputs["Result"], cam_bg.inputs["Color"])
+    lp = nt.nodes.new("ShaderNodeLightPath")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(lp.outputs["Is Camera Ray"], mix.inputs["Fac"])
+    nt.links.new(light_bg.outputs[0], mix.inputs[1])
+    nt.links.new(cam_bg.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
+
+    sun_data = bpy.data.lights.new("ART sun", "SUN")
+    sun_data.color = hex_linear(ctx_light["sun"])[:3]
+    sun_data.energy = 1.6
+    sun_data.angle = math.radians(2.0)
+    sun = bpy.data.objects.new("ART sun", sun_data)
+    scene.collection.objects.link(sun)
+    el = math.radians(ctx_light["sunElevationDeg"])
+    az = math.radians(sun_azimuth_deg)
+    # direction towards the sun: from the front-left of the camera (front = -Y)
+    to_sun = Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
+    sun.rotation_euler = (-to_sun).to_track_quat("-Z", "Y").to_euler()
+    _ = mathutils
+
+
+def _palette_light() -> dict:
+    src = PALETTE_TS.read_text(encoding="utf-8")
+    block = re.search(r"daylight:\s*\{(.*?)\}", src, re.S).group(1)
+    d = dict(re.findall(r"(\w+):\s*'(#[0-9a-fA-F]{6})'", block))
+    d["sunElevationDeg"] = float(re.search(r"sunElevationDeg:\s*([\d.]+)", block).group(1))
+    return d
+
+
+def diffuse_material(name: str, hexc: str | None = None, use_attr: bool = True, image=None):
+    """Lambert (Diffuse BSDF, roughness 0) material for previews, like MeshLambertMaterial."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfDiffuse")
+    bsdf.inputs["Roughness"].default_value = 0.0
+    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    if image is not None:
+        tex = nt.nodes.new("ShaderNodeTexImage")
+        tex.image = image
+        tex.interpolation = "Closest"
+        nt.links.new(tex.outputs["Color"], bsdf.inputs["Color"])
+    elif use_attr:
+        attr = nt.nodes.new("ShaderNodeVertexColor")
+        nt.links.new(attr.outputs["Color"], bsdf.inputs["Color"])
+    else:
+        bsdf.inputs["Color"].default_value = hex_linear(hexc or "#ffffff")
+    return mat
+
+
+def import_glb(path: Path, prefix: str | None = None) -> list:
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(path))
+    new = [o for o in bpy.data.objects if o not in before]
+    return new
+
+
+def lambertise(objs) -> None:
+    """Swap imported materials for Lambert ones: COLOR_0 meshes read the colour
+    attribute, image materials keep their image with nearest filtering."""
+    for o in objs:
+        if o.type != "MESH":
+            continue
+        has_col = len(o.data.color_attributes) > 0
+        for slot in o.material_slots:
+            m = slot.material
+            img = None
+            if m and m.use_nodes:
+                for n in m.node_tree.nodes:
+                    if n.type == "TEX_IMAGE" and n.image:
+                        img = n.image
+            if img is not None:
+                slot.material = diffuse_material(f"{m.name}-lambert", image=img)
+            elif has_col:
+                slot.material = diffuse_material("vc-lambert")
+            else:
+                col = "#ffffff"
+                if m and m.use_nodes:
+                    b = m.node_tree.nodes.get("Principled BSDF")
+                    if b:
+                        c = b.inputs["Base Color"].default_value
+                        col = "#%02x%02x%02x" % tuple(int(round(linear_to_srgb(x) * 255)) for x in c[:3])
+                slot.material = diffuse_material(f"flat-{col}", col, use_attr=False)
+
+
+def recolour_kenney(objs, mapping: dict[str, str]) -> None:
+    """Kenney Nature Kit materials -> ramp colours (the same mapping OpenCode's
+    color-map.json reviews), for a fair style comparison."""
+    for o in objs:
+        if o.type != "MESH":
+            continue
+        for slot in o.material_slots:
+            name = slot.material.name.split(".")[0] if slot.material else ""
+            slot.material = diffuse_material(f"k-{name}", mapping.get(name, ramp("rock", 2)), use_attr=False)
+
+
+def flat_box(name, centre, size, hexc):
+    m = Mesh(name)
+    m.box(centre, size, hexc)
+    ob = build_object(m, name, material=diffuse_material(f"{name}-mat", hexc, use_attr=False))
+    return ob
+
+
+def measuring_props(x: float, y: float = 0.0, rod_height: float | None = None, bar_y: float | None = None) -> list:
+    """The 3.0 u grey avatar block (Blocky avatar footprint 0.9 x 0.6 u) and a scale rod
+    of alternating 1 u bands next to it; plus a 1 u bar on the ground."""
+    objs = [flat_box("avatar-3u", (x, y, 1.5), (0.9, 0.6, 3.0), PREVIEW["avatar"])]
+    h = int(math.ceil(rod_height or 3))
+    rod = Mesh("rod")
+    for i in range(h):
+        rod.box((x + 0.85, y, i + 0.5), (0.18, 0.18, 1.0), PREVIEW["rodDark"] if i % 2 == 0 else PREVIEW["rodLight"])
+    objs.append(build_object(rod, "rod-1u", material=diffuse_material("rod-mat")))
+    bar = Mesh("bar")
+    by = (y - 0.75) if bar_y is None else bar_y
+    bar.box((x + 0.5, by, 0.04), (1.0, 0.16, 0.08), PREVIEW["rodDark"])
+    bar.box((x + 0.0, by, 0.1), (0.04, 0.2, 0.2), PREVIEW["rodDark"])
+    bar.box((x + 1.0, by, 0.1), (0.04, 0.2, 0.2), PREVIEW["rodDark"])
+    objs.append(build_object(bar, "bar-1u", material=diffuse_material("bar-mat")))
+    return objs
+
+
+def ground(size: float = 200.0, hexc: str | None = None):
+    m = Mesh("ground")
+    s = size / 2
+    m.add([(-s, -s, 0), (s, -s, 0), (s, s, 0), (-s, s, 0)], hexc or ramp("grass", 2))
+    ob = build_object(m, "preview-ground", material=diffuse_material("ground-mat"))
+    # The ground shows shadows but does not block the hemisphere's ground light, so the
+    # models are lit like the game's HemisphereLight (sky above, ground colour below).
+    ob.visible_diffuse = False
+    ob.visible_glossy = False
+    ob.visible_shadow = False
+    ob.location.z = -0.002
+    return ob
+
+
+def label(text: str, location, size: float = 0.5, hexc: str = "#2b2b2b", rot_z_deg: float = 0.0):
+    curve = bpy.data.curves.new(f"label-{text}", "FONT")
+    curve.body = text
+    curve.size = size
+    curve.align_x = "CENTER"
+    if FONT_LABEL.exists():
+        curve.font = bpy.data.fonts.load(str(FONT_LABEL), check_existing=True)
+    ob = bpy.data.objects.new(f"label-{text}", curve)
+    bpy.context.scene.collection.objects.link(ob)
+    ob.location = Vector(location)
+    ob.rotation_euler = (math.radians(90), 0, math.radians(rot_z_deg))
+    mat = bpy.data.materials.new(f"label-{text}")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    o = nt.nodes.new("ShaderNodeOutputMaterial")
+    e = nt.nodes.new("ShaderNodeEmission")
+    e.inputs["Color"].default_value = hex_linear(hexc)
+    nt.links.new(e.outputs[0], o.inputs["Surface"])
+    curve.materials.append(mat)
+    ob.visible_shadow = False
+    return ob
+
+
+def world_bbox(objs) -> tuple[Vector, Vector]:
+    lo = Vector((1e9,) * 3)
+    hi = Vector((-1e9,) * 3)
+    bpy.context.view_layer.update()
+    for o in objs:
+        if o.type not in {"MESH", "FONT"}:
+            continue
+        for c in o.bound_box:
+            w = o.matrix_world @ Vector(c)
+            lo = Vector(map(min, lo, w))
+            hi = Vector(map(max, hi, w))
+    return lo, hi
+
+
+def frame_camera(objs, azimuth_deg=-28.0, elevation_deg=12.0, lens=50.0, res=(1200, 1200), margin=0.08,
+                 look_from=None):
+    """Perspective camera fitted to the objects' bounding box from the front-left."""
+    scene = bpy.context.scene
+    scene.render.resolution_x, scene.render.resolution_y = res
+    scene.render.resolution_percentage = 100
+    cam_data = bpy.data.cameras.new("preview-cam")
+    cam_data.lens = lens
+    cam_data.sensor_fit = "AUTO"
+    cam_data.clip_start = 0.05
+    cam_data.clip_end = 2000
+    cam = bpy.data.objects.new("preview-cam", cam_data)
+    scene.collection.objects.link(cam)
+    scene.camera = cam
+    lo, hi = world_bbox(objs)
+    centre = (lo + hi) / 2
+    az, el = math.radians(azimuth_deg), math.radians(elevation_deg)
+    d = Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
+    rot = (-d).to_track_quat("-Z", "Y").to_matrix()
+    right, upv, fwd = rot.col[0], rot.col[1], -rot.col[2]
+    aspect = res[0] / res[1]
+    fov = 2 * math.atan(18.0 / lens)  # sensor 36 mm on the longer side
+    tx = math.tan(fov / 2) * (1 if aspect >= 1 else aspect)
+    ty = math.tan(fov / 2) / (aspect if aspect >= 1 else 1)
+    tx *= 1 - margin
+    ty *= 1 - margin
+    corners = [Vector((x, y, z)) for x in (lo.x, hi.x) for y in (lo.y, hi.y) for z in (lo.z, hi.z)]
+    # centre the projected box, then back off until every corner fits
+    for _ in range(3):
+        xs = [(c - centre).dot(right) for c in corners]
+        ys = [(c - centre).dot(upv) for c in corners]
+        centre = centre + right * ((max(xs) + min(xs)) / 2) + upv * ((max(ys) + min(ys)) / 2)
+    dist = 0.0
+    for c in corners:
+        rel = c - centre
+        x, y, z = rel.dot(right), rel.dot(upv), rel.dot(fwd)
+        dist = max(dist, abs(x) / tx - z, abs(y) / ty - z)
+    cam.location = centre - fwd * dist
+    cam.rotation_euler = rot.to_euler()
+    return cam
+
+
+def render(png: Path, samples: int = 96) -> Path:
+    scene = bpy.context.scene
+    scene.cycles.samples = samples
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGB"
+    scene.render.filepath = str(png)
+    png.parent.mkdir(parents=True, exist_ok=True)
+    bpy.ops.render.render(write_still=True)
+    return png
+
+
+def compose_side_by_side(left: Path, right: Path, out: Path) -> Path:
+    """Join two renders of equal height (left: game scale lineup, right: close-up)."""
+    import numpy as np
+
+    a = bpy.data.images.load(str(left))
+    b = bpy.data.images.load(str(right))
+    pa = np.array(a.pixels[:]).reshape(a.size[1], a.size[0], 4)
+    pb = np.array(b.pixels[:]).reshape(b.size[1], b.size[0], 4)
+    assert pa.shape[0] == pb.shape[0]
+    gap = np.ones((pa.shape[0], 8, 4))
+    joined = np.concatenate([pa, gap, pb], axis=1)
+    img = bpy.data.images.new("joined", joined.shape[1], joined.shape[0])
+    img.pixels[:] = joined.ravel()
+    img.filepath_raw = str(out)
+    img.file_format = "PNG"
+    img.save()
+    return out
+
+
+def preview_static(glb: Path, png: Path, *, closeup: bool = False, res=(1200, 1200), azimuth_deg=-28.0,
+                   elevation_deg=12.0, lens=50.0, samples=96) -> Path:
+    """Asset next to the 3.0 u avatar block, the 1 u rod and bar, in the ART light.
+    closeup=True adds a second, tighter render of the asset alone (small props)."""
+    reset_scene()
+    setup_cycles(samples)
+    art_light()
+    objs = import_glb(glb)
+    lambertise(objs)
+    lo, hi = world_bbox(objs)
+    x = lo.x - 1.6
+    props = measuring_props(x, 0.0, rod_height=max(3.0, hi.z))
+    ground()
+    frame_camera(objs + props, azimuth_deg, elevation_deg, lens, res)
+    if not closeup:
+        return render(png, samples)
+    left = render(png.with_name(png.stem + "-lineup.png"), samples)
+    for o in props:
+        o.hide_render = True
+    bpy.data.objects.remove(bpy.context.scene.camera, do_unlink=True)
+    frame_camera(objs, azimuth_deg, max(elevation_deg, 20.0), lens, res, margin=0.15)
+    right = render(png.with_name(png.stem + "-closeup.png"), samples)
+    out = compose_side_by_side(left, right, png)
+    left.unlink()
+    right.unlink()
+    return out
+
+
+def run(build, *, name: str, budget: int, target: str, preview=None) -> dict:
+    """Build -> export -> audit -> preview. `build()` returns the root object."""
+    reset_scene()
+    root = build()
+    glb = export_glb(OUT / f"{name}.glb", root)
+    audit = write_audit(glb, budget, target)
+    if "--no-render" not in argv_flags():
+        (preview or (lambda g, p: preview_static(g, p)))(glb, OUT / f"{name}.png")
+    return audit

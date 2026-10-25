@@ -1,0 +1,204 @@
+{
+	"$schema": "./color-map.schema.json",
+	"description": "Reviewed CIE Lab colour mapping from Kenney CC0 kits (Nature Kit 2.1, Platformer Kit 4.1, Food Kit 2.0, Holiday Kit 2.0) to Guardiões da Mata Atlântica ART.md ramps (game/src/style/palette.ts).",
+	"ramps": {
+		"leaf": ["#1e4d36", "#2d6a4f", "#4f9a6e", "#74c69d"],
+		"grass": ["#2f5e3c", "#3f7d4f", "#5fa36a", "#86bf7c"],
+		"wood": ["#5e4330", "#8a6448", "#a8805c", "#c9a27a"],
+		"soil": ["#5a4232", "#6b4f3a", "#8f6e52", "#b08f70"],
+		"rock": ["#4f5c55", "#6f7d74", "#8e9b92", "#b3bdb5"],
+		"water": ["#2f7fb0", "#3e9ccf", "#73cbf0", "#b6e6f7"]
+	},
+	"accent": {
+		"gold": "#ffd166",
+		"ipeAmarelo": "#f2c94c",
+		"ipeRosa": "#ff9fb7"
+	},
+	"bounds": {
+		"lightness": { "min": 0.12, "max": 0.9 },
+		"saturation": { "min": 0.25, "max": 0.7 }
+	},
+	"natureKitMaterials": {
+		"leafsGreen": {
+			"sourceHex": "#29c9ab",
+			"targetRamp": "leaf[2]",
+			"targetHex": "#4f9a6e",
+			"deltaELab": 23.28,
+			"rationale": "Tree canopies and palm fronds mapped from Kenney teal-green to Atlantic Forest mid-canopy leaf[2]."
+		},
+		"grass": {
+			"sourceHex": "#2cd8b8",
+			"targetRamp": "grass[2]",
+			"targetHex": "#5fa36a",
+			"deltaELab": 29.51,
+			"rationale": "Bushes, grass tufts, moss, and seedling leaves mapped to sunlit clearing grass[2]."
+		},
+		"woodBark": {
+			"sourceHex": "#e28357",
+			"targetRamp": "wood[1]",
+			"targetHex": "#8a6448",
+			"deltaELab": 32.94,
+			"rationale": "Tree trunks, logs, and stumps mapped from Kenney orange-brown to natural bark wood[1]."
+		},
+		"woodInner": {
+			"sourceHex": "#f5d7bb",
+			"targetRamp": "wood[3]",
+			"targetHex": "#c9a27a",
+			"deltaELab": 20.63,
+			"rationale": "Cut log rings and inner heartwood mapped to brightest wood[3]."
+		},
+		"wood": {
+			"sourceHex": "#ff8e62",
+			"targetRamp": "wood[2]",
+			"targetHex": "#a8805c",
+			"deltaELab": 35.51,
+			"rationale": "Planter pots, signboards, and split firewood mapped to warm timber wood[2]."
+		},
+		"woodBarkDark": {
+			"sourceHex": "#cc765e",
+			"targetRamp": "soil[2]",
+			"targetHex": "#8f6e52",
+			"deltaELab": 25.12,
+			"rationale": "Nursery pot rim and soil bed mapped to soil[2]."
+		},
+		"woodDark": {
+			"sourceHex": "#c46d4b",
+			"targetRamp": "wood[0]",
+			"targetHex": "#5e4330",
+			"deltaELab": 37.58,
+			"rationale": "Signpost support and charred campfire logs mapped to deep shadow wood[0]."
+		},
+		"dirt": {
+			"sourceHex": "#e28357",
+			"targetRamp": "rock[1]",
+			"targetHex": "#6f7d74",
+			"deltaELab": 55.21,
+			"rationale": "In rock_largeA, Kenney named the boulder material 'dirt'; mapped to Atlantic Forest granite rock[1]."
+		},
+		"stone": {
+			"sourceHex": "#b8e2e8",
+			"targetRamp": "rock[2]",
+			"targetHex": "#8e9b92",
+			"deltaELab": 18.44,
+			"rationale": "Stones and boulders mapped to mid-light granite rock[2]."
+		},
+		"colorYellow": {
+			"sourceHex": "#feb147",
+			"targetRamp": "accent.ipeAmarelo",
+			"targetHex": "#f2c94c",
+			"deltaELab": 18.02,
+			"rationale": "Yellow forest flowers mapped to ipê-amarelo botanical accent."
+		},
+		"_defaultMat": {
+			"sourceHex": "#ffffff",
+			"targetRamp": "rock[3]",
+			"targetHex": "#b3bdb5",
+			"deltaELab": 25.02,
+			"rationale": "Pure white #ffffff violates ART.md lightness max (0.90); mapped to light stone/plaque rock[3]."
+		}
+	},
+	"kitPropsSwatches": {
+		"platformer-kit": {
+			"(7,2)": {
+				"sourceHex": "#5ac487 -> #1f886b",
+				"targetRamps": ["grass[3]", "grass[2]", "grass[1]", "grass[0]"],
+				"targetHexes": ["#86bf7c", "#5fa36a", "#3f7d4f", "#2f5e3c"],
+				"rationale": "Obby grass block tops mapped to the 4-step grass ramp (light to shadow)."
+			},
+			"(3,2)": {
+				"sourceHex": "#ea9168 -> #b56545",
+				"targetRamps": ["wood[3]", "wood[2]", "wood[1]", "wood[0]"],
+				"targetHexes": ["#c9a27a", "#a8805c", "#8a6448", "#5e4330"],
+				"rationale": "Obby wooden planks and soil sides mapped to the 4-step wood ramp."
+			},
+			"(4,2)": {
+				"sourceHex": "#ab5f41 -> #865542",
+				"targetRamps": ["soil[2]", "soil[1]", "soil[0]", "wood[0]"],
+				"targetHexes": ["#8f6e52", "#6b4f3a", "#5a4232", "#5e4330"],
+				"rationale": "Obby platform structural beams and earth sub-base mapped to soil/wood shadow steps."
+			},
+			"(0,1)": {
+				"sourceHex": "#ffcf60 -> #ff9731",
+				"targetRamps": ["accent.gold", "accent.ipeAmarelo", "wood[3]", "wood[2]"],
+				"targetHexes": ["#ffd166", "#f2c94c", "#c9a27a", "#a8805c"],
+				"rationale": "Interactive collectible coin-gold uses reserved accent.gold (#ffd166) per ART.md §2."
+			},
+			"(2,1)": {
+				"sourceHex": "#fa6b41 -> #d3554e",
+				"targetRamps": ["accent.gold", "accent.ipeAmarelo", "leaf[3]", "leaf[2]"],
+				"targetHexes": ["#ffd166", "#f2c94c", "#74c69d", "#4f9a6e"],
+				"rationale": "Interactive obby checkpoint flag banner uses reserved accent.gold (#ffd166) per ART.md §2."
+			},
+			"(7,3)": {
+				"sourceHex": "#82879d -> #65657a",
+				"targetRamps": ["rock[2]", "rock[1]", "rock[0]", "rock[0]"],
+				"targetHexes": ["#8e9b92", "#6f7d74", "#4f5c55", "#4f5c55"],
+				"rationale": "Checkpoint flag mast and stone base mapped to rock ramp."
+			},
+			"(2,2)": {
+				"sourceHex": "#f8f8fb -> #c1c1d7",
+				"targetRamps": ["rock[3]", "rock[2]", "rock[1]", "rock[1]"],
+				"targetHexes": ["#b3bdb5", "#8e9b92", "#6f7d74", "#6f7d74"],
+				"rationale": "Flag trim and light stone accents mapped to rock[3..1] (avoiding pure white)."
+			}
+		},
+		"food-kit": {
+			"(7,2)": {
+				"sourceHex": "#f96a42 -> #d3554d",
+				"targetRamps": ["water[2]", "water[1]", "water[0]", "water[0]"],
+				"targetHexes": ["#73cbf0", "#3e9ccf", "#2f7fb0", "#2f7fb0"],
+				"rationale": "Plastic PET bottle & soda can body mapped to translucent-look water blue ramp."
+			},
+			"(1,2)": {
+				"sourceHex": "#ab5e41 -> #885541",
+				"targetRamps": ["leaf[2]", "leaf[1]", "leaf[0]", "leaf[0]"],
+				"targetHexes": ["#4f9a6e", "#2d6a4f", "#1e4d36", "#1e4d36"],
+				"rationale": "Bottle cap & neck ring mapped to leaf green ramp."
+			},
+			"(4,3)": {
+				"sourceHex": "#7f849c -> #595f77",
+				"targetRamps": ["rock[2]", "rock[1]", "rock[0]", "rock[0]"],
+				"targetHexes": ["#8e9b92", "#6f7d74", "#4f5c55", "#4f5c55"],
+				"rationale": "Aluminum can metallic rim mapped to rock grey ramp."
+			},
+			"(6,3)": {
+				"sourceHex": "#bfc8f0 -> #7c8299",
+				"targetRamps": ["rock[3]", "rock[2]", "rock[1]", "rock[0]"],
+				"targetHexes": ["#b3bdb5", "#8e9b92", "#6f7d74", "#4f5c55"],
+				"rationale": "Aluminum can top/bottom mapped to light rock[3..0] ramp."
+			},
+			"(1,3)": {
+				"sourceHex": "#574641 -> #3e2e2d",
+				"targetRamps": ["rock[0]", "soil[0]", "wood[0]", "wood[0]"],
+				"targetHexes": ["#4f5c55", "#5a4232", "#5e4330", "#5e4330"],
+				"rationale": "Can pull-tab opening mapped to darkest rock/wood shadow step."
+			},
+			"(2,2)": {
+				"sourceHex": "#efba94 -> #c9835b",
+				"targetRamps": ["soil[3]", "soil[2]", "soil[1]", "soil[0]"],
+				"targetHexes": ["#b08f70", "#8f6e52", "#6b4f3a", "#5a4232"],
+				"rationale": "Discarded bag mapped to soil/kraft-paper ramp."
+			}
+		},
+		"holiday-kit": {
+			"(1,2)": {
+				"sourceHex": "#e99066 -> #b46344",
+				"targetRamps": ["wood[3]", "wood[2]", "wood[1]", "wood[0]"],
+				"targetHexes": ["#c9a27a", "#a8805c", "#8a6448", "#5e4330"],
+				"rationale": "Ranger station cabin walls, logs, doorway, and wood floor mapped to wood ramp."
+			},
+			"(5,2)": {
+				"sourceHex": "#5ac588 -> #1f886b",
+				"targetRamps": ["leaf[3]", "leaf[2]", "leaf[1]", "leaf[0]"],
+				"targetHexes": ["#74c69d", "#4f9a6e", "#2d6a4f", "#1e4d36"],
+				"rationale": "Ranger station cabin roof and window frames mapped to forest guard leaf green ramp."
+			},
+			"(2,2)": {
+				"sourceHex": "#ad5f41 -> #855442",
+				"targetRamps": ["soil[2]", "soil[1]", "soil[0]", "wood[0]"],
+				"targetHexes": ["#8f6e52", "#6b4f3a", "#5a4232", "#5e4330"],
+				"rationale": "Cabin roof rafters and dark timber trim mapped to soil/wood shadow ramp."
+			}
+		}
+	}
+}
