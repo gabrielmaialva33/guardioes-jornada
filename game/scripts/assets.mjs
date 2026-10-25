@@ -1111,7 +1111,8 @@ function main() {
 							'-kn',
 							'-si',
 							String(entry.simplifyRatio),
-							'-sp'
+							'-sp',
+							'-sa'
 						],
 						{ stdio: 'pipe' }
 					);
