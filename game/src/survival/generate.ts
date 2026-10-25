@@ -165,7 +165,7 @@ const BASE_LAYOUT: [BasePieceKind, number, number][] = [
 	['signpost', 0, -5.5]
 ];
 
-interface Item {
+export interface Item {
 	kind: number;
 	x: number;
 	z: number;
@@ -662,7 +662,7 @@ function makeCrossing(
  * A step rises at most WALK_SLOPE per unit of run; diagonals never cut a corner.
  * Walkable cells stay MARGIN cells inside the map, so neighbours never wrap.
  */
-function walkSteps(flags: Uint8Array, walkH: Float32Array, start: number): Int16Array {
+export function walkSteps(flags: Uint8Array, walkH: Float32Array, start: number): Int16Array {
 	const far = 0x7fffffff;
 	const half = new Int32Array(CELLS).fill(far);
 	const buckets: number[][] = [[], [], [], []];
@@ -891,7 +891,7 @@ function baseCamp(rng: Rng, heights: Float32Array, x: number, z: number, y: numb
 }
 
 /** Marks every cell within r of (x, z) with `bit`. */
-function paint(clear: Uint8Array, x: number, z: number, r: number, bit: number) {
+export function paint(clear: Uint8Array, x: number, z: number, r: number, bit: number) {
 	const r2 = r * r;
 	for (let j = Math.max(0, floor(z - r)); j <= Math.min(N - 1, floor(z + r) + 1); j++)
 		for (let i = Math.max(0, floor(x - r)); i <= Math.min(N - 1, floor(x + r) + 1); i++)
@@ -999,7 +999,11 @@ const blockOf = (x: number, z: number) =>
 	Math.min(BLOCKS_PER_SIDE - 1, floor(x / BLOCK_SIZE));
 
 /** Items as parallel typed arrays, sorted by block, then kind, then creation order. */
-function pack<K extends string>(kinds: readonly K[], items: Item[], heights: Float32Array): Placements<K> {
+export function pack<K extends string>(
+	kinds: readonly K[],
+	items: Item[],
+	heights: Float32Array
+): Placements<K> {
 	const keys = items.map((it) => blockOf(it.x, it.z) * 256 + it.kind);
 	const order = items.map((_, k) => k).sort((a, b) => keys[a] - keys[b] || a - b);
 	const n = items.length;
@@ -1030,7 +1034,7 @@ function pack<K extends string>(kinds: readonly K[], items: Item[], heights: Flo
 }
 
 /** Ground every COLLISION_STEP u, trunk and boulder cylinders, log boxes and bridge decks, per block. */
-function collisionBlocks(
+export function collisionBlocks(
 	heights: Float32Array,
 	trees: Placements<TreeSpecies>,
 	rocks: Placements<(typeof ROCK_KINDS)[number]>,
