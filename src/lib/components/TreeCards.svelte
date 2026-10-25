@@ -39,7 +39,8 @@
 				<p class="sources">
 					Fontes:
 					{#each tree.sources as url, i (url)}
-						<a href={url} target="_blank" rel="noopener noreferrer">{sourceName(url)}</a>{i < tree.sources.length - 1
+						<a href={url} target="_blank" rel="noopener noreferrer">{sourceName(url)}</a>{i <
+						tree.sources.length - 1
 							? ', '
 							: ''}
 					{/each}
