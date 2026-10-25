@@ -52,8 +52,8 @@ async function createJourney(page: Page, participant = 'Ana') {
 	await expect(cedroRadio).toBeAttached();
 	await expect(page.getByRole('button', { name: 'Adicionar grupo' })).toHaveCount(0);
 
-	// The radio input is visually hidden inside its label, so click/check via the radio or label.
-	await cedroRadio.check({ force: true });
+	// No force: the invisible radio covers its whole card, as a tap would hit it.
+	await cedroRadio.check();
 	await page.getByRole('button', { name: 'Começar a jornada' }).click();
 	await expect(page).toHaveURL(/\/journey\/\?id=/);
 }
