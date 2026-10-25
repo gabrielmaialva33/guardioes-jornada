@@ -202,8 +202,15 @@
 	h1 {
 		font-size: clamp(1.75rem, 4vw, 3rem);
 	}
+	/* The name is in ink: the pastel group colors are under 3:1 on paper and in
+	   the Sol theme. The group's color underlines it instead. */
 	.group-name {
-		color: var(--group-color);
+		width: fit-content;
+		max-width: 100%;
+		margin-inline: auto;
+		padding-bottom: 0.08em;
+		border-bottom: 0.12em solid var(--group-color);
+		color: var(--text);
 		font-size: clamp(2.5rem, 6vw, 4rem);
 	}
 	.recognition {
