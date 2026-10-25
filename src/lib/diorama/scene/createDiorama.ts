@@ -85,16 +85,20 @@ export async function createEngine(opts: {
 	const quality: Quality = opts.tier === 'full' && !weakGpu(gpu) ? 'full' : 'lite';
 
 	let palette = readPalette(document.documentElement);
+	performance.mark('forest-world-start');
 	const world = new World(quality, palette);
+	performance.measure('forest-world-build', 'forest-world-start');
 	const camera = new PerspectiveCamera(FOV, 2, 0.5, 40);
 	let distance = 11;
 
 	// Compile every shader now (in parallel where supported), not mid-animation.
 	world.showAll();
 	placeCamera();
+	performance.mark('forest-compile-start');
 	if (renderer.extensions.has('KHR_parallel_shader_compile'))
 		await renderer.compileAsync(world.scene, camera);
 	else renderer.compile(world.scene, camera);
+	performance.measure('forest-shaders', 'forest-compile-start');
 	world.apply();
 
 	let host: HTMLElement | null = null;
