@@ -11,6 +11,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import modelUrl from '../assets/models/avatar.glb?url';
 import skinUrl from '../assets/skins/skin-a.webp?url';
+import { ensureVertexColors } from './materials.ts';
 
 /** Own every resource, including ImageBitmaps, so leaving during decoding is safe. */
 export function disposeModel(model: Group) {
@@ -59,7 +60,7 @@ export async function loadAvatar(signal: AbortSignal): Promise<Group> {
 		texture.magFilter = texture.minFilter = NearestFilter;
 		texture.generateMipmaps = false;
 		texture.needsUpdate = true;
-		const material = new MeshLambertMaterial({ map: texture });
+		const material = new MeshLambertMaterial({ map: texture, flatShading: true, vertexColors: true });
 		// The source embeds a default skin; release it before replacing it.
 		const originals = new Set<Material>();
 		const originalTextures = new Set<Texture>();
@@ -69,6 +70,7 @@ export async function loadAvatar(signal: AbortSignal): Promise<Group> {
 				originals.add(old);
 				for (const value of Object.values(old)) if (value instanceof Texture) originalTextures.add(value);
 			}
+			ensureVertexColors(object.geometry);
 			object.material = material;
 		});
 		for (const old of originals) old.dispose();

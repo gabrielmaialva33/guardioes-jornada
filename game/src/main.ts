@@ -20,7 +20,7 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 	const createRenderer = (canvas: HTMLCanvasElement) => {
 		let value: WebGLRenderer;
 		try {
-			value = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'low-power' });
+			value = new WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' });
 		} catch (cause) {
 			throw new Error('game-webgl-unavailable', { cause });
 		}
