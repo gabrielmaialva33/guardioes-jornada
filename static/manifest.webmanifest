@@ -1,7 +1,7 @@
 {
 	"name": "Guardiões da Mata Atlântica",
 	"short_name": "Guardiões",
-	"description": "Jornada guiada na PENAP para grupos de estudantes. Funciona sem internet.",
+	"description": "Aceite o chamado da floresta, escolha seu grupo e cumpra as missões pela Mata Atlântica. Funciona sem internet.",
 	"lang": "pt-BR",
 	"start_url": "./",
 	"scope": "./",
