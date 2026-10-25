@@ -71,7 +71,10 @@ function whenVisible(signal: AbortSignal): Promise<void> {
 			document.removeEventListener('visibilitychange', on);
 			signal.removeEventListener('abort', cancel);
 		};
-		const cancel = () => { cleanup(); reject(new Error('diorama-cancelled')); };
+		const cancel = () => {
+			cleanup();
+			reject(new Error('diorama-cancelled'));
+		};
 		const on = () => {
 			if (document.hidden) return;
 			cleanup();
@@ -82,6 +85,21 @@ function whenVisible(signal: AbortSignal): Promise<void> {
 	});
 }
 
+function whenGameFinished(signal: AbortSignal): Promise<void> {
+	if (signal.aborted) return Promise.reject(new Error('diorama-cancelled'));
+	return new Promise((resolve, reject) => {
+		const cancel = () => {
+			signal.removeEventListener('abort', cancel);
+			reject(new Error('diorama-cancelled'));
+		};
+		signal.addEventListener('abort', cancel, { once: true });
+		void gameFinished.then(() => {
+			signal.removeEventListener('abort', cancel);
+			resolve();
+		});
+	});
+}
+
 export function getEngine(): Promise<Engine> {
 	if (host.tier === 'svg') return Promise.reject(new Error('3D is off on this device'));
 	if (!engine) {
@@ -89,12 +107,13 @@ export function getEngine(): Promise<Engine> {
 		const signal = engineAbort.signal;
 		const quality = host.tier === 'full' ? 'full' : 'lite';
 		const created = whenVisible(signal).then(async () => {
-			await gameFinished;
+			if (engine !== created || signal.aborted) throw new Error('diorama-cancelled');
+			await whenGameFinished(signal);
 			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
 			const m = await import('./scene/createDiorama.ts');
 			if (engine !== created) throw new Error('diorama-cancelled');
 			await whenVisible(signal);
-			await gameFinished;
+			await whenGameFinished(signal);
 			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
 			return m.createEngine({ tier: quality, onFail: fail });
 		});
@@ -119,10 +138,16 @@ export async function acquireGameGpu(): Promise<() => void> {
 	const previous = engine;
 	engine = null;
 	engineAbort?.abort();
-	await previous?.then(
-		(value) => value.dispose(),
-		() => {}
-	);
+	try {
+		await previous?.then(
+			(value) => value.dispose(),
+			() => {}
+		);
+	} catch (error) {
+		releaseGame?.();
+		releaseGame = undefined;
+		throw error;
+	}
 	let released = false;
 	return () => {
 		if (released) return;
