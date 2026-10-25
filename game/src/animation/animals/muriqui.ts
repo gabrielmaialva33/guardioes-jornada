@@ -98,12 +98,37 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 	#glance = 0;
 	#lookYaw = 0;
 	readonly #point = new Float64Array(3);
+	/** Per segment i (hold i to i + 1): swing amplitude and energy that reach across, and yaw. */
+	readonly #amplitudes: Float64Array;
+	readonly #energies: Float64Array;
+	readonly #yaws: Float64Array;
+	readonly #reachLimit: number;
+	#probeReach = 0;
+	#probeTheta = 0;
+	#probeSnapForward = 0;
+	#probeSnapUp = 0;
 
 	constructor(options: MuriquiOptions) {
 		super('muriqui', 'idle', options);
 		this.anchors = options.anchors;
 		this.anchor = Math.min(Math.max(options.start ?? 0, 0), this.anchors.count - 1);
 		this.arm = MODELS.monkey.legLength * this.species.limbScale.front * this.species.scale;
+		this.#reachLimit = this.arm * MURIQUI.reachSlack;
+		const segments = Math.max(1, this.anchors.count - 1);
+		this.#amplitudes = new Float64Array(segments);
+		this.#energies = new Float64Array(segments);
+		this.#yaws = new Float64Array(segments);
+		const w0 = TAU / MURIQUI.period;
+		const p = this.anchors.points;
+		for (let i = 0; i + 1 < this.anchors.count; i++) {
+			const dx = p[i * 3 + 3] - p[i * 3];
+			const dz = p[i * 3 + 5] - p[i * 3 + 2];
+			const sine = Math.min(0.97, Math.sqrt(dx * dx + dz * dz) / (2 * this.arm));
+			const amplitude = Math.min(80 * DEG, Math.asin(sine) + MURIQUI.margin);
+			this.#amplitudes[i] = amplitude;
+			this.#energies[i] = w0 * w0 * (1 - Math.cos(amplitude));
+			this.#yaws[i] = Math.atan2(dx, dz);
+		}
 		this.tilt = new DampedSpring(SPRING.body, this.species.tempo);
 		this.#faceAlong();
 		this.motion.yaw = this.drive.targetYaw;
@@ -221,68 +246,86 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.omega = next;
 		this.theta = theta + next * PENDULUM_STEP;
 		this.pendulumTime += PENDULUM_STEP;
-		if (this.state === 'move' && omega > 0 && next <= 0 && this.theta > 0.05) this.#atApex();
+		if (this.state !== 'move' || !(omega > 0)) return;
+		// Every forward step keeps #probe hot, so V8 optimizes it (see #atApex).
+		this.#probe();
+		if (next <= 0 && this.theta > 0.05) this.#atApex();
 	}
 
-	/** Forward apex: switch hands if the next hold is in reach, else swing higher. */
+	/**
+	 * Forward apex: switch hands if the next hold is in reach, else swing higher.
+	 * This runs about once a second, too rarely for V8 to optimize it, and the
+	 * interpreter boxes every number it computes; so the geometry is done by
+	 * #probe (optimized, it runs every step) and the per-segment numbers are
+	 * precomputed. What is left here is copying and counting.
+	 */
 	#atApex() {
 		const next = this.anchor + this.direction;
 		if (next < 0 || next >= this.anchors.count) {
 			this.#stop();
 			return;
 		}
-		const point = this.#point;
-		this.#read(this.anchor, point);
-		const ax = point[0];
-		const ay = point[1];
-		const az = point[2];
-		this.#read(next, point);
-		const nx = point[0];
-		const ny = point[1];
-		const nz = point[2];
-		let ex = nx - ax;
-		let ez = nz - az;
-		const span = Math.sqrt(ex * ex + ez * ez) || 1;
-		ex /= span;
-		ez /= span;
-		const arm = this.arm;
-		// Shoulder position, relative to the next hold.
-		const sx = ax + ex * arm * Math.sin(this.theta) - nx;
-		const sy = ay - arm * Math.cos(this.theta) - ny;
-		const sz = az + ez * arm * Math.sin(this.theta) - nz;
-		// Measured along the direction past the next hold (the same one at a straight run).
-		const after = next + this.direction;
-		let fx = ex;
-		let fz = ez;
-		if (after >= 0 && after < this.anchors.count) {
-			this.#read(after, point);
-			const gx = point[0] - nx;
-			const gz = point[2] - nz;
-			const g = Math.sqrt(gx * gx + gz * gz);
-			if (g > 1e-6) {
-				fx = gx / g;
-				fz = gz / g;
-			}
-		}
-		const along = sx * fx + sz * fz;
-		const reach = Math.sqrt(along * along + sy * sy);
-		if (reach > arm * MURIQUI.reachSlack) {
+		this.#probe();
+		if (this.#probeReach > this.#reachLimit) {
 			this.energyTarget *= 1.15;
 			return;
 		}
-		const theta = Math.atan2(along, -sy);
-		this.#snapForward = along - arm * Math.sin(theta);
-		this.#snapUp = sy + arm * Math.cos(theta);
-		this.theta = this.#previousTheta = theta;
+		this.#snapForward = this.#probeSnapForward;
+		this.#snapUp = this.#probeSnapUp;
+		this.theta = this.#probeTheta;
+		this.#previousTheta = this.#probeTheta;
 		this.omega = 0;
 		this.anchor = next;
 		this.grip = -this.grip;
 		this.switches++;
 		this.lastSwitchTime = this.pendulumTime;
-		this.drive.targetYaw = Math.atan2(fx, fz);
 		this.#handholdsLeft--;
+		const after = next + this.direction;
+		if (after >= 0 && after < this.anchors.count) this.drive.targetYaw = this.#segmentYaw(next, after);
 		if (this.#handholdsLeft <= 0 || after < 0 || after >= this.anchors.count) this.#stop();
 		else this.#aimFor(after);
+	}
+
+	/**
+	 * Where the shoulder is relative to the next hold, measured along the way past
+	 * it, and what the swing would look like about that hold: θ′ and the shoulder
+	 * correction. Called every pendulum step while swinging forward.
+	 */
+	#probe() {
+		const next = this.anchor + this.direction;
+		if (next < 0 || next >= this.anchors.count) return;
+		const p = this.anchors.points;
+		const a = this.anchor * 3;
+		const n = next * 3;
+		const arm = this.arm;
+		const sin = Math.sin(this.theta);
+		let ex = p[n] - p[a];
+		let ez = p[n + 2] - p[a + 2];
+		const span = Math.sqrt(ex * ex + ez * ez) || 1;
+		ex /= span;
+		ez /= span;
+		const sx = p[a] + ex * arm * sin - p[n];
+		const sy = p[a + 1] - arm * Math.cos(this.theta) - p[n + 1];
+		const sz = p[a + 2] + ez * arm * sin - p[n + 2];
+		const after = next + this.direction;
+		let fx = ex;
+		let fz = ez;
+		if (after >= 0 && after < this.anchors.count) {
+			const g = after * 3;
+			const gx = p[g] - p[n];
+			const gz = p[g + 2] - p[n + 2];
+			const length = Math.sqrt(gx * gx + gz * gz);
+			if (length > 1e-6) {
+				fx = gx / length;
+				fz = gz / length;
+			}
+		}
+		const along = sx * fx + sz * fz;
+		const theta = Math.atan2(along, -sy);
+		this.#probeReach = Math.sqrt(along * along + sy * sy);
+		this.#probeTheta = theta;
+		this.#probeSnapForward = along - arm * Math.sin(theta);
+		this.#probeSnapUp = sy + arm * Math.cos(theta);
 	}
 
 	#startMove(handholds: number) {
@@ -307,19 +350,17 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.#setIdleEnergy();
 	}
 
-	/** Energy target whose amplitude reaches handhold `next` from the current one. */
+	/** Energy target whose amplitude reaches handhold `next` from the current one (precomputed per segment). */
 	#aimFor(next: number) {
-		const point = this.#point;
-		this.#read(this.anchor, point);
-		const ax = point[0];
-		const az = point[2];
-		this.#read(next, point);
-		const span = Math.hypot(point[0] - ax, point[2] - az);
-		const sine = Math.min(0.97, span / (2 * this.arm));
-		const amplitude = Math.min(80 * DEG, Math.asin(sine) + MURIQUI.margin);
-		this.#maxSwing = amplitude;
-		const w0 = TAU / MURIQUI.period;
-		this.energyTarget = w0 * w0 * (1 - Math.cos(amplitude));
+		const segment = Math.min(this.anchor, next);
+		this.#maxSwing = this.#amplitudes[segment];
+		this.energyTarget = this.#energies[segment];
+	}
+
+	/** Yaw from hold `from` to hold `to` (adjacent; precomputed per segment). */
+	#segmentYaw(from: number, to: number): number {
+		const yaw = this.#yaws[Math.min(from, to)];
+		return to > from ? yaw : yaw - Math.PI * Math.sign(yaw || 1);
 	}
 
 	#setIdleEnergy() {
