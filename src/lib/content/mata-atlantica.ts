@@ -17,11 +17,11 @@ const canelaPreta: TreeInfo = {
 	scientificName: 'Ocotea catharinensis',
 	family: 'Lauraceae',
 	summary:
-		'Típica das encostas e morros da Mata Atlântica. Cresce devagar, à sombra da floresta, e seus frutos alimentam aves e mamíferos, como o muriqui. Muito cortada por sua madeira, hoje está ameaçada de extinção.',
+		'Típica das encostas e morros da Mata Atlântica, mas também aparece no Pampa. Cresce devagar, à sombra da floresta, e seus frutos alimentam aves e mamíferos, como o muriqui. Muito cortada por sua madeira, hoje está ameaçada de extinção.',
 	cues: [
 		'Casca escura, com marcas côncavas onde se soltou em placas.',
-		'Folhas duras e pontudas; embaixo, tufinhos de pelos junto às nervuras.',
-		'Fruto ovalado, metade dentro de uma “tacinha” preta.'
+		'Folhas firmes e pontudas; embaixo, tufinhos de pelos claros onde as nervuras se encontram.',
+		'Fruto ovalado, com a base encaixada numa “tacinha” (cúpula) escura.'
 	],
 	sources: [
 		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1139722/1/Especies-Arboreas-Brasileiras-vol-1-Canela-Preta.pdf',
@@ -35,11 +35,11 @@ const cedroRosa: TreeInfo = {
 	scientificName: 'Cedrela fissilis',
 	family: 'Meliaceae',
 	summary:
-		'Vive na Mata Atlântica e também em outros biomas do Brasil e em outros países. Seus frutos de madeira se abrem e soltam sementes com asas, levadas pelo vento. O corte da madeira e a destruição das florestas o ameaçam.',
+		'Vive na Mata Atlântica e também em outros biomas do Brasil e em outros países. Seus frutos secos e duros se abrem como flores de madeira e soltam sementes com asas, levadas pelo vento. Muito cortado por sua madeira e pelo desmatamento, também está ameaçado de extinção.',
 	cues: [
 		'Casca grossa, com rachaduras fundas ao longo do tronco.',
 		'Folhas grandes, com muitos pares de folhinhas (folíolos).',
-		'Frutos de madeira abertos em 5 partes, às vezes ainda presos nos galhos.'
+		'Frutos secos e duros, abertos em 5 partes, às vezes ainda presos nos galhos.'
 	],
 	sources: [
 		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1139731/1/Especies-Arboreas-Brasileiras-vol-1-Cedro.pdf',
