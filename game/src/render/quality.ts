@@ -75,7 +75,7 @@ const MOBILE_GPU = /Mali|Adreno|PowerVR|\bIMG\b|Immortalis|Xclipse|Apple GPU|App
 const DESKTOP_GPU = /GeForce|RTX|Quadro|NVIDIA|Radeon (RX|Pro)|Apple M\d|Intel\(R\) Arc|\bArc\b/i;
 
 /** Masked or generic renderer strings that say nothing about the GPU. */
-const MASKED_GPU = /^(|WebKit WebGL|Mozilla|Generic Renderer|ANGLE \(Unknown)$/i;
+const MASKED_GPU = /^(WebKit WebGL|Mozilla|Generic Renderer)?$|^ANGLE \(Unknown/i;
 
 interface NavigatorHints {
 	deviceMemory?: number;
