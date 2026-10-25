@@ -15,8 +15,9 @@ Shape decisions and sources:
   Horto Didático UFSC, https://hortodidatico.ufsc.br/embauba-vermelha/ (weaker source;
   peltate Cecropia leaves are standard botany but not stated by Embrapa).
 - So: a pale grey ringed trunk (rock ramp, darker rings), three candelabrum arms, and at
-  each tip three big 7-lobed star leaves, domed like umbrellas and tilted outwards so their
-  silvery undersides (rock[3], the lightest grey-green in the ramps) show from the side.
+  each tip three big 7-lobed star leaves, domed like umbrellas and drooping outwards so
+  their silvery undersides (rock[3], the lightest grey-green in the ramps) show from below
+  and from the side.
   Leaves are drawn about 3x real size so the umbrella crown reads on a phone.
 """
 
@@ -42,8 +43,8 @@ def star_leaf(m: C.Mesh, centre: Vector, normal: Vector, radius: float, lobes: i
     for k in range(lobes * 2):
         a = spin + math.pi * k / lobes
         tip = k % 2 == 0
-        r = radius if tip else radius * 0.48
-        drop = -0.3 * radius if tip else -0.1 * radius
+        r = radius if tip else radius * 0.6
+        drop = -0.34 * radius if tip else -0.12 * radius
         rim.append(centre + basis @ Vector((math.cos(a) * r, math.sin(a) * r, drop)))
     for k in range(len(rim)):
         a, b = rim[k], rim[(k + 1) % len(rim)]
@@ -70,10 +71,12 @@ def build():
         for k in range(3):
             b = a + (k - 1) * 2.1 + 0.25 * i
             out = Vector((math.cos(b), math.sin(b), 0))
-            tilt = math.radians(30 + 8 * k)
-            normal = (Vector((0, 0, 1)) * math.cos(tilt) + out * math.sin(tilt)).normalized()
-            centre = tip + out * 0.85 + Vector((0, 0, 0.05 + 0.18 * (k % 2)))
-            star_leaf(m, centre, normal, 1.45 - 0.08 * k, 7, b)
+            # the blade droops outwards (normal leans towards the trunk), so its silvery
+            # underside faces anyone looking up at the crown
+            tilt = math.radians(16 + 6 * k)
+            normal = (Vector((0, 0, 1)) * math.cos(tilt) - out * math.sin(tilt)).normalized()
+            centre = tip + out * 0.95 + Vector((0, 0, 0.12 + 0.2 * (k % 2)))
+            star_leaf(m, centre, normal, 1.6 - 0.1 * k, 7, b)
     _ = Matrix
     return C.build_object(m, "embauba")
 
