@@ -8,13 +8,13 @@ function setup() {
 			current = root;
 		})
 	};
-	const environment: PresentationEnvironment = {
+	const environment = {
 		fullscreenElement: () => current,
 		exitFullscreen: vi.fn(async () => {
 			current = null;
 		}),
 		orientation: { lock: vi.fn(async () => {}), unlock: vi.fn() }
-	};
+	} satisfies PresentationEnvironment;
 	return {
 		root,
 		environment,
