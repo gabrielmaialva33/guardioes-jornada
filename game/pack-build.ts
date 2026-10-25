@@ -10,7 +10,8 @@ export function makeManifest(files: Map<string, Uint8Array>): GameManifest {
 		.map(([path, bytes]) => ({
 			path,
 			bytes: bytes.byteLength,
-			sha256: createHash('sha256').update(bytes).digest('hex')
+			sha256: createHash('sha256').update(bytes).digest('hex'),
+			...(/\.(js|css|json|svg|wasm|txt|glb)$/.test(path) ? { gzipBytes: gzipSync(bytes, { level: 9 }).length } : {})
 		}));
 	const content = { abi: GAME_ABI, entry: 'entry.js', files: list };
 	const packId = createHash('sha256').update(JSON.stringify(content)).digest('hex');

@@ -3,6 +3,8 @@ export interface GameFile {
 	path: string;
 	bytes: number;
 	sha256: string;
+	/** Estimated HTTP transfer when the server serves the generated gzip variant. */
+	gzipBytes?: number;
 }
 export interface GameManifest {
 	packId: string;
@@ -46,7 +48,8 @@ export function decodeGameManifest(input: unknown): GameManifest {
 			throw new Error('invalid-game-file');
 		seen.add(f.path);
 		total += f.bytes;
-		return { path: f.path, bytes: f.bytes, sha256: f.sha256 };
+		if (f.gzipBytes !== undefined && (!Number.isSafeInteger(f.gzipBytes) || f.gzipBytes < 0 || f.gzipBytes > 64 * 1024 * 1024)) throw new Error('invalid-game-file');
+		return { path: f.path, bytes: f.bytes, sha256: f.sha256, ...(f.gzipBytes !== undefined ? { gzipBytes: f.gzipBytes } : {}) };
 	});
 	if (!seen.has(value.entry) || total > 64 * 1024 * 1024) throw new Error('invalid-game-manifest');
 	return { packId: value.packId, abi: value.abi, entry: value.entry, files };

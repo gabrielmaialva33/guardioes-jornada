@@ -11,6 +11,28 @@ export interface DownloadProgress {
 	loaded: number;
 	total: number;
 }
+
+export interface GamePackInfo {
+	complete: boolean;
+	packId: string | null;
+	/** Missing transfer bytes, estimated from the generated gzip files; null without a manifest. */
+	missingBytes: number | null;
+	sizeKB: number | null;
+}
+/** Call when the discovery sheet opens, never eagerly on the home page. */
+export async function getGamePackInfo(root: URL, signal?: AbortSignal): Promise<GamePackInfo> {
+	const manager = new GamePacks({ root });
+	const saved = await manager.current();
+	if (saved) return { complete: true, packId: saved.packId, missingBytes: 0, sizeKB: 0 };
+	try {
+		const latest = await manager.latest(signal);
+		const missingBytes = latest.files.reduce((sum, file) => sum + (file.gzipBytes ?? file.bytes), 0);
+		return { complete: false, packId: latest.packId, missingBytes, sizeKB: Math.ceil(missingBytes / 1024) };
+	} catch (error) {
+		if (signal?.aborted) throw error;
+		return { complete: false, packId: null, missingBytes: null, sizeKB: null };
+	}
+}
 interface DownloadOptions {
 	signal?: AbortSignal;
 	progress?: (progress: DownloadProgress) => void;
