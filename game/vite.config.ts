@@ -6,6 +6,7 @@ export default defineConfig({
 	root: fileURLToPath(new URL('.', import.meta.url)),
 	base: './',
 	publicDir: false,
+	server: { watch: { ignored: ['**/.build/**', '**/build/**'] } },
 	resolve: { dedupe: ['svelte', 'three'] },
 	plugins: [
 		svelte({ configFile: false }),

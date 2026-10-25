@@ -40,6 +40,7 @@ export default defineConfig({
 	preview: { port: 4180 },
 	// Unit tests for the data layer; end-to-end tests live in tests/ (Playwright).
 	test: {
+		maxWorkers: 2,
 		include: ['src/**/*.test.ts', 'game/**/*.test.ts'],
 		environment: 'node',
 		setupFiles: ['fake-indexeddb/auto']
