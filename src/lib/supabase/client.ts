@@ -10,9 +10,21 @@ let client: Promise<SupabaseClient<Database> | null> | null = null;
 export function getSupabase(): Promise<SupabaseClient<Database> | null> {
 	if (!cloudAvailable) return Promise.resolve(null);
 	if (!client) {
-		client = import('@supabase/supabase-js').then(({ createClient }) => createClient<Database>(PUBLIC_SUPABASE_URL!, PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
-			auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: AUTH_STORAGE_KEY }
-		})).catch((error) => { client = null; throw error; });
+		client = import('@supabase/supabase-js')
+			.then(({ createClient }) =>
+				createClient<Database>(PUBLIC_SUPABASE_URL!, PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+					auth: {
+						persistSession: true,
+						autoRefreshToken: true,
+						detectSessionInUrl: false,
+						storageKey: AUTH_STORAGE_KEY
+					}
+				})
+			)
+			.catch((error) => {
+				client = null;
+				throw error;
+			});
 	}
 	return client;
 }
@@ -25,8 +37,31 @@ export function readStoredUser(): User | null {
 		if (!raw) return null;
 		const session = JSON.parse(raw);
 		const user = session?.user;
-		if (typeof session?.access_token !== 'string' || typeof session.refresh_token !== 'string' ||
-			typeof user?.id !== 'string' || !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(user.id)) return null;
-		return { id: user.id, aud: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: typeof user.created_at === 'string' ? user.created_at : '', ...(typeof user.email === 'string' ? { email: user.email } : {}) };
-	} catch { return null; }
+		if (
+			typeof session?.access_token !== 'string' ||
+			typeof session.refresh_token !== 'string' ||
+			typeof user?.id !== 'string' ||
+			!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(user.id)
+		)
+			return null;
+		return {
+			id: user.id,
+			aud: 'authenticated',
+			app_metadata: {},
+			user_metadata: {},
+			created_at: typeof user.created_at === 'string' ? user.created_at : '',
+			...(typeof user.email === 'string' ? { email: user.email } : {})
+		};
+	} catch {
+		return null;
+	}
+}
+
+/** Local sign-out still works when an optional SDK chunk is unavailable offline. */
+export function clearStoredAuth(): void {
+	try {
+		if (typeof window === 'undefined') return;
+		for (const key of [AUTH_STORAGE_KEY, `${AUTH_STORAGE_KEY}-code-verifier`, `${AUTH_STORAGE_KEY}-user`])
+			window.localStorage.removeItem(key);
+	} catch { /* Restricted storage must not crash the local app. */ }
 }

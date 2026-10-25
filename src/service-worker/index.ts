@@ -1,9 +1,9 @@
+import { shell } from 'virtual:offline-shell';
 import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
 import { version } from '$app/env';
 import { assets, immutable, prerendered } from '$app/manifest';
 import { asset, resolve } from '$app/paths';
 import { self } from '$app/service-worker';
-import { shell } from 'virtual:offline-shell';
 
 /**
  * Every route and its static dependencies are ready before activation.
@@ -22,11 +22,13 @@ const APP_FILES = [
 	])
 ];
 const PRECACHED = new Set(APP_FILES);
-const SHELL_FILES = [...new Set([
-	...shell.map(toUrl),
-	...assets.map(({ path }) => toUrl(asset(path))),
-	...prerendered.map(({ path }) => toUrl(resolve(path)))
-])];
+const SHELL_FILES = [
+	...new Set([
+		...shell.map(toUrl),
+		...assets.map(({ path }) => toUrl(asset(path))),
+		...prerendered.map(({ path }) => toUrl(resolve(path)))
+	])
+];
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL_FILES)));

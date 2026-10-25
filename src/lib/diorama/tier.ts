@@ -20,8 +20,16 @@ const WEAK_GPU =
 
 export function pickTier(): Tier {
 	if (typeof window === 'undefined' || typeof WebGL2RenderingContext === 'undefined') return 'svg';
-	const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean; effectiveType?: string } };
-	if (nav.onLine === false || nav.connection?.saveData || /^(slow-2g|2g|3g)$/.test(nav.connection?.effectiveType ?? '')) return 'svg';
+	const nav = navigator as Navigator & {
+		deviceMemory?: number;
+		connection?: { saveData?: boolean; effectiveType?: string };
+	};
+	if (
+		nav.onLine === false ||
+		nav.connection?.saveData ||
+		/^(slow-2g|2g|3g)$/.test(nav.connection?.effectiveType ?? '')
+	)
+		return 'svg';
 	if (nav.deviceMemory !== undefined && nav.deviceMemory <= 2) return 'svg';
 	if (nav.hardwareConcurrency > 0 && nav.hardwareConcurrency <= 2) return 'svg';
 	const saved = savedTier();

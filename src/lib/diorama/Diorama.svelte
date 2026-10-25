@@ -40,8 +40,8 @@
 			host.seen = { stage, oath };
 			id = join();
 			return () => {
-			host.seen = { stage, oath };
-			leave(id);
+				host.seen = { stage, oath };
+				leave(id);
 				id = 0;
 			};
 		});

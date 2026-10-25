@@ -1,5 +1,5 @@
 import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js';
-import { AUTH_STORAGE_KEY, cloudAvailable, getSupabase, readStoredUser } from '#lib/supabase/client.ts';
+import { AUTH_STORAGE_KEY, clearStoredAuth, cloudAvailable, getSupabase, readStoredUser } from '#lib/supabase/client.ts';
 import type { Database } from '#lib/supabase/database.types.ts';
 import { sessions } from './sessions.svelte.ts';
 
@@ -45,24 +45,34 @@ export class GuideAuth {
 				this.#apply(this.available ? readStoredUser() : null);
 				if (this.user && navigator.onLine) void this.#restore();
 			});
-			window.addEventListener('online', () => { if (this.user) void this.#restore(); });
+			window.addEventListener('online', () => {
+				if (this.user) void this.#restore();
+			});
 		}
 		try {
-			if (this.user && (typeof navigator === 'undefined' || navigator.onLine !== false)) await this.#restore();
-		} finally { this.ready = true; }
+			if (this.user && (typeof navigator === 'undefined' || navigator.onLine !== false))
+				await this.#restore();
+		} finally {
+			this.ready = true;
+		}
 	}
 	#connect(): Promise<SupabaseClient<Database> | null> {
 		if (!this.#connection) {
 			const generation = this.generation;
-			this.#connection = getSupabase().then((client) => {
-				// Keep callbacks synchronous: awaited SDK calls here can deadlock.
-				client?.auth.onAuthStateChange((event, session) => {
-					if (this.#signingOut && session?.user) return;
-					if (event === 'INITIAL_SESSION' && generation !== this.generation) return;
-					this.#apply(session?.user ?? null);
+			this.#connection = getSupabase()
+				.then((client) => {
+					// Keep callbacks synchronous: awaited SDK calls here can deadlock.
+					client?.auth.onAuthStateChange((event, session) => {
+						if (this.#signingOut && session?.user) return;
+						if (event === 'INITIAL_SESSION' && generation !== this.generation) return;
+						this.#apply(session?.user ?? null);
+					});
+					return client;
+				})
+				.catch((error) => {
+					this.#connection = null;
+					throw error;
 				});
-				return client;
-			}).catch((error) => { this.#connection = null; throw error; });
 		}
 		return this.#connection;
 	}
@@ -72,7 +82,10 @@ export class GuideAuth {
 			const client = await this.#connect();
 			if (!client || generation !== this.generation) return;
 			const { data, error } = await client.auth.getSession();
-			if (generation === this.generation) this.#apply(error ? null : (data.session?.user ?? null));
+			if (generation === this.generation) {
+				const retryable = error?.name === 'AuthRetryableFetchError';
+				this.#apply(retryable ? readStoredUser() : error ? null : (data.session?.user ?? null));
+			}
 		} catch {
 			// A new SDK chunk may be unavailable after an offline update. Keep the
 			// cached owner visible; the queue cannot send without a real SDK session.
@@ -108,7 +121,9 @@ export class GuideAuth {
 	signOut(): Promise<void> {
 		if (this.#signingOut) return this.#signingOut;
 		// Invalidate requests and hide this owner's records before any network await.
-		const needsClient = this.#connection !== null || readStoredUser() !== null;
+		const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+		const needsClient = this.#connection !== null || (!offline && readStoredUser() !== null);
+		if (offline) clearStoredAuth();
 		this.#apply(null);
 		// Also invalidate initialization when the previous user was not known yet.
 		this.generation++;
@@ -120,6 +135,7 @@ export class GuideAuth {
 				if (result?.error) throw result.error;
 			})
 			.finally(() => {
+				clearStoredAuth();
 				this.#signingOut = null;
 			});
 		return this.#signingOut;
