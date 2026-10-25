@@ -159,6 +159,7 @@ export class AnimalAnimator {
 	#fadeElapsed = 0;
 	#dt = 0;
 	#arc = 0;
+	#gaitShare = 0;
 	#howlPhase = 0;
 	#eatPhase = 0;
 	#gripSide = 1;
@@ -342,11 +343,19 @@ export class AnimalAnimator {
 		this.#arc = 0;
 		if (!(base > 0) || species.walk === null) return;
 		const run = this.runWeight;
-		this.#addGait(out, species.walk, base * (1 - run));
-		if (species.run !== null && run > 0) this.#addGait(out, species.run, base * run);
+		// The weight travels in a field: a computed number argument is boxed when
+		// V8 does not inline the call (p3-animation.md, V8 rule 1).
+		this.#gaitShare = base * (1 - run);
+		this.#addGait(out, species.walk);
+		if (species.run !== null && run > 0) {
+			this.#gaitShare = base * run;
+			this.#addGait(out, species.run);
+		}
 	}
 
-	#addGait(out: Float64Array, gait: GaitParams, weight: number) {
+	/** Adds one gait at weight #gaitShare. */
+	#addGait(out: Float64Array, gait: GaitParams) {
+		const weight = this.#gaitShare;
 		if (!(weight > 0)) return;
 		const model = this.model;
 		const height = model.height;
