@@ -12,7 +12,8 @@ export default defineConfig({
 		sveltekit({
 			// Fully static: every route is prerendered to an index.html and the
 			// service worker caches all of it so the app works in airplane mode.
-			adapter: adapter({ strict: true }),
+			// precompress writes .gz/.br next to each file for nginx gzip_static.
+			adapter: adapter({ strict: true, precompress: true }),
 			paths: { base: base as '' | `/${string}` },
 			// Always fetch the worker script fresh so new versions are picked up.
 			serviceWorker: { register: true, options: { updateViaCache: 'none' } }
