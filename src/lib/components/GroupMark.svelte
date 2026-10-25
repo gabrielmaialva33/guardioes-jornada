@@ -19,7 +19,7 @@
 
 <span
 	class="mark"
-	class:pair={initials.length > 1}
+	class:double={initials.length > 1}
 	style:--group={color}
 	style:--ink={GROUP_INK}
 	style:--size="{size}rem"
@@ -45,7 +45,7 @@
 		line-height: 1;
 	}
 
-	.mark.pair {
+	.mark.double {
 		font-size: calc(var(--size) * 0.4);
 		letter-spacing: -0.02em;
 	}
