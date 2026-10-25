@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
-	"description": "Jornada guiada dos Guardiões da Mata Atlântica: PWA offline para o guia conduzir grupos de estudantes na trilha.",
+	"description": "Jornada guiada dos Guardi\u00f5es da Mata Atl\u00e2ntica: PWA offline para o guia conduzir grupos de estudantes na trilha.",
 	"packageManager": "pnpm@11.22.0",
 	"engines": {
 		"node": ">=22.17"
@@ -29,7 +29,8 @@
 		"test": "vitest run",
 		"deploy": "pnpm build && pnpm dlx wrangler@4.152.0 deploy",
 		"db:config": "set -a && . ./supabase/.env && set +a && supabase config push",
-		"deploy:vps": "deploy/vps.sh"
+		"deploy:vps": "deploy/vps.sh",
+		"game:dev": "vite --config game/vite.config.ts --host 0.0.0.0 --port 5196 --strictPort"
 	},
 	"dependencies": {
 		"@fontsource-variable/alegreya": "5.3.0",
