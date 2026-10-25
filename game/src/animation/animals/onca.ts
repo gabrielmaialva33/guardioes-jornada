@@ -117,6 +117,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		this.rampRate = ONCA.accel;
 		this.ramp();
 		this.#speed = this.speed;
+		motion.speed = this.speed;
 		if (this.travel > 0) {
 			const step = this.#advance;
 			step.distance = this.travel;

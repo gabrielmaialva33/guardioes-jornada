@@ -365,3 +365,10 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 		]
 	}
 };
+
+/** Stride length (u) of a species at a speed (u/s): linear between the two stride points, clamped. */
+export function strideAt(species: SpeciesParams, speed: number): number {
+	const { slowSpeed, slowStride, fastSpeed, fastStride } = species.stride;
+	const t = Math.min(1, Math.max(0, (speed - slowSpeed) / (fastSpeed - slowSpeed)));
+	return slowStride + (fastStride - slowStride) * t;
+}

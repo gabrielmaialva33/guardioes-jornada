@@ -184,6 +184,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		} else if (this.route) {
 			this.#ground = this.cursor.y;
 		}
+		motion.speed = this.#speed;
 		this.#lift = 0;
 		if (this.state === 'hop') this.#hop();
 		motion.y = this.#ground + this.#lift;

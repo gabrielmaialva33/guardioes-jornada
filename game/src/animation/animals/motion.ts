@@ -23,6 +23,12 @@ export class AnimalMotion {
 	// --- Locomotion (ground and branches) ---
 	/** Distance actually covered during this update, u (turning on the spot counts its foot travel). The gait advances by it only. */
 	distance = 0;
+	/**
+	 * Gait cycles covered during this update: the sum over substeps of distance /
+	 * stride at that substep's speed (Behaviour fills it). -1 when unset: the
+	 * animator then uses distance / stride at the final speed.
+	 */
+	cycles = -1;
 	/** Travel speed, u/s: picks stride, cadence and the walk/run blend. */
 	speed = 0;
 	/** Forward acceleration, u/s², for lean and tail lag. */
@@ -83,6 +89,7 @@ export class AnimalMotion {
 	/** Clears the per-update events. */
 	beginUpdate() {
 		this.distance = 0;
+		this.cycles = -1;
 		this.landing = 0;
 		this.takeoff = 0;
 	}

@@ -47,7 +47,7 @@ import {
 	ROOT,
 	TAIL
 } from './rigs.ts';
-import { SPECIES, type GaitParams, type SpeciesId, type SpeciesParams } from './species.ts';
+import { SPECIES, type GaitParams, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
 import { clamp, clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
 
 const STAND = POSTURE_INDEX.stand;
@@ -297,22 +297,22 @@ export class AnimalAnimator {
 			return;
 		}
 		const speed = motion.speed > 0 ? motion.speed : 0;
-		const moving = speed > ANIMAL_LAYERS.moveThreshold && this.#target === STAND;
+		const distance = motion.distance > 0 && Number.isFinite(motion.distance) ? motion.distance : 0;
+		// Turning on the spot covers foot travel at no speed: it steps too.
+		const moving = (speed > ANIMAL_LAYERS.moveThreshold || distance > 0) && this.#target === STAND;
 		const fade = this.reducedMotion ? REDUCED_MOTION_DURATION : DURATION.state;
 		const step = this.#dt / fade;
 		this.gaitWeight = moving ? Math.min(1, this.gaitWeight + step) : Math.max(0, this.gaitWeight - step);
 		this.runWeight =
 			species.run === null ? 0 : smoothstep((speed - species.runFrom) / (species.runTo - species.runFrom));
 
-		const { slowSpeed, slowStride, fastSpeed, fastStride } = species.stride;
-		const t = clamp01((speed - slowSpeed) / (fastSpeed - slowSpeed));
-		const stride = slowStride + (fastStride - slowStride) * t;
+		const stride = strideAt(species, speed);
 		this.stride = stride;
 		this.cadence = speed / stride;
-		const distance = motion.distance > 0 && Number.isFinite(motion.distance) ? motion.distance : 0;
 		if (distance === 0) return;
 		const before = this.phase;
-		const advance = distance / stride;
+		const cycles = motion.cycles;
+		const advance = cycles >= 0 && Number.isFinite(cycles) ? cycles : distance / stride;
 		this.phase = wrap01(before + advance);
 		if (this.gaitWeight < 0.5) return;
 		// Footfalls crossed during this update (the last one wins), for dust and sounds.

@@ -139,8 +139,8 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		if (this.state === 'idle') {
 			this.#glance -= h;
 			if (this.#glance <= 0) {
-				this.#glance = this.rng.range(MURIQUI.glance[0], MURIQUI.glance[1]);
-				this.#lookYaw = this.rng.range(-MURIQUI.glanceYaw, MURIQUI.glanceYaw);
+				this.#glance = this.cosmetic.range(MURIQUI.glance[0], MURIQUI.glance[1]);
+				this.#lookYaw = this.cosmetic.range(-MURIQUI.glanceYaw, MURIQUI.glanceYaw);
 			}
 		} else this.#lookYaw = 0;
 	}

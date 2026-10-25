@@ -82,12 +82,14 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 	protected advance(_world: AnimalWorld) {
 		const h = this.h;
 		const motion = this.motion;
-		const before = this.#speed;
-		this.#speed = approach(before, this.state === 'move' ? BUGIO.walkSpeed : 0, BUGIO.accel * h);
-		motion.accel = (this.#speed - before) / h;
-		if (this.#speed > 0) {
+		this.cruise = this.state === 'move' ? BUGIO.walkSpeed : 0;
+		this.rampRate = BUGIO.accel;
+		this.ramp();
+		this.#speed = this.speed;
+		motion.speed = this.speed;
+		if (this.travel > 0) {
 			const step = this.#advance;
-			step.distance = 0.5 * (before + this.#speed) * h;
+			step.distance = this.travel;
 			this.branch.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
@@ -99,8 +101,8 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 		if (this.state === 'idle') {
 			this.#glance -= h;
 			if (this.#glance <= 0) {
-				this.#glance = this.rng.range(BUGIO.glance[0], BUGIO.glance[1]);
-				this.#lookYaw = this.rng.range(-BUGIO.glanceYaw, BUGIO.glanceYaw);
+				this.#glance = this.cosmetic.range(BUGIO.glance[0], BUGIO.glance[1]);
+				this.#lookYaw = this.cosmetic.range(-BUGIO.glanceYaw, BUGIO.glanceYaw);
 			}
 		} else this.#lookYaw = 0;
 	}

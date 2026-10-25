@@ -105,8 +105,8 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 		if (this.state === 'idle') {
 			this.#glance -= h;
 			if (this.#glance <= 0) {
-				this.#glance = this.rng.range(PREGUICA.glance[0], PREGUICA.glance[1]);
-				this.#lookYaw = this.rng.range(-PREGUICA.glanceYaw, PREGUICA.glanceYaw);
+				this.#glance = this.cosmetic.range(PREGUICA.glance[0], PREGUICA.glance[1]);
+				this.#lookYaw = this.cosmetic.range(-PREGUICA.glanceYaw, PREGUICA.glanceYaw);
 			}
 		} else this.#lookYaw = 0;
 	}
@@ -170,6 +170,10 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 		this.enter('move', 1e9);
 	}
 
+	/**
+	 * Pauses and limb moves hand their leftover time to each other within the
+	 * substep, so the timing is exact at any frame rate (and under LOD).
+	 */
 	#moveLimbs() {
 		const h = this.h;
 		const motion = this.motion;
@@ -177,29 +181,40 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 			if (Math.abs(wrapAngle(this.targetYaw - motion.yaw)) > 0.02) return;
 			this.#turning = false;
 		}
-		if (this.moving < 0) {
-			this.#pause -= h;
-			if (this.#pause > 0) return;
-			if (this.#movesLeft <= 0) {
-				this.enter('idle', this.rng.range(PREGUICA.idle[0], PREGUICA.idle[1]));
-				return;
+		let left = h;
+		for (let guard = 0; left > 1e-12 && guard < 8; guard++) {
+			if (this.moving < 0) {
+				if (this.#pause > left) {
+					this.#pause -= left;
+					return;
+				}
+				left -= this.#pause;
+				this.#pause = 0;
+				if (this.#movesLeft <= 0) {
+					// The idle timer starts now, not at the start of this substep.
+					this.enter('idle', this.rng.range(PREGUICA.idle[0], PREGUICA.idle[1]) + (h - left));
+					return;
+				}
+				this.moving = SLOTH_LIMB_ORDER[this.#orderIndex];
+				this.#orderIndex = (this.#orderIndex + 1) % 4;
+				this.#from[this.moving] = this.holds[this.moving];
+				this.#duration = this.rng.range(PREGUICA.limbMove[0], PREGUICA.limbMove[1]);
+				this.progress = 0;
 			}
-			this.moving = SLOTH_LIMB_ORDER[this.#orderIndex];
-			this.#orderIndex = (this.#orderIndex + 1) % 4;
-			this.#from[this.moving] = this.holds[this.moving];
-			this.#duration = this.rng.range(PREGUICA.limbMove[0], PREGUICA.limbMove[1]);
-			this.progress = 0;
-		}
-		const leg = this.moving;
-		this.progress = Math.min(1, this.progress + h / this.#duration);
-		const step = PREGUICA.step * this.cursor.direction;
-		this.holds[leg] = this.#from[leg] + step * easeInOutSine(this.progress);
-		this.#follow();
-		if (this.progress >= 1) {
-			this.moving = -1;
-			this.moves++;
-			this.#movesLeft--;
-			this.#pause = this.rng.range(PREGUICA.limbPause[0], PREGUICA.limbPause[1]);
+			const leg = this.moving;
+			const need = (1 - this.progress) * this.#duration;
+			const used = left < need ? left : need;
+			this.progress = used >= need ? 1 : this.progress + used / this.#duration;
+			left -= used;
+			const step = PREGUICA.step * this.cursor.direction;
+			this.holds[leg] = this.#from[leg] + step * easeInOutSine(this.progress);
+			this.#follow();
+			if (this.progress >= 1) {
+				this.moving = -1;
+				this.moves++;
+				this.#movesLeft--;
+				this.#pause = this.rng.range(PREGUICA.limbPause[0], PREGUICA.limbPause[1]);
+			}
 		}
 	}
 

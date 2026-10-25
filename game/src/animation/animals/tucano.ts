@@ -309,7 +309,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		}
 		this.#glance -= this.h;
 		if (this.#glance > 0) return;
-		const rng = this.rng;
+		const rng = this.cosmetic;
 		this.#glance = rng.range(TUCANO.glance[0], TUCANO.glance[1]);
 		this.#lookYaw = rng.range(-TUCANO.glanceYaw, TUCANO.glanceYaw);
 		this.#lookPitch = rng.range(-1, 1) * TUCANO.glancePitch;

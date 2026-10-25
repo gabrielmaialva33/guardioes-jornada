@@ -15,7 +15,7 @@
  */
 import { AnimalMotion, type AnimalWorld } from './motion.ts';
 import { approachAngle, MAX_DT, Rng, safeDt, wrapAngle } from './scalar.ts';
-import { SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
+import { SPECIES, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
 
 /** Longest substep, seconds. */
 export const MAX_SUBSTEP = 1 / 30;
@@ -42,7 +42,13 @@ export abstract class Behaviour<S extends string = string> {
 	timer = 0;
 	/** Total time stepped, seconds. */
 	clock = 0;
+	/** Decisions only: drawn at exact event times, so replays match at any frame rate. */
 	readonly rng: Rng;
+	/**
+	 * Cosmetic draws (glances) tick at substep granularity; a separate stream keeps
+	 * them from shifting the decisions' sequence when the frame rate changes.
+	 */
+	readonly cosmetic: Rng;
 	/** Copied from the world at each step; behaviours drop decorative extras with it. */
 	reducedMotion = false;
 	/** The current substep, seconds (see the module comment). */
@@ -53,6 +59,12 @@ export abstract class Behaviour<S extends string = string> {
 	protected targetYaw = 0;
 	/** Radius the feet travel on when the body turns on the spot, u (about the hip spread). */
 	protected footRadius = 0;
+	/** Travel speed along the route (u/s), the speed it ramps toward and the ramp (u/s²); see ramp(). */
+	protected speed = 0;
+	protected cruise = 0;
+	protected rampRate = 1;
+	/** Distance covered in the last ramp() substep, u. */
+	protected travel = 0;
 	readonly #seed: number;
 
 	constructor(species: SpeciesId, initial: S, options: BehaviourOptions = {}) {
@@ -61,6 +73,7 @@ export abstract class Behaviour<S extends string = string> {
 		this.footRadius = this.species.size * 0.3;
 		this.#seed = options.seed ?? 0x5eed;
 		this.rng = new Rng(this.#seed);
+		this.cosmetic = new Rng(this.#seed ^ 0x9e3779b9);
 	}
 
 	/** Advances by `dt` seconds of world time. */
@@ -77,14 +90,22 @@ export abstract class Behaviour<S extends string = string> {
 
 	#run(world: AnimalWorld) {
 		this.reducedMotion = world.reducedMotion;
-		this.motion.beginUpdate();
+		const motion = this.motion;
+		motion.beginUpdate();
+		motion.cycles = 0;
 		this.sense(world);
 		let left = Math.min(this.frameDt, MAX_DT);
 		for (let guard = 0; left > 1e-9 && guard < 64; guard++) {
 			let h = left < MAX_SUBSTEP ? left : MAX_SUBSTEP;
 			if (this.timer > 1e-9 && this.timer < h) h = this.timer;
 			this.h = h;
+			const distance = motion.distance;
+			const speed = motion.speed;
 			this.advance(world);
+			// Gait cycles at this substep's mean speed: the phase then does not depend
+			// on how the frame was cut (one LOD update or three frames).
+			const covered = motion.distance - distance;
+			if (covered > 0) motion.cycles += covered / strideAt(this.species, 0.5 * (speed + motion.speed));
 			this.stateTime += h;
 			this.timer -= h;
 			this.clock += h;
@@ -97,6 +118,7 @@ export abstract class Behaviour<S extends string = string> {
 	/** Restarts the state machine and the random stream (respawn, teleport). */
 	reset() {
 		this.rng.reset(this.#seed);
+		this.cosmetic.reset(this.#seed ^ 0x9e3779b9);
 		this.stateTime = this.timer = this.clock = 0;
 	}
 
@@ -117,6 +139,28 @@ export abstract class Behaviour<S extends string = string> {
 		this.state = state;
 		this.stateTime = 0;
 		this.timer = duration > 1e-3 ? duration : 1e-3;
+	}
+
+	/**
+	 * Ramps `speed` toward `cruise` at `rampRate` over this substep and sets
+	 * `travel`, the exact distance covered, splitting the substep where the ramp
+	 * reaches the cruise speed (a plain trapezoid would overshoot by a different
+	 * amount at each substep size, and the gait would drift between frame rates).
+	 */
+	protected ramp() {
+		const h = this.h;
+		const before = this.speed;
+		const target = this.cruise;
+		const gap = target - before;
+		const reach = Math.abs(gap) / this.rampRate;
+		if (reach >= h) {
+			this.speed = before + Math.sign(gap) * this.rampRate * h;
+			this.travel = 0.5 * (before + this.speed) * h;
+		} else {
+			this.speed = target;
+			this.travel = 0.5 * (before + target) * reach + target * (h - reach);
+		}
+		this.motion.accel = h > 0 ? (this.speed - before) / h : 0;
 	}
 
 	/**
