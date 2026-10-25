@@ -55,6 +55,13 @@ sys.path.insert(0, str(SCRIPT_DIR))
 import recolor  # noqa: E402
 
 
+DECAL_LEGEND = {
+    "k": "#242228",
+    "w": "#e2e6e0",
+    "m": "#5a2e2e",
+}
+
+
 def composite_preset_png(regions_spec: dict, preset: dict, out_path: Path) -> Path:
     rgba = bytearray(64 * 64 * 4)
 
@@ -70,51 +77,31 @@ def composite_preset_png(regions_spec: dict, preset: dict, out_path: Path) -> Pa
                 rgba[p + 3] = 255
 
     fill_rect([0, 0, 64, 64], "#1e4d36")
-    R = regions_spec["regions"]
-    fill_rect(R["head"]["all"], preset["skin"])
-    fill_rect(R["armRight"]["bottom"], preset["skin"])
-    fill_rect(R["armRight"]["forearm"], preset["skin"])
-    fill_rect(R["armLeft"]["bottom"], preset["skin"])
-    fill_rect(R["armLeft"]["forearm"], preset["skin"])
-    for rect in R["head"]["hair"]:
-        fill_rect(rect, preset["hair"])
-    fill_rect(R["torso"]["all"], preset["shirt"])
-    fill_rect(R["armRight"]["top"], preset["shirt"])
-    fill_rect(R["armRight"]["sleeve"], preset["shirt"])
-    fill_rect(R["armLeft"]["top"], preset["shirt"])
-    fill_rect(R["armLeft"]["sleeve"], preset["shirt"])
-    fill_rect(R["legRight"]["top"], preset["pants"])
-    fill_rect(R["legRight"]["pants"], preset["pants"])
-    fill_rect(R["legRight"]["bottom"], preset["shoes"])
-    fill_rect(R["legRight"]["shoe"], preset["shoes"])
-    fill_rect(R["legLeft"]["top"], preset["pants"])
-    fill_rect(R["legLeft"]["pants"], preset["pants"])
-    fill_rect(R["legLeft"]["bottom"], preset["shoes"])
-    fill_rect(R["legLeft"]["shoe"], preset["shoes"])
+    for slot_name in regions_spec["paintOrder"]:
+        color_hex = preset.get(slot_name)
+        if not color_hex:
+            continue
+        for rect in regions_spec["slots"].get(slot_name, []):
+            fill_rect(rect, color_hex)
 
-    face_spec = regions_spec["faces"].get(preset.get("face", "smile"), regions_spec["faces"]["smile"])
-    fx0, fy0 = regions_spec["faces"]["targetRect64"][:2]
-    for px in face_spec["pixels8x8"]:
-        # Blender's glTF importer flips V (1 - v), while external images loaded via bpy.data.images.load
-        # are not flipped by the importer; flip Y inside the 64x64 texture for direct bpy.data.images.load
-        fill_rect([fx0 + px["x"], fy0 + px["y"], 1, 1], px["color"])
+    fx0, fy0, fw, fh = regions_spec["face"]["rect"]
+    decals = regions_spec["face"]["decals"]
+    rows = decals.get(preset.get("face", "smile")) or decals["smile"]
+    row_count = len(rows)
+    col_count = len(rows[0]) if row_count else 1
+    for dy in range(fh):
+        r_idx = min(row_count - 1, (dy * row_count) // fh)
+        row_str = rows[r_idx]
+        for dx in range(fw):
+            c_idx = min(col_count - 1, (dx * col_count) // fw)
+            ch = row_str[c_idx]
+            if ch and ch != ".":
+                col_hex = DECAL_LEGEND.get(ch)
+                if col_hex:
+                    fill_rect([fx0 + dx, fy0 + dy, 1, 1], col_hex)
 
-    # Flip rows vertically so bpy.data.images.load matches Blender's glTF-imported (1 - v) UVs
-    flipped = bytearray(64 * 64 * 4)
-    for y in range(64):
-        src_row = y * 64 * 4
-        dst_row = (63 - y) * 64 * 4
-        flipped[dst_row : dst_row + 64 * 4] = rgba[src_row : src_row + 64 * 4]
-
-    out_path.write_bytes(recolor.encode_png8(64, 64, flipped))
+    out_path.write_bytes(recolor.encode_png8(64, 64, bytes(rgba)))
     return out_path
-
-
-def flip_image_for_blender_uvs(src_path: Path, tmp_dir: Path) -> Path:
-    out_p = tmp_dir / f"vflip-{src_path.stem}.png"
-    if not out_p.exists():
-        subprocess.run(["magick", str(src_path), "-flip", f"PNG8:{out_p}"], check=True)
-    return out_p
 
 
 def hex_to_linear_rgba(hex_str: str, alpha: float = 1.0) -> tuple[float, float, float, float]:
@@ -479,19 +466,46 @@ def main() -> None:
             roots = import_single_glb(MODELS_DIR / model_name, tmp_dir)
             if roots:
                 pet = roots[0]
+                pet_nodes = {o.name.split(".")[0]: o for o in [pet, *pet.children_recursive]}
+                group_loc = Vector((0.0, -0.1125, 1.1621))
                 if model_name == "parrot.glb":
-                    # Remove cockatoo crest ('Group') so the toucan has a smooth black crown
+                    # Hide/remove cockatoo crest ('Group') so the toucan has a smooth black crown
                     for ch in list(pet.children_recursive):
                         if ch.name.startswith("Group"):
+                            group_loc = ch.location.copy()
                             bpy.data.objects.remove(ch, do_unlink=True)
-                flipped_pal = flip_image_for_blender_uvs(SKINS_DIR / pal_name, tmp_dir)
-                convert_to_flat_lambert(pet, flipped_pal)
+                convert_to_flat_lambert(pet, SKINS_DIR / pal_name)
+                place_and_scale_root(pet, xy, target_height=th, target_length=tl, yaw_deg=160.0)
                 if attach_glb and (MODELS_DIR / attach_glb).exists():
                     att_roots = import_single_glb(MODELS_DIR / attach_glb, tmp_dir)
                     for ar in att_roots:
                         convert_to_flat_lambert(ar)
-                        ar.parent = pet
-                place_and_scale_root(pet, xy, target_height=th, target_length=tl, yaw_deg=160.0)
+                        if "bico-tucano" in attach_glb and "body" in pet_nodes:
+                            ar.parent = pet_nodes["body"]
+                            ar.matrix_parent_inverse.identity()
+                            ar.location = group_loc
+                            ar.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+                            ar.scale = Vector((1.0, 1.0, 1.0))
+                        elif "juba-mico" in attach_glb and "body" in pet_nodes:
+                            ar.parent = pet_nodes["body"]
+                            ar.matrix_parent_inverse.identity()
+                            ar.location = Vector((0.0, 0.0, 0.0))
+                            ar.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+                            ar.scale = Vector((1.0, 1.0, 1.0))
+                        elif "rosetas-onca" in attach_glb:
+                            for g in list(ar.children):
+                                base_g = g.name.split(".")[0]
+                                if base_g.startswith("rosetas-"):
+                                    target = pet_nodes.get(base_g[len("rosetas-") :])
+                                    if target:
+                                        for child in list(g.children):
+                                            loc = child.location.copy()
+                                            child.parent = target
+                                            child.matrix_parent_inverse.identity()
+                                            child.location = loc
+                                            child.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+                                            child.scale = Vector((1.0, 1.0, 1.0))
+                bpy.context.view_layer.update()
 
         # 4. Props, Obby & Cabin from kit-props.glb (middle row y = 1.5)
         props_roots = import_single_glb(MODELS_DIR / "kit-props.glb", tmp_dir)
