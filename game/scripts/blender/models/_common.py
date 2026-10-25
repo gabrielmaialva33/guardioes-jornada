@@ -185,6 +185,14 @@ class Mesh:
         self.add([p + n for p in pts], front, uv)
         self.add([p - n for p in reversed(pts)], back, uv)
 
+    def add_out(self, pts, colour: str, inside, uv=None) -> None:
+        """Add a face wound so its normal points away from `inside` (a point within the
+        solid it closes)."""
+        pts = [Vector(p) for p in pts]
+        n = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+        centroid = sum(pts, Vector()) / len(pts)
+        self.add(pts if n.dot(centroid - Vector(inside)) >= 0 else pts[::-1], colour, uv)
+
     def tris(self) -> int:
         return sum(len(f) - 2 for f in self.faces)
 
