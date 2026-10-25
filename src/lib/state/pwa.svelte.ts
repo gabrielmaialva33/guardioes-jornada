@@ -13,11 +13,26 @@ class Pwa {
 	offlineReady = $state(false);
 	updateReady = $state(false);
 	canInstall = $state(false);
+	/** iPhone/iPad in the browser: Safari may evict data of sites not added to the home screen. */
+	iosNeedsInstall = $state(false);
+	persisted = $state<boolean | null>(null);
 	#installEvent: BeforeInstallPromptEvent | null = null;
 	#registration: ServiceWorkerRegistration | null = null;
 
 	async init() {
 		this.online = navigator.onLine;
+		const standalone =
+			matchMedia('(display-mode: standalone)').matches ||
+			(navigator as Navigator & { standalone?: boolean }).standalone === true;
+		const ios =
+			/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+			(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+		this.iosNeedsInstall = ios && !standalone;
+		// Ask once for durable storage so the browser does not evict journeys under pressure.
+		void navigator.storage
+			?.persist?.()
+			.then((granted) => (this.persisted = granted))
+			.catch(() => {});
 		addEventListener('online', () => (this.online = true));
 		addEventListener('offline', () => (this.online = false));
 		addEventListener('beforeinstallprompt', (event) => {

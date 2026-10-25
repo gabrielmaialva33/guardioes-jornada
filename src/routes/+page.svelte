@@ -168,6 +168,17 @@
 		</section>
 	{/if}
 
+	{#if pwa.iosNeedsInstall}
+		<section class="card ios-install">
+			<Icon name="install" weight="duotone" size={30} />
+			<p>
+				<strong>No iPhone, adicione à Tela de Início.</strong>
+				Toque em Compartilhar e depois em "Adicionar à Tela de Início". Assim o app abre sem internet e as jornadas
+				não são apagadas pelo Safari.
+			</p>
+		</section>
+	{/if}
+
 	{#if pwa.updateReady || pwa.canInstall}
 		<div class="app-actions">
 			{#if pwa.updateReady}
@@ -410,5 +421,23 @@
 		gap: 0.75rem;
 		padding: 1rem;
 		color: var(--warning);
+	}
+
+	.ios-install {
+		display: flex;
+		gap: 0.875rem;
+		padding: 1rem 1.25rem;
+		color: var(--accent-strong);
+		--icon-tone: var(--gold);
+		--icon-tone-opacity: 0.45;
+	}
+
+	.ios-install p {
+		color: var(--text-soft);
+	}
+
+	.ios-install strong {
+		display: block;
+		color: var(--text);
 	}
 </style>
