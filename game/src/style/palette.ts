@@ -39,6 +39,17 @@ export const LIGHT = {
 	}
 } as const;
 
+/**
+ * View distance per quality tier, in world units. Fog starts at `fogNear` and is
+ * opaque at `far`, which is also the camera's far plane. This is how far the
+ * player sees, unrelated to how far the camera sits from the avatar.
+ */
+export const VIEW = {
+	low: { fogNear: 30, far: 70 },
+	medium: { fogNear: 40, far: 90 },
+	high: { fogNear: 50, far: 120 }
+} as const;
+
 export type Ramp = keyof typeof RAMPS;
 
 /** HSL lightness bounds every world colour stays within (ART.md: no pure black or white). */

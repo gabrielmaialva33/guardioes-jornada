@@ -57,7 +57,7 @@ One unit is about 0.47 m: the avatar is 3.0 u tall (1 stud = 0.6 u, as in `src/e
 
 - One material family: `MeshLambertMaterial`, flat shading, vertex colours multiplied by a palette texture. No PBR, no specular, no normal maps.
 - Static assets carry baked light in their vertex colours: ambient occlusion plus a sky-to-ground gradient, baked in Blender (`scripts/blender/`). This is the diorama's technique, and it keeps the low tier grounded without a shadow map.
-- Scene light: one hemisphere light (sky `#cfe8f2`, ground `#3f6b48`) and one sun (`#fff1d0`, 45° elevation). Fog uses the horizon colour and ends at the camera's maximum distance.
+- Scene light: one hemisphere light (sky `#cfe8f2`, ground `#3f6b48`) and one sun (`#fff1d0`, 45° elevation). Fog uses the horizon colour and follows the view distance, not the camera's zoom distance: on the low tier it starts at 30 u and is opaque at 70 u, which is also the camera's far plane (`VIEW` in `src/style/palette.ts`). Gameplay objects must sit inside the clear range.
 - Characters and animals use the same material family; on the low tier they get a blob shadow, on higher tiers a real one.
 
 ## 6. Textures
