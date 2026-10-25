@@ -890,6 +890,7 @@ function main() {
 			if (json.animations) {
 				json.animations = json.animations.filter((a) => PET_KEEP_ANIMS.has(a.name));
 			}
+			remapPetUvsForSpecies(pet, json, bin);
 			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [petsPalBytes] }, bin);
 			const step1 = path.join(workDir, `${pet}-step1.glb`);
 			const step2 = path.join(workDir, `${pet}-step2.glb`);
