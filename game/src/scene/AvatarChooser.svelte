@@ -171,7 +171,10 @@
 								>{labels[part]}<input
 									type="color"
 									value={draft.colors[part]}
-									oninput={(event) => changeColor(part, event.currentTarget.value)}
+									oninput={(event) => {
+										changeColor(part, event.currentTarget.value);
+										event.currentTarget.value = draft.colors[part];
+									}}
 								/></label
 							>{/each}
 						<div class="faces" role="group" aria-label="Expressão do rosto">
