@@ -249,7 +249,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 			// Dead band (inside the settle band, so it is reached in finite time), then a
 			// proportional pull capped by a braking curve (arrive).
 			const excess = Math.max(0, Math.abs(error) - MICO.aimBand);
-			const pull = Math.min(MICO.gain * excess, Math.sqrt(2 * MICO.accel * excess), MICO.maxSpeed);
+			const pull = Math.min(MICO.maxSpeed, Math.min(MICO.gain * excess, Math.sqrt(2 * MICO.accel * excess)));
 			const radial = error > 0 ? -pull : pull;
 			tvx = this.#playerVx + radial * nx;
 			tvz = this.#playerVz + radial * nz;

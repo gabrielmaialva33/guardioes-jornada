@@ -60,6 +60,8 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 	#playerX = 0;
 	#playerZ = 0;
 	#playerDistance = Number.POSITIVE_INFINITY;
+	#dx = 0;
+	#dz = 0;
 
 	constructor(options: OncaOptions) {
 		super('onca-pintada', 'idle', options);
@@ -127,7 +129,9 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		}
 		this.targetYaw = this.cursor.yaw;
 		this.turn();
-		this.#attend(dx, dz, distance);
+		this.#dx = dx;
+		this.#dz = dz;
+		this.#attend();
 	}
 
 	protected decide(_world: AnimalWorld) {
@@ -165,9 +169,12 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		motion.lookPitch = this.#lookPitch;
 	}
 
-	/** Watches a nearby player calmly; otherwise glances around. */
-	#attend(dx: number, dz: number, distance: number) {
+	/** Watches a nearby player calmly; otherwise glances around. Reads #dx, #dz, #playerDistance. */
+	#attend() {
 		const motion = this.motion;
+		const dx = this.#dx;
+		const dz = this.#dz;
+		const distance = this.#playerDistance;
 		if (distance < ONCA.watchRadius) {
 			this.#lookYaw = wrapAngle(Math.atan2(dx, dz) - motion.yaw);
 			this.#lookPitch = clamp(Math.atan2(1.5, distance), 0, 0.3);
