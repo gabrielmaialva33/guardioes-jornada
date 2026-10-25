@@ -58,7 +58,7 @@ Kenney's Nature Kit is modelled at about 1/9 of these tree heights. Scale it uni
 | Kind                     | Triangles          | Notes                                                                                 |
 | ------------------------ | ------------------ | ------------------------------------------------------------------------------------- |
 | Avatar                   | 72 (Kenney Blocky) | 6 rigid nodes, names fixed in `src/animation/joints.ts`                               |
-| Animal                   | ≤ 1,000            | rigid named nodes, no skinning                                                        |
+| Animal                   | ≤ 1,000            | rigid named nodes, no skinning; the onça may go to 1,200 for its rosettes             |
 | Tree                     | ≤ 400              | one merged mesh per species, instanced; a Kenney original up to 5% over is kept as is |
 | Prop                     | ≤ 200              |                                                                                       |
 | Landmark (cabin, bridge) | ≤ 1,500            |                                                                                       |
