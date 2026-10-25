@@ -595,25 +595,25 @@ def main() -> None:
 
         # Render 1: Master Lineup Overview (2560x1440)
         render_camera_view(
-            cam_pos=(1.5, 36.0, 14.5),
-            look_at=(1.5, -2.5, 5.5),
+            cam_pos=(1.5, 41.0, 15.5),
+            look_at=(1.5, -2.5, 6.2),
             out_file=OUT_DIR / "lineup.png",
             res=(2560, 1440),
-            fov_deg=48.0,
+            fov_deg=50.0,
         )
 
         # Render 2: Close-up Sheet — Avatars (3 skins), 1 u Scale Bar, Grey Card & 7 Animals
         render_camera_view(
-            cam_pos=(0.5, 19.5, 3.8),
-            look_at=(0.5, 5.5, 1.3),
+            cam_pos=(-1.2, 23.5, 4.2),
+            look_at=(-1.2, 5.5, 1.3),
             out_file=OUT_DIR / "closeup-avatars-animals.png",
             res=(1920, 1080),
-            fov_deg=45.0,
+            fov_deg=48.0,
         )
 
         # Render 3: Close-up Sheet — Props, Obby Platforms, Checkpoint Flag & Ranger Cabin
         render_camera_view(
-            cam_pos=(2.5, 19.0, 5.2),
+            cam_pos=(2.5, 21.0, 5.4),
             look_at=(2.5, 1.2, 1.4),
             out_file=OUT_DIR / "closeup-props-obby-cabin.png",
             res=(1920, 1080),
@@ -622,11 +622,11 @@ def main() -> None:
 
         # Render 4: Close-up Sheet — Custom Atlantic Forest Trees (6 u to 18 u) & Understorey Flora
         render_camera_view(
-            cam_pos=(1.5, 30.0, 12.5),
-            look_at=(1.5, -7.5, 6.8),
+            cam_pos=(2.0, 34.5, 13.5),
+            look_at=(2.0, -7.5, 7.5),
             out_file=OUT_DIR / "closeup-trees-flora.png",
             res=(1920, 1080),
-            fov_deg=48.0,
+            fov_deg=50.0,
         )
 
         # Render 5: 18 Roblox-Classic Flat-Colour Avatar Presets Sheet (6x3 grid in lineup light)
@@ -646,11 +646,11 @@ def main() -> None:
                     yaw_deg=165.0,
                 )
         render_camera_view(
-            cam_pos=(0.0, 16.5, 6.2),
-            look_at=(0.0, 0.0, 1.5),
+            cam_pos=(0.0, 21.0, 7.5),
+            look_at=(0.0, 0.0, 1.4),
             out_file=OUT_DIR / "avatar-presets-18.png",
             res=(1920, 1080),
-            fov_deg=42.0,
+            fov_deg=46.0,
         )
 
     print(f"[lineup.py] Rendered master lineup and 3 category sheets to {OUT_DIR}")
