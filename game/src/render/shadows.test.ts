@@ -37,6 +37,16 @@ describe('ShadowRig', () => {
 		expect(renderer.shadowMap.needsUpdate).toBe(false);
 	});
 
+	it('lights from the palette elevation on every tier, low included', () => {
+		const rig = new ShadowRig(mockRenderer());
+		const direction = rig.sun.position.clone().sub(rig.sun.target.position).normalize();
+		expect(direction.distanceTo(sunDirection(LIGHT.daylight.sunElevationDeg, 180))).toBeLessThan(1e-6);
+		expect(rig.sun.color.equals(new Color(LIGHT.daylight.sun))).toBe(true);
+		rig.setVariant('night');
+		const night = rig.sun.position.clone().sub(rig.sun.target.position).normalize();
+		expect(night.distanceTo(sunDirection(LIGHT.night.sunElevationDeg, 180))).toBeLessThan(1e-6);
+	});
+
 	it('medium: 1024 map, autoUpdate off, renders only when something moved', () => {
 		const renderer = mockRenderer();
 		const rig = new ShadowRig(renderer);

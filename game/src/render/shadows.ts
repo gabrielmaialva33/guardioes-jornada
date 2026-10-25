@@ -526,6 +526,16 @@ export class ShadowRig {
 		if (this.#right.lengthSq() < 1e-8) this.#right.set(1, 0, 0);
 		this.#right.normalize();
 		this.#up.copy(d).cross(this.#right).normalize();
+		// The light's direction is position − target: place it now, so shading is right on
+		// the low tier too, where update() never moves it.
+		const target = this.sun.target.position;
+		this.sun.position.set(
+			target.x + d.x * SUN_DISTANCE,
+			target.y + d.y * SUN_DISTANCE,
+			target.z + d.z * SUN_DISTANCE
+		);
+		this.sun.updateMatrixWorld();
+		this.sun.target.updateMatrixWorld();
 		this.#a = Number.NaN;
 		this.invalidate();
 	}
