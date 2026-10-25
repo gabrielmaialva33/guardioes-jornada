@@ -132,7 +132,7 @@
 			>
 		</header>
 		<fieldset class="choices" disabled={busy}>
-			<div class="tabs" role="tablist" aria-label="Estilos do personagem" onkeydown={tabKey}>
+			<div class="tabs" tabindex="-1" role="tablist" aria-label="Estilos do personagem" onkeydown={tabKey}>
 				<button
 					type="button"
 					role="tab"
