@@ -1271,8 +1271,7 @@ function compositeAvatarPresetPng(regionsSpec, preset) {
 	}
 
 	const [fx0, fy0, fw, fh] = regionsSpec.face.rect;
-	const rows =
-		regionsSpec.face.decals[preset.face] || regionsSpec.face.decals.smile || [];
+	const rows = regionsSpec.face.decals[preset.face] || regionsSpec.face.decals.smile || [];
 	const rowCount = rows.length;
 	const colCount = rows[0]?.length || 1;
 	for (let dy = 0; dy < fh; dy++) {
