@@ -42,6 +42,8 @@ export abstract class Behaviour<S extends string = string> {
 	reducedMotion = false;
 	/** The current substep, seconds (see the module comment). */
 	protected h = 0;
+	/** The whole step's dt, seconds, for sense() and finish(). */
+	protected frameDt = 0;
 	/** Yaw the body turns toward at the species' turn rate. */
 	protected targetYaw = 0;
 	/** Radius the feet travel on when the body turns on the spot, u (about the hip spread). */
@@ -59,6 +61,7 @@ export abstract class Behaviour<S extends string = string> {
 	/** Advances by `dt` seconds of world time. */
 	step(rawDt: number, world: AnimalWorld) {
 		const dt = safeDt(rawDt);
+		this.frameDt = dt;
 		this.reducedMotion = world.reducedMotion;
 		this.motion.beginUpdate();
 		this.sense(world);
