@@ -3,7 +3,7 @@
 	then the group. Nothing else is asked: no school, no class.
 -->
 <script lang="ts">
-	import { goto, pushState } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Calling from '#lib/components/Calling.svelte';
@@ -20,8 +20,8 @@
 
 	// Coming from the home screen, the call has already been read.
 	const entry: Stage = page.url.searchParams.get('etapa') === 'nome' || !opening ? 'name' : 'calling';
-	// Every later stage is a history entry (shallow routing): the phone's back
-	// button and the header arrow both return to the previous stage.
+	// Every later stage is a shallow history entry: the phone's back button and
+	// the header arrow both return to the previous stage.
 	// The name rides along in the history entry, so a reload on the group stage
 	// keeps it; without a name, the group stage falls back to asking for it.
 	let name = $state(page.state.name ?? '');
@@ -41,7 +41,8 @@
 
 	function go(next: Stage) {
 		moved = true;
-		pushState('', { stage: next, name: trimmed });
+		// Shallow: same page, new history entry. persistState keeps it across a reload.
+		void goto(page.url.href, { shallow: true, persistState: true, state: { stage: next, name: trimmed } });
 	}
 
 	function back() {
