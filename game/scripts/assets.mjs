@@ -844,13 +844,7 @@ function splitPetHeadFromBody(petName, json, bin) {
 
 	// Coat UV cell for the 2-triangle internal neck cap on body (+Z) and head (-Z)
 	const coatCell =
-		petName === 'monkey'
-			? [2, 2]
-			: petName === 'tiger'
-				? [3, 3]
-				: petName === 'koala'
-					? [6, 3]
-					: [1, 3];
+		petName === 'monkey' ? [2, 2] : petName === 'tiger' ? [3, 3] : petName === 'koala' ? [6, 3] : [1, 3];
 	const capUv = [(coatCell[0] + 0.5) / 8, (coatCell[1] * 16 + 8) / 64];
 
 	function buildMeshBuffers(triList, shift, capNormalZ) {

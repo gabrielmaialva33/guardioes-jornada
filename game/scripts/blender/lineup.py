@@ -455,15 +455,15 @@ def main() -> None:
                 convert_to_flat_lambert(av, preset_png)
                 place_and_scale_root(av, (-10.2 + idx * 1.6, 5.5), target_height=3.0, yaw_deg=165.0)
 
-        # 3. 7 Atlantic Forest Animals at true ART.md §3 scale (front row y = 5.5) + custom attachments
+        # 3. 7 Atlantic Forest Animals at true ART.md §3 height scale (front row y = 5.5) + custom attachments
         animal_specs = [
             ("monkey.glb", "palette-mico-leao-dourado.png", (-4.8, 5.5), 0.9, None, "custom-juba-mico.glb"),
             ("parrot.glb", "palette-tucano-de-bico-verde.png", (-3.1, 5.5), 0.9, None, "custom-bico-tucano.glb"),
             ("monkey.glb", "palette-bugio-ruivo.png", (-1.3, 5.5), 1.4, None, None),
             ("koala.glb", "palette-preguica-de-coleira.png", (0.7, 5.5), 1.4, None, None),
             ("monkey.glb", "palette-muriqui.png", (2.8, 5.5), 1.7, None, None),
-            ("tiger.glb", "palette-onca-pintada.png", (5.6, 5.5), None, 3.0, "custom-rosetas-onca.glb"),
-            ("tiger.glb", "palette-onca-melanica.png", (9.0, 5.5), None, 3.0, None),
+            ("tiger.glb", "palette-onca-pintada.png", (5.5, 5.5), 2.2, None, "custom-rosetas-onca.glb"),
+            ("tiger.glb", "palette-onca-melanica.png", (8.5, 5.5), 2.2, None, None),
         ]
         for model_name, pal_name, xy, th, tl, attach_glb in animal_specs:
             roots = import_single_glb(MODELS_DIR / model_name, tmp_dir)
@@ -478,7 +478,7 @@ def main() -> None:
                             group_loc = ch.location.copy()
                             bpy.data.objects.remove(ch, do_unlink=True)
                 convert_to_flat_lambert(pet, SKINS_DIR / pal_name)
-                place_and_scale_root(pet, xy, target_height=th, target_length=tl, yaw_deg=160.0)
+                place_and_scale_root(pet, xy, target_height=th, target_length=tl, yaw_deg=160.0, ignore_tail=True)
                 if attach_glb and (MODELS_DIR / attach_glb).exists():
                     att_roots = import_single_glb(MODELS_DIR / attach_glb, tmp_dir)
                     for ar in att_roots:
