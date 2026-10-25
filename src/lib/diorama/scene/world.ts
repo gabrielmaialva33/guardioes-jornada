@@ -78,7 +78,9 @@ interface StagePart {
 export class World {
 	readonly scene = new Scene();
 	private triangleCount = 0;
-	get triangles() { return this.triangleCount; }
+	get triangles() {
+		return this.triangleCount;
+	}
 	private readonly paintables: Paintable[] = [];
 	private readonly parts: StagePart[][] = [[], [], [], [], [], []];
 	private water!: WaterUniforms;
@@ -99,7 +101,10 @@ export class World {
 
 	constructor(quality: Quality, palette: Palette, deferred = false) {
 		this.building = this.build(quality, palette);
-		if (!deferred) while (!this.building.next().done) { /* Keep the synchronous constructor available. */ }
+		if (!deferred)
+			while (!this.building.next().done) {
+				/* Keep the synchronous constructor available. */
+			}
 	}
 
 	static async create(quality: Quality, palette: Palette, pause = yieldToMain): Promise<World> {
