@@ -3,10 +3,11 @@ import { version } from '$app/env';
 import { assets, immutable, prerendered } from '$app/manifest';
 import { asset, resolve } from '$app/paths';
 import { self } from '$app/service-worker';
+import { shell } from 'virtual:offline-shell';
 
 /**
- * Caches the whole app on the first visit with a connection. After that it
- * opens and works in airplane mode: there is barely any signal inside the park.
+ * Every route and its static dependencies are ready before activation.
+ * Optional dynamic imports and extra fonts are cached only when requested.
  */
 const root = new URL(resolve('/'), self.location.origin);
 const PREFIX = cachePrefix(root.pathname);
@@ -21,9 +22,14 @@ const APP_FILES = [
 	])
 ];
 const PRECACHED = new Set(APP_FILES);
+const SHELL_FILES = [...new Set([
+	...shell.map(toUrl),
+	...assets.map(({ path }) => toUrl(asset(path))),
+	...prerendered.map(({ path }) => toUrl(resolve(path)))
+])];
 
 self.addEventListener('install', (event) => {
-	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_FILES)));
+	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL_FILES)));
 });
 
 self.addEventListener('activate', (event) => {
@@ -66,7 +72,10 @@ self.addEventListener('fetch', (event) => {
 
 			try {
 				const response = await fetch(request);
-				if (response.ok && response.type === 'basic') event.waitUntil(cache.put(request, response.clone()));
+				if (response.ok && response.type === 'basic' && PRECACHED.has(url.pathname)) {
+					// Session/query parameters select local data, not a different HTML shell.
+					event.waitUntil(cache.put(url.pathname, response.clone()).catch(() => {}));
+				}
 				return response;
 			} catch (error) {
 				const hit = await cache.match(request, { ignoreSearch: true });

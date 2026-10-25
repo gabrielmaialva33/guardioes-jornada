@@ -1,5 +1,8 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { shellFiles } from './src/lib/data/precache.ts';
 import { defineConfig } from 'vitest/config';
 
 const base = process.env.BASE_PATH ?? '';
@@ -9,6 +12,16 @@ if (base !== '' && (!base.startsWith('/') || base.endsWith('/'))) {
 
 export default defineConfig({
 	plugins: [
+		{
+			name: 'offline-shell-manifest',
+			resolveId(id) { return id === 'virtual:offline-shell' ? '\0offline-shell' : undefined; },
+			load(id) {
+				if (id !== '\0offline-shell') return;
+				// Kit builds the worker after the client manifest is finalized.
+				const manifest = JSON.parse(readFileSync(resolve('.svelte-kit/output/client/.vite/manifest.json'), 'utf8'));
+				return `export const shell = ${JSON.stringify(shellFiles(manifest))};`;
+			}
+		},
 		sveltekit({
 			// Fully static: every route is prerendered to an index.html and the
 			// service worker caches all of it so the app works in airplane mode.

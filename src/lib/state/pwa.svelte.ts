@@ -43,7 +43,7 @@ class Pwa {
 		addEventListener('appinstalled', () => (this.canInstall = false));
 
 		if (!('serviceWorker' in navigator)) return;
-		// Resolves once a worker is active, i.e. the whole app has been cached.
+		// Activation confirms all route shells and their static dependencies are cached.
 		const registration = await navigator.serviceWorker.ready;
 		this.#registration = registration;
 		this.offlineReady = registration.active !== null;
