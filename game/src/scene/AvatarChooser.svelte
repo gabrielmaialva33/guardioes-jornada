@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { AVATAR_ATLAS } from '../avatar/catalog.ts';
 	import {
 		AVATAR_PARTS,
 		type AvatarColors,
@@ -54,7 +55,13 @@
 	}
 	function selectPreset(preset: AvatarPreset) {
 		message = '';
-		draft = { ...draft, style: 'classic', colors: { ...preset.colors }, face: preset.face };
+		draft = {
+			...draft,
+			style: 'classic',
+			colors: { ...preset.colors },
+			face: preset.face,
+			hairStyle: preset.hairStyle
+		};
 	}
 	function tabKey(event: KeyboardEvent) {
 		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -88,8 +95,25 @@
 	}
 </script>
 
-{#snippet mannequin(colors: AvatarColors, face: AvatarProfile['face'])}
+{#snippet mannequin(
+	colors: AvatarColors,
+	face: AvatarProfile['face'],
+	hairStyle: AvatarProfile['hairStyle'] = 'curto'
+)}
 	<svg class="mannequin" viewBox="0 0 64 80" aria-hidden="true">
+		{#if hairStyle === 'longo'}<path
+				d="M20 8q12-12 24 0v27H19z"
+				fill={colors.hair}
+			/>{:else if hairStyle === 'black-power'}<path
+				d="M17 14C9-2 51-11 48 14l-5 8H21z"
+				fill={colors.hair}
+			/>{:else if hairStyle === 'rabo'}<path
+				d="M39 7q18-4 11 27l-7-4z"
+				fill={colors.hair}
+			/>{:else if hairStyle === 'trancas'}<path
+				d="M19 8h6v31h-6zm20 0h6v31h-6z"
+				fill={colors.hair}
+			/>{:else if hairStyle === 'coque'}<circle cx="32" cy="3" r="7" fill={colors.hair} />{/if}
 		<rect x="22" y="4" width="20" height="21" rx="1" fill={colors.skin} /><path
 			d="M22 4h20v7H22zM22 11h3v4h-3z"
 			fill={colors.hair}
@@ -105,6 +129,7 @@
 			fill={colors.shoes}
 		/></svg
 	>
+	{#if hairStyle === 'bone'}<path d="M21 10V4q12-9 23 0v6h5v4H20z" fill={colors.shirt} />{/if}
 {/snippet}
 
 <div
@@ -161,12 +186,14 @@
 								aria-label={preset.name}
 								title={preset.name}
 								aria-pressed={draft.face === preset.face &&
+									(draft.hairStyle ?? 'curto') === preset.hairStyle &&
 									AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
-								onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors, preset.face)}</button
+								onclick={() => selectPreset(preset)}
+								>{@render mannequin(preset.colors, preset.face, preset.hairStyle)}</button
 							>{/each}
 					</div>
 					<div class="custom">
-						<div class="preview">{@render mannequin(draft.colors, draft.face)}</div>
+						<div class="preview">{@render mannequin(draft.colors, draft.face, draft.hairStyle)}</div>
 						{#each AVATAR_PARTS as part}<label
 								>{labels[part]}<input
 									type="color"
@@ -177,6 +204,16 @@
 									}}
 								/></label
 							>{/each}
+						<div class="hair-styles" role="group" aria-label="Estilo do cabelo">
+							<span>Cabelo</span>{#each AVATAR_ATLAS.hairStyles as style}<button
+									type="button"
+									aria-label={`Cabelo ${style.name.toLowerCase()}`}
+									title={style.name}
+									aria-pressed={(draft.hairStyle ?? 'curto') === style.id}
+									onclick={() => (draft = { ...draft, hairStyle: style.id })}
+									>{@render mannequin(draft.colors, draft.face, style.id)}<span>{style.name}</span></button
+								>{/each}
+						</div>
 						<div class="faces" role="group" aria-label="Expressão do rosto">
 							<span>Rosto</span><button
 								type="button"
@@ -254,6 +291,24 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
+	}
+	.hair-styles {
+		grid-column: 1/-1;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		align-items: center;
+	}
+	.hair-styles > span {
+		width: 100%;
+	}
+	.hair-styles button {
+		display: grid;
+		justify-items: center;
+		gap: 2px;
+		min-width: 64px;
+		padding: 4px;
+		font-size: 0.65rem;
 	}
 	.faces button {
 		width: 44px;

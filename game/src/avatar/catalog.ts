@@ -8,6 +8,7 @@ export const DEFAULT_AVATAR: AvatarProfile = {
 	style: 'classic',
 	kenneySkin: 'a',
 	colors: { ...AVATAR_PRESETS[0].colors },
+	hairStyle: AVATAR_PRESETS[0].hairStyle,
 	face: AVATAR_PRESETS[0].face
 };
 const urls = import.meta.glob<string>('../assets/skins/skin-*.webp', {

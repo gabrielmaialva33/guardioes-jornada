@@ -2,6 +2,9 @@ import { type Group, type Material, Mesh, MeshLambertMaterial, Texture } from 't
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import modelUrl from '../assets/models/avatar.glb?url';
+import hairUrl from '../assets/models/avatar-hair.glb?url';
+import { AVATAR_ATLAS } from '../avatar/catalog.ts';
+import { HairAccessories } from '../avatar/hair.ts';
 import { createAvatarTexture } from '../avatar/texture.ts';
 import type { AvatarProfile } from '../data/local-save.ts';
 import { ensureVertexColors } from './materials.ts';
@@ -50,6 +53,8 @@ export async function loadAvatar(signal: AbortSignal, profile: AvatarProfile): P
 	let model: Group | undefined;
 	let appearance: ReturnType<typeof createAvatarTexture> | undefined;
 	let cancel: (() => void) | undefined;
+	let hairSource: Group | undefined;
+	let hair: HairAccessories | undefined;
 	try {
 		model = await loadModel(modelUrl, signal);
 		appearance = createAvatarTexture();
@@ -75,20 +80,48 @@ export async function loadAvatar(signal: AbortSignal, profile: AvatarProfile): P
 			old.dispose();
 			if (typeof ImageBitmap !== 'undefined' && old.image instanceof ImageBitmap) old.image.close();
 		}
+		if (AVATAR_ATLAS.version === 2) {
+			hairSource = await loadModel(hairUrl, signal);
+			const head = model.getObjectByName('head');
+			if (!head) throw new Error('avatar-head-missing');
+			hair = new HairAccessories(hairSource, head, AVATAR_ATLAS.hairStyles);
+			hair.apply(profile.style === 'classic' ? (profile.hairStyle ?? 'curto') : 'curto', profile.colors);
+		}
 		model.scale.setScalar(3 / 2.7);
 		const ownedModel = model;
 		const onAbort = cancel;
+		let appearanceGeneration = 0;
+		const accessory = hair,
+			accessorySource = hairSource;
 		return {
 			model,
-			appearance: skin,
+			appearance: {
+				texture: skin.texture,
+				dispose: () => skin.dispose(),
+				async apply(profile: AvatarProfile) {
+					const generation = ++appearanceGeneration;
+					const changed = await skin.apply(profile);
+					if (generation === appearanceGeneration)
+						hair?.apply(
+							profile.style === 'classic' ? (profile.hairStyle ?? 'curto') : 'curto',
+							profile.colors
+						);
+					return changed;
+				}
+			},
 			dispose() {
 				signal.removeEventListener('abort', onAbort);
+				appearanceGeneration++;
+				accessory?.dispose();
+				if (accessorySource) disposeModel(accessorySource);
 				skin.dispose();
 				disposeModel(ownedModel);
 			}
 		};
 	} catch (error) {
 		if (cancel) signal.removeEventListener('abort', cancel);
+		hair?.dispose();
+		if (hairSource) disposeModel(hairSource);
 		appearance?.dispose();
 		if (model) disposeModel(model);
 		throw error;

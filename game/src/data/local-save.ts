@@ -2,7 +2,10 @@ export const GAME_SAVE_KEY = 'guardioes-secret-trail-save';
 export const AVATAR_PARTS = ['skin', 'hair', 'shirt', 'pants', 'shoes'] as const;
 export type AvatarPart = (typeof AVATAR_PARTS)[number];
 export type AvatarColors = Record<AvatarPart, string>;
+export const HAIR_STYLE_IDS = ['curto', 'longo', 'rabo', 'coque', 'black-power', 'trancas', 'bone'] as const;
+export type HairStyleId = (typeof HAIR_STYLE_IDS)[number];
 export interface AvatarProfile {
+	hairStyle?: HairStyleId;
 	style: 'classic' | 'kenney';
 	colors: AvatarColors;
 	face: 'smile' | 'neutral';
@@ -33,6 +36,7 @@ export function decodeAvatarProfile(value: unknown): AvatarProfile | null {
 	}
 	if (value.face !== undefined && value.face !== 'smile' && value.face !== 'neutral') return null;
 	return {
+		hairStyle: HAIR_STYLE_IDS.find((id) => id === value.hairStyle) ?? 'curto',
 		style: value.style,
 		kenneySkin: value.kenneySkin,
 		colors,
@@ -64,6 +68,26 @@ export function createLocalSave(
 		}
 	};
 	return {
+		checkpoint(mapKey: string): string | null {
+			const checkpoints = read().doc.checkpoints;
+			const value = record(checkpoints) ? checkpoints[mapKey] : null;
+			return typeof value === 'string' && value.length <= 100 ? value : null;
+		},
+		setCheckpoint(mapKey: string, id: string): boolean {
+			if (!mapKey || mapKey.length > 150 || !id || id.length > 100) return false;
+			const { doc, writable } = read();
+			if (!writable) return false;
+			const checkpoints = record(doc.checkpoints) ? doc.checkpoints : {};
+			try {
+				storage?.setItem(
+					GAME_SAVE_KEY,
+					JSON.stringify({ ...doc, checkpoints: { ...checkpoints, [mapKey]: id } })
+				);
+				return true;
+			} catch {
+				return false;
+			}
+		},
 		avatar(): AvatarProfile {
 			return (
 				decodeAvatarProfile(read().doc.avatar) ?? { ...defaultAvatar, colors: { ...defaultAvatar.colors } }

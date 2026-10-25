@@ -3,18 +3,28 @@ import {
 	type AvatarColors,
 	type AvatarPart,
 	type AvatarProfile,
-	decodeAvatarProfile
+	decodeAvatarProfile,
+	HAIR_STYLE_IDS,
+	type HairStyleId
 } from '../data/local-save.ts';
 import { ACCENT } from '../style/palette.ts';
 export type PixelRect = readonly [number, number, number, number];
+export interface HairStyle {
+	id: HairStyleId;
+	name: string;
+	mesh: string | null;
+	tint: 'hair' | 'shirt';
+}
 export interface AvatarPreset {
+	hairStyle: HairStyleId;
 	id: string;
 	name: string;
 	colors: AvatarColors;
 	face: AvatarProfile['face'];
 }
 export interface AvatarAtlas {
-	version: 1;
+	version: 1 | 2;
+	hairStyles: HairStyle[];
 	size: 64;
 	uvSource: string;
 	slots: Record<AvatarPart, PixelRect[]>;
@@ -45,7 +55,40 @@ function part(value: unknown): value is AvatarPart {
 }
 export function decodeAvatarAtlas(input: unknown): AvatarAtlas {
 	const value = object(input);
-	if (value.version !== 1 || value.size !== 64 || typeof value.uvSource !== 'string') return invalid();
+	if ((value.version !== 1 && value.version !== 2) || value.size !== 64 || typeof value.uvSource !== 'string')
+		return invalid();
+	const hairStyles: HairStyle[] =
+		value.version === 1
+			? [{ id: 'curto', name: 'Curto', mesh: null, tint: 'hair' }]
+			: (() => {
+					if (!Array.isArray(value.hairStyles) || value.hairStyles.length < 1 || value.hairStyles.length > 32)
+						return invalid();
+					const styles = value.hairStyles.map((raw) => {
+						const s = object(raw),
+							id = HAIR_STYLE_IDS.find((id) => id === s.id);
+						if (
+							!id ||
+							typeof s.name !== 'string' ||
+							!s.name.trim() ||
+							s.name.length > 64 ||
+							(s.mesh !== null && (typeof s.mesh !== 'string' || !/^[\w-]{1,48}$/.test(s.mesh))) ||
+							(s.tint !== undefined && s.tint !== 'hair' && s.tint !== 'shirt')
+						)
+							return invalid();
+						return {
+							id,
+							name: s.name,
+							mesh: s.mesh as string | null,
+							tint: s.tint === 'shirt' ? ('shirt' as const) : ('hair' as const)
+						};
+					});
+					if (
+						new Set(styles.map((s) => s.id)).size !== styles.length ||
+						!styles.some((s) => s.id === 'curto' && s.mesh === null)
+					)
+						return invalid();
+					return styles;
+				})();
 	const rawSlots = object(value.slots);
 	const slots = {} as AvatarAtlas['slots'];
 	for (const part of AVATAR_PARTS) {
@@ -79,10 +122,12 @@ export function decodeAvatarAtlas(input: unknown): AvatarAtlas {
 			style: 'classic',
 			kenneySkin: 'a',
 			face: p.face,
+			hairStyle: p.hairStyle,
 			colors: Object.fromEntries(AVATAR_PARTS.map((part) => [part, p[part]]))
 		});
 		if (
 			!profile ||
+			!hairStyles.some((s) => s.id === (p.hairStyle ?? 'curto')) ||
 			typeof p.id !== 'string' ||
 			!/^[\w-]{1,48}$/.test(p.id) ||
 			typeof p.name !== 'string' ||
@@ -92,11 +137,18 @@ export function decodeAvatarAtlas(input: unknown): AvatarAtlas {
 			return invalid();
 		if ([profile.colors.shirt, profile.colors.pants, profile.colors.shoes].includes(ACCENT.gold))
 			return invalid();
-		return { id: p.id, name: p.name, colors: profile.colors, face: profile.face };
+		return {
+			id: p.id,
+			name: p.name,
+			colors: profile.colors,
+			face: profile.face,
+			hairStyle: profile.hairStyle ?? 'curto'
+		};
 	});
 	if (new Set(presets.map((p) => p.id)).size !== 18) return invalid();
 	return {
-		version: 1,
+		version: value.version,
+		hairStyles,
 		size: 64,
 		uvSource: value.uvSource,
 		slots,

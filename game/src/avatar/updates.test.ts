@@ -56,3 +56,10 @@ it('returning to the committed skin cancels a pending change without repainting'
 	expect(sink.commit).toHaveBeenCalledTimes(1);
 	updates.dispose();
 });
+it('changing only the accessory style leaves the skin texture untouched', async () => {
+	const { sink, updates } = setup();
+	await updates.apply({ ...profile, hairStyle: 'curto' });
+	await updates.apply({ ...profile, hairStyle: 'longo' });
+	expect(sink.commit).toHaveBeenCalledTimes(1);
+	updates.dispose();
+});

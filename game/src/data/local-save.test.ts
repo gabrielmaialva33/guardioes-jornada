@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { type AvatarProfile, createLocalSave, decodeAvatarProfile, GAME_SAVE_KEY } from './local-save.ts';
 
 const profile: AvatarProfile = {
+	hairStyle: 'curto',
 	style: 'classic',
 	face: 'smile',
 	kenneySkin: 'a',
@@ -59,4 +60,14 @@ it('degrades gracefully when storage is unavailable or full', () => {
 	});
 	expect(save.avatar()).toEqual(profile);
 	expect(save.setAvatar(profile)).toBe(false);
+});
+it('saves checkpoints per map checksum without replacing avatar or other sections', () => {
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	save.setAvatar(profile);
+	expect(save.setCheckpoint('story:1:123', 'stones-east')).toBe(true);
+	expect(createLocalSave(profile, disk).checkpoint('story:1:123')).toBe('stones-east');
+	expect(save.checkpoint('story:2:234')).toBeNull();
+	expect(save.avatar()).toEqual(profile);
+	expect(save.setCheckpoint('story:1:123', 'x'.repeat(200))).toBe(false);
 });

@@ -47,3 +47,27 @@ it('consumes the produced v1 atlas with eighteen diverse presets', () => {
 	expect(atlas.presets).toHaveLength(18);
 	expect(new Set(atlas.presets.map((p) => p.colors.skin)).size).toBeGreaterThan(8);
 });
+it('accepts the v2 hair contract and gives v1 presets their painted short style', () => {
+	const atlas = decodeAvatarAtlas(fixture);
+	expect(atlas.hairStyles.map((s) => s.id)).toEqual(['curto']);
+	expect(atlas.presets[0].hairStyle).toBe('curto');
+	const styles = [
+		{ id: 'curto', name: 'Curto', mesh: null },
+		{ id: 'longo', name: 'Longo', mesh: 'hair-long' }
+	];
+	const v2 = decodeAvatarAtlas({
+		...fixture,
+		version: 2,
+		hairStyles: styles,
+		presets: fixture.presets.map((p) => ({ ...p, hairStyle: 'longo' }))
+	});
+	expect(v2.presets[0].hairStyle).toBe('longo');
+	expect(() =>
+		decodeAvatarAtlas({
+			...fixture,
+			version: 2,
+			hairStyles: styles,
+			presets: fixture.presets.map((p) => ({ ...p, hairStyle: 'missing' }))
+		})
+	).toThrow();
+});
