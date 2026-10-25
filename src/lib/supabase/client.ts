@@ -8,11 +8,13 @@ let client: Promise<SupabaseClient<Database> | null> | null = null;
 
 /** Loading this small module never loads the SDK. Guests work entirely locally. */
 export function getSupabase(): Promise<SupabaseClient<Database> | null> {
-	if (!cloudAvailable) return Promise.resolve(null);
+	const url = PUBLIC_SUPABASE_URL;
+	const key = PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+	if (!url || !key) return Promise.resolve(null);
 	if (!client) {
 		client = import('@supabase/supabase-js')
 			.then(({ createClient }) =>
-				createClient<Database>(PUBLIC_SUPABASE_URL!, PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+				createClient<Database>(url, key, {
 					auth: {
 						persistSession: true,
 						autoRefreshToken: true,

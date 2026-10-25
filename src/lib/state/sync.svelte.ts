@@ -147,6 +147,11 @@ export class CloudSync {
 		return this.#running;
 	}
 	async #execute(owner: string, current: () => boolean) {
+		const client = this.#client;
+		if (!client) {
+			this.status = 'unavailable';
+			return;
+		}
 		this.status = 'syncing';
 		try {
 			let rounds = 0;
@@ -165,11 +170,13 @@ export class CloudSync {
 					if (!current()) return;
 					if (!pending) break;
 					const { id, operation } = pending;
-					const reply = await this.#request((signal) =>
-						operation.kind === 'delete'
-							? this.#client!.delete(id, operation.baseRev, operation.mutationId, signal)
-							: this.#client!.push(operation.session!, operation.baseRev, operation.mutationId, signal)
-					);
+					const reply = await this.#request((signal) => {
+						if (operation.kind === 'delete')
+							return client.delete(id, operation.baseRev, operation.mutationId, signal);
+						const session = operation.session;
+						if (!session) throw new Error('The queued upload has no session document');
+						return client.push(session, operation.baseRev, operation.mutationId, signal);
+					});
 					if (!current()) return;
 					if (
 						reply.server_doc &&
@@ -207,7 +214,7 @@ export class CloudSync {
 					if (!current()) return;
 				}
 				if (pull) {
-					const rows = await this.#request((signal) => this.#client!.pull(owner, signal));
+					const rows = await this.#request((signal) => client.pull(owner, signal));
 					if (!current()) return;
 					for (const row of rows) {
 						if (!current()) return;
