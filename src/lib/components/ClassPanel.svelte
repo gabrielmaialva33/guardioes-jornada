@@ -68,7 +68,8 @@
 		padding: 1rem;
 	}
 
-	/* Large system text on a phone: the seal gets its own row so the name keeps a usable width. */
+	/* Large system text on a phone: one column (seal, name, level, progress) so the
+	   name keeps a usable width and the level pill cannot cover the seal. */
 	@media (max-width: 19.5em) {
 		.panel {
 			grid-template-columns: minmax(0, 1fr);
@@ -76,6 +77,11 @@
 
 		.panel .who strong {
 			padding-right: 0;
+		}
+
+		.panel .level {
+			position: static;
+			justify-self: start;
 		}
 	}
 
