@@ -419,8 +419,6 @@ ASSETS = [
     ("degrau-raiz", build_degrau_raiz, 200, "2.5x2.5 u root ledge"),
     ("degrau-tronco", build_degrau_tronco, 200, "2.5x2.5 u log ledge"),
     ("ponte-madeira", build_ponte_madeira, 300, "15.6 u wooden bridge"),
-    ("jequitiba-silhueta", build_jequitiba_silhueta, 80, "18.0 u jequitibá silhouette"),
-    ("ipe-amarelo-silhueta", build_ipe_amarelo_silhueta, 80, "10.45 u ipê-amarelo silhouette"),
 ]
 
 

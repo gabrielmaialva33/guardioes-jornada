@@ -653,8 +653,6 @@ def main() -> None:
             ("custom-ipe-rosa.glb", (5.4, -8.5)),
             ("custom-araucaria.glb", (11.0, -8.5)),
             ("custom-jequitiba-rosa.glb", (17.2, -8.5)),
-            ("custom-ipe-amarelo-silhueta.glb", (-18.5, -9.5)),
-            ("custom-jequitiba-silhueta.glb", (23.5, -9.5)),
         ]
         for c_name, xy in custom_tree_layout:
             if (MODELS_DIR / c_name).exists():
