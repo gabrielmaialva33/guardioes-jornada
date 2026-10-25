@@ -43,21 +43,23 @@ def octagon(xz, y):
 def mane(face_y: float) -> C.Mesh:
     m = C.Mesh("juba-mico")
     front_y = face_y - 0.085  # proud of the face panel
-    back_y = 0.36
-    # Outline seen from the front (x, z), clockwise from the top left. Bottom kept above
-    # the front legs (z 0.31).
-    outer = [(-0.62, 1.74), (0.62, 1.74), (1.04, 1.36), (1.04, 0.74), (0.68, 0.4), (-0.68, 0.4), (-1.04, 0.74),
-             (-1.04, 1.36)]
-    # The face window, just larger than the dark face panel (x +-0.45, z 0.46-1.15).
-    window = [(-0.4, 1.3), (0.4, 1.3), (0.55, 1.16), (0.55, 0.6), (0.42, 0.47), (-0.42, 0.47), (-0.55, 0.6),
-              (-0.55, 1.16)]
+    back_y = 0.2
+    # Outline seen from the front (x, z), clockwise from the top left. The bottom covers the
+    # throat; it stays in front of and above the front legs (y > -0.44, z < 0.31).
+    outer = [(-0.56, 1.66), (0.56, 1.66), (1.02, 1.27), (1.02, 0.66), (0.62, 0.33), (-0.62, 0.33), (-1.02, 0.66),
+             (-1.02, 1.27)]
+    # The face window, fitted to the dark face panel (x +-0.45, z 0.46-1.15).
+    window = [(-0.38, 1.22), (0.38, 1.22), (0.47, 1.13), (0.47, 0.58), (0.38, 0.49), (-0.38, 0.49), (-0.47, 0.58),
+              (-0.47, 1.13)]
     # Back outline, swept in, and the hole that fits round the head (x +-0.62, z 0.2-1.44).
-    back_outer = [(x * 0.9, 0.95 + (z - 0.95) * 0.92) for x, z in outer]
+    # Swept in only a little: the wall must stay outside the round ears (x 0.96 at y -0.05).
+    back_outer = [(x * 0.95, 0.95 + (z - 0.95) * 0.9) for x, z in outer]
     back_hole = [(-0.5, 1.45), (0.5, 1.45), (0.63, 1.3), (0.63, 0.55), (0.5, 0.42), (-0.5, 0.42), (-0.63, 0.55),
                  (-0.63, 1.3)]
-    fo, fw = octagon(outer, front_y), octagon(window, front_y)
+    # The front ring bevels back from the face window: hair fanning out, not a flat frame.
+    fo, fw = octagon(outer, front_y + 0.2), octagon(window, front_y)
     bo, bh = octagon(back_outer, back_y), octagon(back_hole, back_y)
-    wi = octagon(window, face_y + 0.07)  # window rim runs into the head
+    wi = octagon(window, face_y + 0.025)  # window rim runs just behind the face panel
     axis_z = 0.95  # the head's centre line runs along Y at this height
 
     def radial(face, sign=1.0):
