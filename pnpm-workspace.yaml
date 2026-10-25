@@ -1,2 +1,4 @@
+packages:
+  - game
 allowBuilds:
   esbuild: true

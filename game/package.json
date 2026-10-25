@@ -1,0 +1,12 @@
+{
+	"name": "@guardioes/secret-trail",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"dependencies": {
+		"@threlte/core": "8.6.1",
+		"svelte": "5.57.2",
+		"three": "0.186.1",
+		"three-mesh-bvh": "0.9.16"
+	}
+}

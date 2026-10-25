@@ -9,4 +9,5 @@ vite.config.*.timestamp-*
 .playwright-cli
 /test-results
 /playwright-report
+/game/.build
 tmp

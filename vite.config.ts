@@ -36,11 +36,11 @@ export default defineConfig({
 			serviceWorker: { register: true, options: { updateViaCache: 'none' } }
 		})
 	],
-	server: { port: 5180 },
+	server: { port: 5180, watch: { ignored: ['**/build/**', '**/game/.build/**'] } },
 	preview: { port: 4180 },
 	// Unit tests for the data layer; end-to-end tests live in tests/ (Playwright).
 	test: {
-		include: ['src/**/*.test.ts'],
+		include: ['src/**/*.test.ts', 'game/**/*.test.ts'],
 		environment: 'node',
 		setupFiles: ['fake-indexeddb/auto']
 	}
