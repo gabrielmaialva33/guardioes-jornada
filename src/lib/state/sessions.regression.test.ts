@@ -1,5 +1,5 @@
 import { del } from 'idb-keyval';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 import {
 	IndexedRepository,
 	type LocalRecord,
@@ -46,7 +46,7 @@ function lock(): WriterLock {
 }
 function store(
 	ownerId: string | null = A,
-	repository: Repository = new IndexedRepository('test-' + crypto.randomUUID()),
+	repository: Repository = new IndexedRepository(`test-${crypto.randomUUID()}`),
 	writer = lock()
 ) {
 	const s = new Sessions({ repository, lock: writer, ownerId });
@@ -88,9 +88,10 @@ class Cloud implements CloudAdapter {
 			return { status: 'ok', rev: old.rev, server_doc: structuredClone(old) };
 		if (old && (old.rev !== base || old.deleted_at))
 			return { status: 'conflict', rev: old.rev, server_doc: structuredClone(old) };
+		assert(session.ownerId);
 		const row = {
 			id: session.id,
-			owner_id: session.ownerId!,
+			owner_id: session.ownerId,
 			rev: (old?.rev ?? 0) + 1,
 			doc: structuredClone(session),
 			deleted_at: null,
@@ -178,7 +179,7 @@ describe('durable sessions and ownership', () => {
 	});
 	it('R8 makes a second window read-only and reloads before taking the released writer lock', async () => {
 		const writer = lock(),
-			name = 'windows-' + crypto.randomUUID();
+			name = `windows-${crypto.randomUUID()}`;
 		const a = store(A, new IndexedRepository(name), writer),
 			b = store(A, new IndexedRepository(name), writer);
 		await a.load();
@@ -197,7 +198,7 @@ describe('durable sessions and ownership', () => {
 		expect(b.list).toHaveLength(2);
 	});
 	it('refuses writes when a browser cannot obtain a Web Lock', async () => {
-		const s = store(A, new IndexedRepository('no-lock-' + crypto.randomUUID()), async () => null);
+		const s = store(A, new IndexedRepository(`no-lock-${crypto.randomUUID()}`), async () => null);
 		await s.load();
 		expect(s.readOnly).toBe(true);
 		expect(() => s.create(input)).toThrow();
@@ -220,7 +221,8 @@ describe('durable sessions and ownership', () => {
 		const old = s.create(input);
 		await s.flush();
 		const pending = await s.nextOperation();
-		await s.acknowledge(old.id, pending!.operation, 1);
+		assert(pending);
+		await s.acknowledge(old.id, pending.operation, 1);
 		await s.receive({
 			id: old.id,
 			owner_id: A,
@@ -254,7 +256,7 @@ describe('durable sessions and ownership', () => {
 		expect(decodeSession({ ...visit, updatedAt: Number.MAX_SAFE_INTEGER }).session).toBeUndefined();
 	});
 	it('quarantines a damaged in-flight envelope without uploading or discarding the raw record', async () => {
-		const name = 'bad-outbox-' + crypto.randomUUID(),
+		const name = `bad-outbox-${crypto.randomUUID()}`,
 			repository = new IndexedRepository(name);
 		const s = store(A, repository);
 		await s.load();
@@ -301,13 +303,14 @@ describe('durable sessions and ownership', () => {
 		s.addPhoto(visit, key);
 		await s.flush();
 		const op = await s.nextOperation();
-		await s.acknowledge(visit.id, op!.operation, 1);
+		assert(op);
+		await s.acknowledge(visit.id, op.operation, 1);
 		await s.receive({ id: visit.id, owner_id: A, rev: 2, deleted_at: new Date().toISOString(), doc: {} });
 		expect(s.find(visit.id)).toBeNull();
 		expect(await readPhoto(key)).toBeUndefined();
 	});
 	it('wipes a deleted guest document locally without leaving an upload intent', async () => {
-		const repository = new IndexedRepository('guest-delete-' + crypto.randomUUID()),
+		const repository = new IndexedRepository(`guest-delete-${crypto.randomUUID()}`),
 			s = store(null, repository);
 		await s.load();
 		const visit = s.create(input);
@@ -318,7 +321,7 @@ describe('durable sessions and ownership', () => {
 		expect(s.guestCount).toBe(0);
 	});
 	it('preserves an uncommitted write on storage failure and retries it without reloading over memory', async () => {
-		const repository = new IndexedRepository('disk-' + crypto.randomUUID());
+		const repository = new IndexedRepository(`disk-${crypto.randomUUID()}`);
 		let fail = false;
 		const s = store(A, {
 			read: () => repository.read(),
@@ -412,15 +415,17 @@ describe('persistent CAS outbox', () => {
 		const { sync, cloud } = await connected(s);
 		const visit = s.create(input);
 		await sync.run();
-		const remote = cloud.rows.get(visit.id)!;
+		const remote = cloud.rows.get(visit.id);
+		assert(remote);
 		remote.rev++;
 		remote.doc = { ...(remote.doc as Session), school: 'Server school' };
 		remote.last_mutation_id = crypto.randomUUID();
 		s.score(visit, visit.groups[0].id, 1, null);
 		await sync.run();
 		expect(s.find(visit.id)?.school).toBe('Server school');
-		const copy = s.list.find((s) => s.id !== visit.id)!;
-		expect(copy.school).toBe(input.school + ' (cópia deste celular)');
+		const copy = s.list.find((s) => s.id !== visit.id);
+		assert(copy);
+		expect(copy.school).toBe(`${input.school} (cópia deste celular)`);
 		expect(copy.scores).toHaveLength(1);
 		expect(copy.certificateCode).not.toBe(visit.certificateCode);
 		expect(cloud.rows.has(copy.id)).toBe(true);
@@ -442,14 +447,16 @@ describe('persistent CAS outbox', () => {
 		await savePhoto(key, new File(['photo bytes'], 'nature.jpg', { type: 'image/jpeg' }));
 		s.addPhoto(visit, key);
 		await sync.run();
-		const remote = cloud.rows.get(visit.id)!;
+		const remote = cloud.rows.get(visit.id);
+		assert(remote);
 		remote.rev++;
 		remote.last_mutation_id = crypto.randomUUID();
 		s.score(visit, visit.groups[0].id, 1, null);
 		await sync.run();
-		const copy = s.list.find((entry) => entry.id !== visit.id)!;
+		const copy = s.list.find((entry) => entry.id !== visit.id);
+		assert(copy);
 		expect(copy.photos).toHaveLength(1);
-		expect(copy.photos[0].startsWith(copy.id + ':')).toBe(true);
+		expect(copy.photos[0].startsWith(`${copy.id}:`)).toBe(true);
 		expect(await (await readPhoto(copy.photos[0]))?.text()).toBe('photo bytes');
 	});
 	it('invalidates conflict work across an A to B to A authentication generation change', async () => {
@@ -500,7 +507,7 @@ describe('persistent CAS outbox', () => {
 		expect(cloud.pulls).toBeGreaterThan(before);
 	});
 	it('retries the same durable mutation after a response is lost and the app restarts', async () => {
-		const name = 'restart-' + crypto.randomUUID(),
+		const name = `restart-${crypto.randomUUID()}`,
 			writer = lock(),
 			cloud = new Cloud();
 		const s = store(A, new IndexedRepository(name), writer);
@@ -520,7 +527,7 @@ describe('persistent CAS outbox', () => {
 		expect(next.list).toHaveLength(1);
 	});
 	it('persists a tombstone across closing and reopening before any network call', async () => {
-		const name = 'delete-restart-' + crypto.randomUUID(),
+		const name = `delete-restart-${crypto.randomUUID()}`,
 			writer = lock(),
 			cloud = new Cloud();
 		const s = store(A, new IndexedRepository(name), writer);
@@ -606,7 +613,8 @@ describe('persistent CAS outbox', () => {
 		const { sync, cloud } = await connected(s);
 		const visit = s.create(input);
 		await sync.run();
-		const remote = cloud.rows.get(visit.id)!;
+		const remote = cloud.rows.get(visit.id);
+		assert(remote);
 		remote.rev++;
 		remote.deleted_at = new Date().toISOString();
 		remote.doc = {};
@@ -646,7 +654,7 @@ describe('hardened RPC conflicts', () => {
 		expect(sync.pending).toBe(0);
 	});
 	it('caps certificate regenerations durably without forking, losing the session or retrying forever', async () => {
-		const name = 'certificate-cap-' + crypto.randomUUID(),
+		const name = `certificate-cap-${crypto.randomUUID()}`,
 			s = store(A, new IndexedRepository(name));
 		const { sync, cloud } = await connected(s);
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -769,7 +777,7 @@ describe('hardened RPC conflicts', () => {
 		expect(s.find(visit.id)?.school).toBe('Server school');
 		expect(s.list).toHaveLength(2);
 		expect(s.list.find((entry) => entry.id !== visit.id)?.school).toBe(
-			input.school + ' (cópia deste celular)'
+			`${input.school} (cópia deste celular)`
 		);
 		expect(sync.pending).toBe(0);
 	});

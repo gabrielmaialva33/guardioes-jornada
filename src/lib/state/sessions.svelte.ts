@@ -82,13 +82,19 @@ export class Sessions {
 	}
 	get list(): Session[] {
 		return this.#records
-			.filter((r) => r.ownerId === this.ownerId && !r.deleted && !r.quarantine && r.session)
-			.map((r) => r.session!);
+			.filter(
+				(r): r is LocalRecord & { session: Session } =>
+					r.ownerId === this.ownerId && !r.deleted && !r.quarantine && !!r.session
+			)
+			.map((r) => r.session);
 	}
 	get quarantine() {
 		return this.#records
-			.filter((r) => r.ownerId === this.ownerId && r.quarantine)
-			.map((r) => ({ id: r.id, ...r.quarantine! }));
+			.filter(
+				(r): r is LocalRecord & { quarantine: NonNullable<LocalRecord['quarantine']> } =>
+					r.ownerId === this.ownerId && !!r.quarantine
+			)
+			.map((r) => ({ id: r.id, ...r.quarantine }));
 	}
 	/** No journey stored on this phone for any account: a first visit. */
 	get empty() {
@@ -386,7 +392,8 @@ export class Sessions {
 		return this.#draining;
 	}
 	#persist(session: Session) {
-		const record = this.#record(session.id)!;
+		const record = this.#record(session.id);
+		if (!record) throw new Error(`No stored record for session ${session.id}`);
 		session.rev = record.rev + 1;
 		session.updatedAt = Date.now();
 		this.#commit([{ ...record, rev: session.rev, session }], 'saved');
@@ -446,7 +453,9 @@ export class Sessions {
 			'saved'
 		);
 		if (typeof navigator !== 'undefined') void navigator.storage?.persist?.().catch(() => {});
-		return this.find(session.id)!;
+		const created = this.find(session.id);
+		if (!created) throw new Error(`No stored record for session ${session.id}`);
+		return created;
 	}
 	setMyGroup(s: Session, groupId: string) {
 		const session = this.#current(s);
@@ -469,7 +478,8 @@ export class Sessions {
 	async remove(id: string) {
 		const session = this.find(id);
 		if (!session || !this.#current(session)) return;
-		const r = this.#record(id)!;
+		const r = this.#record(id);
+		if (!r) return;
 		if (r.syncBlocked && this.error === r.syncBlocked) this.error = null;
 		const rev = r.rev + 1;
 		this.#commit(
@@ -544,7 +554,7 @@ export class Sessions {
 	}
 	score(s: Session, groupId: string, delta: number, stepId: string | null, item?: string) {
 		const session = this.#current(s);
-		if (!session || !session.groups.some((g) => g.id === groupId) || !Number.isSafeInteger(delta)) return;
+		if (!session?.groups.some((g) => g.id === groupId) || !Number.isSafeInteger(delta)) return;
 		const event: ScoreEvent = {
 			id: newId(),
 			at: Date.now(),
@@ -729,17 +739,17 @@ export class Sessions {
 			const snapshot = $state.snapshot(r.session),
 				version = r.rev;
 			const photos = await copySessionPhotos(snapshot.photos, id, duplicateId);
-			if (this.ownerId !== owner || !isCurrent()) {
+			r = this.#record(id);
+			if (!r || this.ownerId !== owner || !isCurrent()) {
 				await deleteSessionPhotos(duplicateId);
 				return;
 			}
-			r = this.#record(id)!;
 			if (r.rev !== version) continue;
 			copy = {
 				...snapshot,
 				id: duplicateId,
 				rev: 1,
-				school: snapshot.school + ' (cópia deste celular)',
+				school: `${snapshot.school} (cópia deste celular)`,
 				certificateCode: newCertificateCode(),
 				photos
 			};
@@ -792,7 +802,8 @@ export class Sessions {
 		if (!this.ready || this.ownerId !== ownerId)
 			throw new Error('Entre na conta e aguarde as jornadas ficarem prontas.');
 		const guests = this.#records.filter(
-			(r) => r.ownerId === null && !r.deleted && r.session && !r.quarantine
+			(r): r is LocalRecord & { session: Session } =>
+				r.ownerId === null && !r.deleted && !!r.session && !r.quarantine
 		);
 		this.#commit(
 			guests.map((r) => ({
@@ -801,7 +812,7 @@ export class Sessions {
 				rev: r.rev + 1,
 				ackedRev: 0,
 				serverRev: 0,
-				session: { ...r.session!, ownerId, rev: r.rev + 1 }
+				session: { ...r.session, ownerId, rev: r.rev + 1 }
 			})),
 			'saved'
 		);

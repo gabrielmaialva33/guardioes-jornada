@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest';
 import { clearJournalRecord, journalRecord } from '#lib/data/journal.ts';
 import { IndexedRepository, type LocalRecord, type Repository } from '#lib/data/repository.ts';
 import { Sessions } from './sessions.svelte.ts';
@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 it('recovers the last synchronous mutation when unloading behind an unfinished IDB write', async () => {
-	const name = 'wal-unload-' + crypto.randomUUID(),
+	const name = `wal-unload-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name);
 	let blocked = false;
 	const store = create({
@@ -76,8 +76,10 @@ it('recovers the last synchronous mutation when unloading behind an unfinished I
 	blocked = true;
 	store.advance(visit);
 	store.advance(visit);
-	const key = 'guardioes-wal:' + visit.id;
-	expect(JSON.parse(localStorage.getItem(key)!).session.revealed).toBe(true);
+	const key = `guardioes-wal:${visit.id}`;
+	const raw = localStorage.getItem(key);
+	assert(raw);
+	expect(JSON.parse(raw).session.revealed).toBe(true);
 	store.close();
 	const recoveredDisk = new IndexedRepository(name),
 		recovered = create(recoveredDisk);
@@ -88,7 +90,7 @@ it('recovers the last synchronous mutation when unloading behind an unfinished I
 	expect(localStorage.getItem(key)).toBeNull();
 });
 it('ignores and clears a journal revision older than the durable IDB record', async () => {
-	const name = 'wal-old-' + crypto.randomUUID(),
+	const name = `wal-old-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name),
 		store = create(disk);
 	await store.load();
@@ -98,7 +100,7 @@ it('ignores and clears a journal revision older than the durable IDB record', as
 	store.advance(visit);
 	await store.flush();
 	store.close();
-	const key = 'guardioes-wal:' + visit.id;
+	const key = `guardioes-wal:${visit.id}`;
 	localStorage.setItem(key, JSON.stringify(old));
 	const recovered = create(new IndexedRepository(name));
 	await recovered.load();
@@ -107,7 +109,7 @@ it('ignores and clears a journal revision older than the durable IDB record', as
 	expect(localStorage.getItem(key)).toBeNull();
 });
 it('quarantines corrupt JSON and invalid envelopes without replacing a valid journey', async () => {
-	const name = 'wal-bad-' + crypto.randomUUID(),
+	const name = `wal-bad-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name),
 		store = create(disk);
 	await store.load();
@@ -115,8 +117,8 @@ it('quarantines corrupt JSON and invalid envelopes without replacing a valid jou
 	await store.flush();
 	const record = (await disk.read())[0] as LocalRecord;
 	store.close();
-	const corruptKey = 'guardioes-wal:' + crypto.randomUUID(),
-		invalidKey = 'guardioes-wal:' + visit.id;
+	const corruptKey = `guardioes-wal:${crypto.randomUUID()}`,
+		invalidKey = `guardioes-wal:${visit.id}`;
 	localStorage.setItem(corruptKey, '{broken');
 	localStorage.setItem(
 		invalidKey,
@@ -141,7 +143,7 @@ it.each(['quota', 'blocked'])('still persists to IDB when localStorage is %s', a
 			throw new Error(mode);
 		};
 	vi.stubGlobal('localStorage', storage);
-	const disk = new IndexedRepository('wal-unavailable-' + crypto.randomUUID()),
+	const disk = new IndexedRepository(`wal-unavailable-${crypto.randomUUID()}`),
 		store = create(disk);
 	await store.load();
 	const visit = store.create(input);
@@ -151,7 +153,7 @@ it.each(['quota', 'blocked'])('still persists to IDB when localStorage is %s', a
 	expect(((await disk.read()) as LocalRecord[])[0].session?.step).toBe(1);
 });
 it('an earlier IDB completion cannot clear a newer journal entry', async () => {
-	const disk = new IndexedRepository('wal-drain-' + crypto.randomUUID());
+	const disk = new IndexedRepository(`wal-drain-${crypto.randomUUID()}`);
 	const first = deferred(),
 		second = deferred(),
 		secondEntered = deferred();
@@ -176,14 +178,16 @@ it('an earlier IDB completion cannot clear a newer journal entry', async () => {
 	store.advance(visit);
 	first.resolve();
 	await secondEntered.promise;
-	const key = 'guardioes-wal:' + visit.id;
-	expect(JSON.parse(localStorage.getItem(key)!).rev).toBe(3);
+	const key = `guardioes-wal:${visit.id}`;
+	const raw = localStorage.getItem(key);
+	assert(raw);
+	expect(JSON.parse(raw).rev).toBe(3);
 	second.resolve();
 	await store.flush();
 	expect(localStorage.getItem(key)).toBeNull();
 });
 it('replays another owner without exposing or reassigning the recovered session', async () => {
-	const name = 'wal-owner-' + crypto.randomUUID(),
+	const name = `wal-owner-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name);
 	const store = create({
 		read: () => disk.read(),
@@ -201,7 +205,7 @@ it('replays another owner without exposing or reassigning the recovered session'
 	expect(recovered.find(visit.id)?.ownerId).toBe(A);
 });
 it('a read-only tab leaves the active writer journal untouched', async () => {
-	const name = 'wal-reader-' + crypto.randomUUID(),
+	const name = `wal-reader-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name);
 	const store = create({
 		read: () => disk.read(),
@@ -213,10 +217,10 @@ it('a read-only tab leaves the active writer journal untouched', async () => {
 	const reader = create(new IndexedRepository(name), A, false);
 	await reader.load();
 	expect(reader.readOnly).toBe(true);
-	expect(localStorage.getItem('guardioes-wal:' + visit.id)).not.toBeNull();
+	expect(localStorage.getItem(`guardioes-wal:${visit.id}`)).not.toBeNull();
 });
 it('does not erase changed outbox metadata at the same local revision', async () => {
-	const disk = new IndexedRepository('wal-metadata-' + crypto.randomUUID()),
+	const disk = new IndexedRepository(`wal-metadata-${crypto.randomUUID()}`),
 		store = create(disk);
 	await store.load();
 	const visit = store.create(input);
@@ -224,10 +228,12 @@ it('does not erase changed outbox metadata at the same local revision', async ()
 	const original = (await disk.read())[0] as LocalRecord;
 	journalRecord({ ...original, ackedRev: original.rev, serverRev: 1 });
 	clearJournalRecord(original);
-	expect(JSON.parse(localStorage.getItem('guardioes-wal:' + visit.id)!).serverRev).toBe(1);
+	const raw = localStorage.getItem(`guardioes-wal:${visit.id}`);
+	assert(raw);
+	expect(JSON.parse(raw).serverRev).toBe(1);
 });
 it('keeps the journal and refuses mutations if recovery cannot finish its IDB transaction', async () => {
-	const name = 'wal-recovery-fail-' + crypto.randomUUID(),
+	const name = `wal-recovery-fail-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name);
 	const original = create({
 		read: () => disk.read(),
@@ -246,12 +252,12 @@ it('keeps the journal and refuses mutations if recovery cannot finish its IDB tr
 	});
 	await recovered.load();
 	expect(recovered.ready).toBe(false);
-	expect(localStorage.getItem('guardioes-wal:' + visit.id)).not.toBeNull();
+	expect(localStorage.getItem(`guardioes-wal:${visit.id}`)).not.toBeNull();
 	fail = false;
 	await recovered.load();
 	expect(recovered.ready).toBe(true);
 	expect(recovered.find(visit.id)).not.toBeNull();
-	expect(localStorage.getItem('guardioes-wal:' + visit.id)).toBeNull();
+	expect(localStorage.getItem(`guardioes-wal:${visit.id}`)).toBeNull();
 });
 it('still works when accessing the localStorage property itself throws', async () => {
 	Object.defineProperty(globalThis, 'localStorage', {
@@ -260,7 +266,7 @@ it('still works when accessing the localStorage property itself throws', async (
 			throw new Error('SecurityError');
 		}
 	});
-	const disk = new IndexedRepository('wal-security-' + crypto.randomUUID()),
+	const disk = new IndexedRepository(`wal-security-${crypto.randomUUID()}`),
 		store = create(disk);
 	await store.load();
 	const visit = store.create(input);
@@ -269,7 +275,7 @@ it('still works when accessing the localStorage property itself throws', async (
 	expect(((await disk.read()) as LocalRecord[])[0].id).toBe(visit.id);
 });
 it('preserves the journey if interrupted between the fork and retirement journal writes', async () => {
-	const name = 'wal-partial-fork-' + crypto.randomUUID(),
+	const name = `wal-partial-fork-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name),
 		entered = deferred();
 	let blocked = false;
@@ -308,7 +314,7 @@ it('preserves the journey if interrupted between the fork and retirement journal
 	expect(recovered.list.some((session) => session.revealed)).toBe(true);
 });
 it('journals participant changes synchronously and recovers them after immediate unload', async () => {
-	const name = 'wal-participant-' + crypto.randomUUID(),
+	const name = `wal-participant-${crypto.randomUUID()}`,
 		disk = new IndexedRepository(name);
 	let blocked = false;
 	const store = create({
@@ -329,7 +335,9 @@ it('journals participant changes synchronously and recovers them after immediate
 	blocked = true;
 	store.rename(session, '  Bruno  ');
 	store.setMyGroup(session, session.groups[1].id);
-	const snapshot = JSON.parse(localStorage.getItem('guardioes-wal:' + session.id)!);
+	const raw = localStorage.getItem(`guardioes-wal:${session.id}`);
+	assert(raw);
+	const snapshot = JSON.parse(raw);
 	expect(snapshot.session.participant).toBe('Bruno');
 	expect(snapshot.session.myGroupId).toBe(session.groups[1].id);
 	expect(snapshot.rev).toBe(3);

@@ -32,7 +32,7 @@ export async function copySessionPhotos(
 	for (const key of photoKeys) {
 		const blob = await readPhoto(key);
 		if (!blob) continue;
-		const next = key.startsWith(sourceId + ':')
+		const next = key.startsWith(`${sourceId}:`)
 			? targetId + key.slice(sourceId.length)
 			: `${targetId}:${key}`;
 		await set(next, blob, store);

@@ -9,7 +9,7 @@ const date = v.pipe(
 	v.string(),
 	v.isoDate(),
 	v.check((value) => {
-		const parsed = new Date(value + 'T12:00:00Z');
+		const parsed = new Date(`${value}T12:00:00Z`);
 		return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 	})
 );

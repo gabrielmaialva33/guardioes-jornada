@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, assert, expect, it } from 'vitest';
 import { IndexedRepository, type LocalRecord } from '#lib/data/repository.ts';
 import { decodeSession } from '#lib/data/session-schema.ts';
 import { normalizeSession, type Session, todayIso } from '#lib/session.ts';
@@ -10,7 +10,7 @@ const groups = [
 	{ name: 'Cedro', color: '#654321' }
 ];
 const stores: Sessions[] = [];
-async function open(repository = new IndexedRepository('participant-' + crypto.randomUUID())) {
+async function open(repository = new IndexedRepository(`participant-${crypto.randomUUID()}`)) {
 	const store = new Sessions({ repository, ownerId: A, lock: async () => () => {} });
 	stores.push(store);
 	await store.load();
@@ -52,7 +52,7 @@ it.each([-1, 2, 0.5, Number.NaN])(
 it('accepts a trimmed 40-character name, keeps optional legacy fields and starts at zero by default', async () => {
 	const store = await open();
 	const session = store.create({
-		participant: ' ' + 'a'.repeat(40) + ' ',
+		participant: ` ${'a'.repeat(40)} `,
 		groups,
 		myGroupIndex: 0,
 		school: 'School',
@@ -74,7 +74,7 @@ it('rejects an empty group list or invalid starting step', async () => {
 	expect(store.list).toHaveLength(0);
 });
 it('loads legacy IDB and cloud documents with defaults rather than quarantining them', async () => {
-	const repository = new IndexedRepository('participant-legacy-' + crypto.randomUUID());
+	const repository = new IndexedRepository(`participant-legacy-${crypto.randomUUID()}`);
 	const normalized = normalizeSession({ id: crypto.randomUUID(), ownerId: A });
 	const legacy = { ...normalized } as Record<string, unknown>;
 	delete legacy.participant;
@@ -108,16 +108,18 @@ it('loads legacy IDB and cloud documents with defaults rather than quarantining 
 	expect(normalizeSession({ id: crypto.randomUUID() }).myGroupId).toBeNull();
 });
 it('renames and changes group with increasing revisions, durable storage and a pending outbox', async () => {
-	const repository = new IndexedRepository('participant-mutate-' + crypto.randomUUID()),
+	const repository = new IndexedRepository(`participant-mutate-${crypto.randomUUID()}`),
 		store = await open(repository);
 	const session = store.create({ participant: 'Ana', groups, myGroupIndex: 0 });
 	await store.flush();
 	const operation = await store.nextOperation();
-	await store.acknowledge(session.id, operation!.operation, 1);
+	assert(operation);
+	await store.acknowledge(session.id, operation.operation, 1);
 	store.rename(session, '  Bruno  ');
 	store.setMyGroup(session, session.groups[1].id);
 	await store.flush();
-	const saved = store.find(session.id)!;
+	const saved = store.find(session.id);
+	assert(saved);
 	expect(saved.participant).toBe('Bruno');
 	expect(saved.myGroupId).toBe(session.groups[1].id);
 	expect(saved.rev).toBe(3);
@@ -135,7 +137,8 @@ it('resolves stale references before renaming and choosing a group', async () =>
 		stale = store.create({ participant: 'Ana', groups, myGroupIndex: 0 });
 	await store.flush();
 	const operation = await store.nextOperation();
-	await store.acknowledge(stale.id, operation!.operation, 1);
+	assert(operation);
+	await store.acknowledge(stale.id, operation.operation, 1);
 	await store.receive({
 		id: stale.id,
 		owner_id: A,
