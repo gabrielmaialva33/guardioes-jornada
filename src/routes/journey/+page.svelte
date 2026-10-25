@@ -330,7 +330,11 @@
 		}
 	}
 
-	/* Large system text on a phone: three tabs side by side no longer fit, so they stack. */
+	/*
+	 * Large system text on a phone: the three tabs stack (side by side they no longer
+	 * fit) at a fingertip's height, the header keeps only the leaf (the name is still
+	 * read out) and the main button drops a step so its label breaks between words.
+	 */
 	@media (max-width: 19.5em) {
 		.tabs {
 			grid-template-columns: minmax(0, 1fr);
@@ -339,6 +343,20 @@
 		.tabs [role='tab'] {
 			flex-direction: row;
 			gap: 0.4rem;
+			min-height: 52px;
+			line-height: 1.2;
+		}
+
+		p.brand {
+			font-size: 0;
+		}
+
+		.actions .primary {
+			font-size: var(--step-0);
+		}
+
+		section.closing {
+			padding-inline: 1rem;
 		}
 	}
 

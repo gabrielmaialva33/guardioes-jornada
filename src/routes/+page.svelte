@@ -245,9 +245,9 @@
 	}
 
 	main {
-		/* Height of the status bar: one 2.75rem row of chips, its border and the inset.
+		/* Height of the status bar: one 44px row of chips, its border and the inset.
 		   Calling's sticky button stops above it instead of under it. */
-		--sticky-bottom: calc(2.75rem + 1px + env(safe-area-inset-bottom) + 0.75rem);
+		--sticky-bottom: calc(44px + 1px + env(safe-area-inset-bottom) + 0.75rem);
 		display: grid;
 		flex: 1 0 auto;
 		grid-template-columns: minmax(0, 1fr);
@@ -256,10 +256,15 @@
 		padding-bottom: 1.25rem;
 	}
 
-	/* Large system text on a phone: the two status chips wrap onto a second row. */
+	/* Large system text on a phone: the status chips wrap and the bar grows, so it stays
+	   at the end of the page instead of following the scroll over the story. */
 	@media (max-width: 19.5em) {
 		main {
-			--sticky-bottom: calc(5.5rem + 1px + env(safe-area-inset-bottom) + 0.75rem);
+			--sticky-bottom: max(1rem, env(safe-area-inset-bottom));
+		}
+
+		footer.status-bar {
+			position: static;
 		}
 	}
 
