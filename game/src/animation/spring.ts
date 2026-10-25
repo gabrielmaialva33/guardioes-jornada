@@ -10,7 +10,7 @@ export class Spring {
 	value = 0;
 	velocity = 0;
 	/** Angular frequency in rad/s; the response settles in about 4/ω seconds. */
-	omega: number;
+	omega = 0;
 
 	constructor(omega: number) {
 		this.omega = omega;

@@ -19,9 +19,11 @@ import { JOINT_STRIDE, type Layout } from './skeleton.ts';
  * object's number fields are updated in place.
  */
 export class Playhead {
+	// Initialized as numbers so V8 keeps them as in-place double fields; a bare
+	// declaration would start them as undefined and box every store.
 	/** Cycle fraction (any real, wrapped) for loops, seconds (clamped) for one-shot tracks. */
-	time: number;
-	weight: number;
+	time = 0;
+	weight = 1;
 
 	constructor(time = 0, weight = 1) {
 		this.time = time;

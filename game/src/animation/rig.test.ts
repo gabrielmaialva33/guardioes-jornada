@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { BoxGeometry, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { AvatarAnimator, createAvatarInput } from './avatar-animator.ts';
@@ -108,7 +109,7 @@ it('measures the rig height in model units when the config omits it', () => {
 	const body = new Mesh(new BoxGeometry(0.8, 2.7, 0.6));
 	body.position.y = 1.35;
 	model.add(body);
-	expect(bindRig(model, AVATAR_LAYOUT, BLOCKY_RIG).height).toBeCloseTo(2.7, 6);
+	expect(bindRig(model, AVATAR_LAYOUT, { nodes: BLOCKY_RIG.nodes }).height).toBeCloseTo(2.7, 6);
 });
 
 it('drives a bound rig from the animator', () => {
@@ -120,4 +121,24 @@ it('drives a bound rig from the animator', () => {
 	for (let i = 0; i < 25; i++) applyToRig(animator.update(1 / 60, input), rig);
 	const legs = ['leg-left', 'leg-right'].map((name) => model.getObjectByName(name)?.quaternion.x ?? 0);
 	expect(Math.abs(legs[0] - legs[1])).toBeGreaterThan(0.1);
+});
+
+const AVATAR_GLB = new URL('../assets/models/avatar.glb', import.meta.url);
+
+it.skipIf(!existsSync(AVATAR_GLB))('matches the nodes of the processed avatar.glb', () => {
+	// The glTF JSON chunk: 12-byte header, then chunk length, type and the JSON itself.
+	const file = readFileSync(AVATAR_GLB);
+	const json = JSON.parse(file.subarray(20, 20 + file.readUInt32LE(12)).toString('utf8')) as {
+		nodes: { name: string; children?: number[]; translation?: number[] }[];
+	};
+	const byName = new Map(json.nodes.map((node, i) => [node.name, i]));
+	const parentOf = (name: string) =>
+		json.nodes.find((node) => node.children?.includes(byName.get(name) ?? -1))?.name;
+	for (const name of Object.values(BLOCKY_RIG.nodes)) expect(byName.has(name)).toBe(true);
+	const { nodes } = BLOCKY_RIG;
+	for (const limb of [nodes.legL, nodes.legR, nodes.torso]) expect(parentOf(limb)).toBe(nodes.root);
+	for (const part of [nodes.armL, nodes.armR, nodes.head]) expect(parentOf(part)).toBe(nodes.torso);
+	// Left is +x on this rig, which the mirrored keys assume.
+	expect(json.nodes[byName.get(nodes.armL) ?? 0].translation?.[0]).toBeGreaterThan(0);
+	expect(json.nodes[byName.get(nodes.legL) ?? 0].translation?.[0]).toBeGreaterThan(0);
 });

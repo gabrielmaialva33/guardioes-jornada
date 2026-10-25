@@ -1,18 +1,19 @@
 /**
  * The avatar's logical joints and the map from them to GLB node names.
  *
- * Defaults are the Kenney Blocky Characters 2.0 names, read from the research
- * copy of character-a.glb (modelos-3d.md); OpenCode's processed GLB reports the
- * final names and pivots in assets-report.md, and only BLOCKY_RIG changes then.
+ * Names and pivots of game/src/assets/models/avatar.glb (Kenney Blocky
+ * Characters 2.0 character-a without its clips, assets-report.md §1): the same
+ * as Kenney's, with the head's 0.1 scale baked into its mesh. A different rig
+ * only needs another RigConfig; bindRig keeps each node's own rest transform.
  *
- * Kenney hierarchy and pivots, native units (2.7 tall, facing +z, left side +x):
+ * Hierarchy and pivots, native units (2.7 tall, feet at 0, facing +z, left side +x):
  *   root (feet)
  *   ├─ leg-left  (0.2, 1, 0)    hip
  *   ├─ leg-right (-0.2, 1, 0)   hip
- *   └─ torso     (0, 0.7, 0)
+ *   └─ torso     (0, 0.7, 0)    waist, below the torso block
  *      ├─ arm-left  (0.4, 1.1, -0.1)   shoulder
  *      ├─ arm-right (-0.4, 1.1, -0.1)  shoulder
- *      └─ head      (0, 1.2, 0)        neck, scale 0.1
+ *      └─ head      (0, 1.2, 0)        neck
  *
  * Rotation signs on that rig (the pose keys in avatar-poses.ts rely on them):
  * - x < 0 swings a limb forward and up, x > 0 back; x > 0 pitches the root,
@@ -47,8 +48,9 @@ export interface RigConfig<J extends string = string> {
 	readonly height?: number;
 }
 
-/** Kenney Blocky Characters 2.0 (checked on character-a and -b; the 18 skins are textures). */
+/** avatar.glb and every Kenney Blocky Characters 2.0 model (the 18 skins are textures). */
 export const BLOCKY_RIG: RigConfig<AvatarJoint> = {
+	height: 2.7,
 	nodes: {
 		root: 'root',
 		torso: 'torso',
