@@ -20,7 +20,7 @@
 import { STUD, WALK_SPEED } from '../../engine/constants.ts';
 import { LIMITS } from '../../style/motion.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
-import type { AnimalWorld } from './motion.ts';
+import { type AnimalWorld, PLAYER_EYES } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
 import { clamp, DEG, wrapAngle } from './scalar.ts';
 
@@ -29,7 +29,10 @@ export type MicoState = (typeof MICO_STATES)[number];
 
 /** Companion and wandering tuning [engine], in world units. */
 export const MICO = {
-	/** Target gap to the player: 3 studs. */
+	/**
+	 * Target gap to the player: 3 studs, centre to centre. Clear of the player's
+	 * 0.5 u capsule by ~0.75 u at the mico's widest (ears, ±0.56 u at 0.9 u tall).
+	 */
 	followDistance: 3 * STUD,
 	/** Settles inside ±bandIn of the gap, starts again outside ±bandOut. */
 	bandIn: 0.25 * STUD,
@@ -47,11 +50,14 @@ export const MICO = {
 	playerStill: 0.15,
 	/** Further than this (a respawn, a teleport) it reappears behind the player. */
 	teleportDistance: 30,
-	/** The hop on a player jump: apex height and airtime. */
+	/**
+	 * The hop on a player jump: apex height and airtime. Not scaled with the body:
+	 * similar animals jump about equally high (Borelli's law), half its height here.
+	 */
 	hopHeight: 0.45,
 	hopTime: 0.42,
-	/** Wandering bursts along its own route when not a companion. */
-	wanderSpeed: 3.8,
+	/** Wandering bursts along its own route when not a companion (≈ 4.7 body lengths per second). */
+	wanderSpeed: 3.5,
 	wanderAccel: 20,
 	burst: [0.6, 1.8],
 	pause: [0.6, 2.2],
@@ -64,7 +70,7 @@ export const MICO = {
 	/** Share of glances spent looking at the player in companion mode. */
 	lookAtPlayer: 0.6,
 	/** The player's eye height above its feet (the avatar is 3 u tall). */
-	playerEyes: 2.6
+	playerEyes: PLAYER_EYES
 } as const;
 
 /** Head lowered while sitting. */
@@ -374,7 +380,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 			const dx = world.playerX - motion.x;
 			const dz = world.playerZ - motion.z;
 			this.#lookYaw = wrapAngle(Math.atan2(dx, dz) - motion.yaw);
-			const rise = world.playerY + MICO.playerEyes - (motion.y + this.species.size * 0.8);
+			const rise = world.playerY + MICO.playerEyes - (motion.y + this.species.eyeHeight);
 			this.#lookPitch = clamp(Math.atan2(rise, Math.sqrt(dx * dx + dz * dz)), -0.6, 0.6);
 		}
 	}

@@ -14,6 +14,7 @@
  * (p3-animation.md, V8 rule 1).
  */
 import { AnimalMotion, type AnimalWorld } from './motion.ts';
+import { MODELS } from './rigs.ts';
 import { MAX_DT, Rng, safeDt, TAU } from './scalar.ts';
 import { SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
 
@@ -54,7 +55,7 @@ export class BehaviourClock {
 export class BehaviourDrive {
 	/** Yaw the body turns toward at the species' turn rate. */
 	targetYaw = 0;
-	/** Radius the feet travel on when the body turns on the spot, u (about the hip spread). */
+	/** Radius the feet travel on when the body turns on the spot, u: the farthest hip from the body axis. */
 	footRadius = 0;
 	/** Travel speed (u/s), the speed it ramps toward and the ramp (u/s²). */
 	speed = 0;
@@ -86,7 +87,9 @@ export abstract class Behaviour<S extends string = string> {
 	constructor(species: SpeciesId, initial: S, options: BehaviourOptions = {}) {
 		this.species = SPECIES[species];
 		this.state = initial;
-		this.drive.footRadius = this.species.size * 0.3;
+		const model = MODELS[this.species.model];
+		this.drive.footRadius =
+			Math.hypot(model.hipX, Math.max(model.hipZFront, -model.hipZBack)) * this.species.scale;
 		this.#seed = options.seed ?? 0x5eed;
 		this.rng = new Rng(this.#seed);
 		this.cosmetic = new Rng(this.#seed ^ 0x9e3779b9);
@@ -130,15 +133,24 @@ export abstract class Behaviour<S extends string = string> {
 			const distance = motion.distance;
 			const speed = motion.speed;
 			this.advance(world);
-			// Gait cycles at this substep's mean speed: the phase then does not depend
-			// on how the frame was cut (one LOD update or three frames). This is
-			// strideAt written out (see turn()).
+			// Gait cycles over this substep, ∫ dx / stride(v): the phase then does not
+			// depend on how the frame was cut (one LOD update or three frames).
+			// Simpson's rule over the distance: under a constant acceleration the
+			// speed at half the distance is the RMS of the end speeds. A mean-speed
+			// stride alone was exact only at constant speed, and the gap grew with
+			// the substep through every ramp. strideAt written out (see turn()).
 			const covered = motion.distance - distance;
 			if (covered > 0) {
-				const mean = 0.5 * (speed + motion.speed);
-				const t = (mean - strides.slowSpeed) / (strides.fastSpeed - strides.slowSpeed);
-				const share = Math.min(1, Math.max(0, t));
-				motion.cycles += covered / (strides.slowStride + (strides.fastStride - strides.slowStride) * share);
+				const after = motion.speed;
+				let inverse = 0;
+				for (let k = 0; k < 3; k++) {
+					const v = k === 0 ? speed : k === 2 ? after : Math.sqrt(0.5 * (speed * speed + after * after));
+					const t = (v - strides.slowSpeed) / (strides.fastSpeed - strides.slowSpeed);
+					const share = Math.min(1, Math.max(0, t));
+					inverse +=
+						(k === 1 ? 4 : 1) / (strides.slowStride + (strides.fastStride - strides.slowStride) * share);
+				}
+				motion.cycles += (covered * inverse) / 6;
 			}
 			clock.inState += h;
 			clock.timer -= h;

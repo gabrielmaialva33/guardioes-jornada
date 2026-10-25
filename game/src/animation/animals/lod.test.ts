@@ -3,6 +3,7 @@ import { type AnyAnimal, createAnimal } from './animal.ts';
 import { holds, straight } from './fixtures.test-helper.ts';
 import { AnimationLod } from './lod.ts';
 import { createAnimalWorld } from './motion.ts';
+import { HEAD } from './rigs.ts';
 import { SPECIES_IDS, type SpeciesId } from './species.ts';
 
 const PERCHES = [
@@ -14,7 +15,7 @@ function make(species: SpeciesId): AnyAnimal {
 	const lod = { nearDistance: 12, farInterval: 3 };
 	switch (species) {
 		case 'muriqui': {
-			const muriqui = createAnimal(species, { seed: 31, route: holds(12, 1.4, 8), lod });
+			const muriqui = createAnimal(species, { seed: 31, route: holds(12, 1.15, 8), lod });
 			muriqui.behaviour.brachiate(6);
 			return muriqui;
 		}
@@ -43,14 +44,16 @@ function play(species: SpeciesId, frames: number, distance: (frame: number) => n
 
 function maxDifference(a: AnyAnimal, b: AnyAnimal) {
 	let rotation = 0;
+	let head = 0;
 	let offset = 0;
 	for (let i = 0; i < a.pose.data.length; i++) {
 		const d = Math.abs(a.pose.data[i] - b.pose.data[i]);
-		if (i % 6 < 3) rotation = Math.max(rotation, d);
-		else offset = Math.max(offset, d);
+		if (i % 6 >= 3) offset = Math.max(offset, d);
+		else if (Math.floor(i / 6) === HEAD) head = Math.max(head, d);
+		else rotation = Math.max(rotation, d);
 	}
 	const placement = Math.hypot(a.motion.x - b.motion.x, a.motion.y - b.motion.y, a.motion.z - b.motion.z);
-	return { rotation, offset, placement, yaw: Math.abs(a.motion.yaw - b.motion.yaw) };
+	return { rotation, head, offset, placement, yaw: Math.abs(a.motion.yaw - b.motion.yaw) };
 }
 
 describe('animation LOD', () => {
@@ -68,6 +71,9 @@ describe('animation LOD', () => {
 				const d = maxDifference(full, other);
 				// Within 1.5° per joint and 2 mm-scale offsets; placement within 2 cm of world.
 				expect(d.rotation).toBeLessThan(0.026);
+				// The head carries the larger share of a glance (1 − bodyLook), and the look
+				// spring sees a glance that lands mid-update one LOD step late: 2.6°.
+				expect(d.head).toBeLessThan(0.045);
 				expect(d.offset).toBeLessThan(0.004);
 				expect(d.placement).toBeLessThan(0.04);
 				expect(d.yaw).toBeLessThan(0.02);

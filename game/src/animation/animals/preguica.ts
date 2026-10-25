@@ -27,8 +27,8 @@ export type PreguicaState = (typeof PREGUICA_STATES)[number];
 export const SLOTH_LIMB_ORDER = [2, 0, 3, 1] as const;
 
 export const PREGUICA = {
-	/** One limb's reach forward, u, and how long it takes, seconds. */
-	step: 0.35,
+	/** One limb's reach forward, u (a quarter of the body length), and how long it takes, seconds. */
+	step: 0.33,
 	limbMove: [2.4, 3.6],
 	/** Still pause between two limbs, seconds. */
 	limbPause: [0.6, 1.6],

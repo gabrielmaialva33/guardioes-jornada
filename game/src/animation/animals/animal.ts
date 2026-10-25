@@ -82,7 +82,7 @@ export class Animal<B extends Behaviour = Behaviour> {
 
 export interface AnimalOptions {
 	seed?: number;
-	/** Set from bindAnimal's result when the model has its own head node. */
+	/** bindAnimal's hasHead: false for a model without a head node (default true, as the Cube Pets have one). */
 	hasHead?: boolean;
 	lod?: LodOptions;
 	/**

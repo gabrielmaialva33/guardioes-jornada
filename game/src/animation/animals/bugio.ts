@@ -24,7 +24,7 @@ export type BugioState = (typeof BUGIO_STATES)[number];
 
 export const BUGIO = {
 	/** Slow walk along the branch, u/s (about half a body length per second), and its ramp. */
-	walkSpeed: 0.7,
+	walkSpeed: 0.64,
 	accel: 0.8,
 	move: [4, 9],
 	idle: [3, 7],

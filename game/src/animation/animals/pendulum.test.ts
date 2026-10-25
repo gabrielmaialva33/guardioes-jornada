@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { createAnimal } from './animal.ts';
 import { holds } from './fixtures.test-helper.ts';
 import { createAnimalWorld } from './motion.ts';
-import { MURIQUI, PENDULUM_STEP } from './muriqui.ts';
+import { MURIQUI, MURIQUI_HOLDS, PENDULUM_STEP } from './muriqui.ts';
 
-/** Brachiates across 9 holds 1.4 u apart at frame times from `dt` and returns the hand-switch times. */
-function switchTimes(dt: (frame: number) => number) {
-	const muriqui = createAnimal('muriqui', { seed: 21, route: holds(12, 1.4, 8) });
+/** Brachiates across 9 holds `spacing` u apart at frame times from `dt` and returns the hand-switch times. */
+function switchTimes(dt: (frame: number) => number, spacing = 1.15) {
+	const muriqui = createAnimal('muriqui', { seed: 21, route: holds(12, spacing, 8) });
 	const behaviour = muriqui.behaviour;
 	behaviour.brachiate(9);
 	const world = createAnimalWorld();
@@ -51,8 +51,40 @@ describe('muriqui brachiation pendulum', () => {
 		const steady = reference.slice(1);
 		const mean = steady.reduce((a, b) => a + b, 0) / steady.length;
 		for (const interval of steady) expect(Math.abs(interval - mean)).toBeLessThan(2 * PENDULUM_STEP);
-		// Half a period at this amplitude (~60°) is a little longer than at small swings.
+		// Half a period at this amplitude (~52°) is a little longer than at small swings.
 		expect(mean).toBeGreaterThan(MURIQUI.period / 2);
 		expect(mean).toBeLessThan(MURIQUI.period * 0.65);
+	});
+
+	it('reaches every hold across the documented spacings, up to the widest', () => {
+		for (const spacing of [
+			MURIQUI_HOLDS.min,
+			MURIQUI_HOLDS.max,
+			MURIQUI_HOLDS.reach,
+			MURIQUI_HOLDS.limit * 0.99
+		])
+			expect(switchTimes(() => 1 / 60, spacing).length).toBe(9);
+	});
+
+	it('gives up on a hold out of reach and turns back, never swinging over the top', () => {
+		const muriqui = createAnimal('muriqui', {
+			seed: 21,
+			route: holds(4, MURIQUI_HOLDS.limit * 1.1, 8),
+			start: 1
+		});
+		const behaviour = muriqui.behaviour;
+		const direction = behaviour.direction;
+		behaviour.brachiate(2);
+		const world = createAnimalWorld();
+		let peak = 0;
+		for (let frame = 0; frame < 60 * 30 && behaviour.state === 'move'; frame++) {
+			muriqui.update(1 / 60, world);
+			peak = Math.max(peak, Math.abs(behaviour.theta));
+		}
+		expect(behaviour.state).not.toBe('move');
+		expect(behaviour.switches).toBe(0);
+		expect(behaviour.anchor).toBe(1);
+		expect(behaviour.direction).toBe(-direction);
+		expect(peak).toBeLessThan(MURIQUI.swingCap + 2 * (Math.PI / 180));
 	});
 });

@@ -11,7 +11,8 @@
  *    (brachiation, sloth limbs);
  * 4. additive layers: gait, wingbeat, feeding, howl, crouch;
  * 5. springs from the shared presets (src/style/motion.ts), scaled by the
- *    species tempo: look-at, tail, lean and bank, squash;
+ *    species tempo: look-at (split between the body and the head node), tail,
+ *    lean and bank, squash;
  * 6. the root offset that puts the blended pivot on the blended anchor.
  *
  * Reduced motion (ART.md §7) zeroes the decorative layers: squash, lean, bank,
@@ -90,9 +91,12 @@ export const ANIMAL_LAYERS = {
 	/** The released hand of a brachiator returns to rest over this long, seconds. */
 	releaseTime: 0.3,
 	/**
-	 * How upright a brachiator hangs: 1 would be vertical, but the Cube Pets head is
-	 * part of the body block, so a vertical trunk would point the face at the sky.
-	 * At 0.35 the trunk is pitched 32° and the face looks ahead to the next hold.
+	 * How upright a brachiator hangs: 1 would be vertical, which points the face
+	 * of the cube-shaped head at the sky. At 0.35 the trunk is pitched 32°, the
+	 * face looks ahead to the next hold, and the arms raised beside the face keep
+	 * the head block clear of the branch through the swing (tuned when the head
+	 * was still part of the body mesh; the head node could now take a more
+	 * upright trunk and level the face, which would need a new clearance check).
 	 */
 	hangUpright: 0.35,
 	/** A free arm at rest, radians from straight down (a little forward). */
@@ -106,8 +110,9 @@ export const ANIMAL_LAYERS = {
 
 export interface AnimalAnimatorOptions {
 	/**
-	 * Whether the model has its own head node. The Cube Pets do not (bindAnimal
-	 * reports it); without one, look-at turns the body by the species' bodyLook.
+	 * Whether the model has its own head node (default true: the Cube Pets have
+	 * had one since commit d165b4a; pass bindAnimal's hasHead for other assets).
+	 * Without one, look-at turns only the body's share (the species' bodyLook).
 	 */
 	hasHead?: boolean;
 }
@@ -173,7 +178,7 @@ export class AnimalAnimator {
 		this.species = typeof species === 'string' ? SPECIES[species] : species;
 		this.model = MODELS[this.species.model];
 		this.postures = buildPostures(this.species.id);
-		this.hasHead = options.hasHead ?? false;
+		this.hasHead = options.hasHead ?? true;
 		this.#bird = isBird(this.species.model);
 		this.#fallback = Math.max(
 			0,
@@ -475,9 +480,10 @@ export class AnimalAnimator {
 			out[LIMB_FR * JOINT_STRIDE] -= swing * (0.5 - 0.5 * Math.sin(TAU * this.#eatPhase));
 		}
 		const howl = Math.min(1, Math.max(0, motion.howl || 0)) * this.weights[HOWL];
-		// Each breath group of the roar pumps the head; the posture itself stays with reduced motion.
+		// Each breath group of the roar pumps the head (the whole body block on a
+		// model without a head node); the posture itself stays with reduced motion.
 		if (howl > 0 && !this.reducedMotion)
-			out[B] -= layers.howlPump * howl * (0.5 + 0.5 * Math.sin(TAU * this.#howlPhase));
+			out[this.hasHead ? H : B] -= layers.howlPump * howl * (0.5 + 0.5 * Math.sin(TAU * this.#howlPhase));
 	}
 
 	#crouchLayer(motion: AnimalMotion, out: Float64Array) {
@@ -503,16 +509,24 @@ export class AnimalAnimator {
 		pitchSpring.update();
 		const yaw = yawSpring.value;
 		const pitch = pitchSpring.value;
-		const at = this.hasHead ? H : B;
-		const gain = this.hasHead ? 1 : species.bodyLook;
+		// The body turns by its share of the look and the head, its child, by the
+		// rest, so the gaze reaches the whole look. Without a head node only the
+		// body's share remains.
+		const body = species.bodyLook;
 		// Hanging by the tail (a child of the body), turning the body would pull the
-		// tail tip off the branch: turn the whole animal about its pivot instead.
-		const anchored = this.hasHead ? 0 : Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
+		// tail tip off the branch: its share turns the whole animal about the pivot instead.
+		const anchored = Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
 		const free = 1 - anchored;
-		out[at + 1] += yaw * gain * free;
-		out[at] -= pitch * gain * free;
-		out[at + 2] -= yaw * gain * species.headTilt * free;
-		out[R + 1] += yaw * gain * anchored;
+		out[B + 1] += yaw * body * free;
+		out[B] -= pitch * body * free;
+		out[R + 1] += yaw * body * anchored;
+		if (this.hasHead) {
+			const head = 1 - body;
+			out[H + 1] += yaw * head;
+			out[H] -= pitch * head;
+			// The bird cocks its head by the whole look, to bring one eye to bear.
+			out[H + 2] -= yaw * species.headTilt;
+		} else out[B + 2] -= yaw * body * species.headTilt * free;
 	}
 
 	#tailLayer(motion: AnimalMotion, out: Float64Array) {

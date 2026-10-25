@@ -3,6 +3,7 @@ import { type AnyAnimal, createAnimal } from './animal.ts';
 import { allFinite, holds, run, straight } from './fixtures.test-helper.ts';
 import { MICO_STATES } from './mico.ts';
 import { createAnimalWorld } from './motion.ts';
+import { MURIQUI_HOLDS } from './muriqui.ts';
 import { ONCA, ONCA_STATES } from './onca.ts';
 import { POSTURES, posturesOf, SUSPENDED } from './postures.ts';
 import { SLOTH_LIMB_ORDER } from './preguica.ts';
@@ -20,7 +21,7 @@ function make(species: SpeciesId, seed = 1): AnyAnimal {
 		case 'mico-leao-dourado':
 			return createAnimal(species, { seed, route: straight(8, 4) });
 		case 'muriqui':
-			return createAnimal(species, { seed, route: holds(10, 1.4, 8), start: 0 });
+			return createAnimal(species, { seed, route: holds(10, 1.15, 8), start: 0 });
 		case 'tucano-de-bico-verde':
 			return createAnimal(species, { seed, perches: PERCHES });
 		case 'onca-pintada':
@@ -31,16 +32,28 @@ function make(species: SpeciesId, seed = 1): AnyAnimal {
 }
 
 describe('scale (ART.md §3)', () => {
-	it('matches the art direction sizes', () => {
+	it('matches the art direction heights', () => {
 		const expected: Record<SpeciesId, number> = {
 			'mico-leao-dourado': 0.9,
 			'bugio-ruivo': 1.4,
 			muriqui: 1.7,
 			'preguica-de-coleira': 1.4,
-			'onca-pintada': 3,
+			'onca-pintada': 2.2,
 			'tucano-de-bico-verde': 0.9
 		};
 		for (const id of SPECIES_IDS) expect(SPECIES[id].size).toBe(expected[id]);
+	});
+
+	it('keeps the spring tempo physical: √(L_mico / L) of the real scaled body length', () => {
+		const mico = SPECIES['mico-leao-dourado'];
+		expect(mico.tempo).toBe(1);
+		for (const id of SPECIES_IDS) {
+			// The sloth's extra ×0.4 is behavioural (species.ts).
+			const behavioural = id === 'preguica-de-coleira' ? 0.4 : 1;
+			expect(SPECIES[id].tempo).toBeCloseTo(behavioural * Math.sqrt(mico.length / SPECIES[id].length), 9);
+		}
+		// Larger bodies are slower.
+		expect(SPECIES['onca-pintada'].tempo).toBeLessThan(SPECIES['bugio-ruivo'].tempo);
 	});
 });
 
@@ -139,8 +152,16 @@ describe('bugio-ruivo', () => {
 });
 
 describe('muriqui', () => {
+	it('documents handhold spacing from its arm: 1.0–1.25 u apart, never more than 1.33 u', () => {
+		expect(MURIQUI_HOLDS.arm).toBeCloseTo(0.768, 3);
+		expect(MURIQUI_HOLDS.min).toBeCloseTo(1, 1);
+		expect(MURIQUI_HOLDS.max).toBeCloseTo(1.25, 2);
+		expect(MURIQUI_HOLDS.reach).toBeCloseTo(1.33, 2);
+		expect(MURIQUI_HOLDS.limit).toBeCloseTo(1.6, 2);
+	});
+
 	it('brachiates along its handholds and hangs by the tail to feed', () => {
-		const muriqui = createAnimal('muriqui', { seed: 4, route: holds(10, 1.4, 8) });
+		const muriqui = createAnimal('muriqui', { seed: 4, route: holds(10, 1.15, 8) });
 		const anchors = new Set<number>();
 		let tailHang = false;
 		run(muriqui, 300, 30, createAnimalWorld(), () => {

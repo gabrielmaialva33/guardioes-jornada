@@ -11,7 +11,7 @@
  */
 import { STUD } from '../../engine/constants.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
-import type { AnimalWorld } from './motion.ts';
+import { type AnimalWorld, PLAYER_EYES } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
 import { clamp, DEG, wrapAngle } from './scalar.ts';
 
@@ -19,9 +19,9 @@ export const ONCA_STATES = ['idle', 'move', 'sit', 'rest'] as const;
 export type OncaState = (typeof ONCA_STATES)[number];
 
 export const ONCA = {
-	/** Calm walk, u/s (about 0.7 body lengths per second), and a brisker walk when moving off. */
-	walkSpeed: 2.2,
-	leaveSpeed: 2.8,
+	/** Calm walk, u/s (about 0.9 body lengths per second), and a brisker walk when moving off. */
+	walkSpeed: 1.8,
+	leaveSpeed: 2.3,
 	accel: 1.5,
 	/** Personal space: inside this it moves away from the player (15 studs). */
 	avoidRadius: 15 * STUD,
@@ -62,9 +62,12 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 	#playerDistance = Number.POSITIVE_INFINITY;
 	#dx = 0;
 	#dz = 0;
+	/** The player's eyes above its own, u: what it raises its head by to watch the player. */
+	readonly #eyeRise: number;
 
 	constructor(options: OncaOptions) {
 		super('onca-pintada', 'idle', options);
+		this.#eyeRise = PLAYER_EYES - this.species.eyeHeight;
 		this.route = options.route;
 		this.cursor.s = options.start ?? 0;
 		this.route.locate(this.cursor);
@@ -178,7 +181,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		const distance = this.#playerDistance;
 		if (distance < ONCA.watchRadius) {
 			this.#lookYaw = wrapAngle(Math.atan2(dx, dz) - motion.yaw);
-			this.#lookPitch = clamp(Math.atan2(1.5, distance), 0, 0.3);
+			this.#lookPitch = clamp(Math.atan2(this.#eyeRise, distance), 0, 0.3);
 			return;
 		}
 		this.#lookPitch = 0;

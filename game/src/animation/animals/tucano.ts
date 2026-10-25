@@ -38,8 +38,11 @@ export const TUCANO = {
 	/** The arc between perches rises by this share of the distance plus a constant, u. */
 	arcShare: 0.2,
 	arcBase: 0.6,
-	/** A hop along the perch: distance and height (u) and airtime (s). */
-	hopDistance: 0.25,
+	/**
+	 * A hop along the perch: distance (about a third of the body length) and
+	 * height (u) and airtime (s).
+	 */
+	hopDistance: 0.28,
 	hopHeight: 0.12,
 	hopTime: 0.3,
 	perch: [2, 6],

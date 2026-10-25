@@ -24,8 +24,15 @@ export {
 export { createFlyerGeometry, FlockMesh, type FlockMeshOptions } from './flock-mesh.ts';
 export { AnimationLod, LOD_DEFAULTS, type LodOptions, type LodTier } from './lod.ts';
 export { MICO, MICO_STATES, MicoBehaviour, type MicoState } from './mico.ts';
-export { AnimalMotion, type AnimalWorld, createAnimalWorld } from './motion.ts';
-export { MURIQUI, MURIQUI_STATES, MuriquiBehaviour, type MuriquiState, PENDULUM_STEP } from './muriqui.ts';
+export { AnimalMotion, type AnimalWorld, createAnimalWorld, PLAYER_EYES } from './motion.ts';
+export {
+	MURIQUI,
+	MURIQUI_HOLDS,
+	MURIQUI_STATES,
+	MuriquiBehaviour,
+	type MuriquiState,
+	PENDULUM_STEP
+} from './muriqui.ts';
 export { ONCA, ONCA_STATES, OncaBehaviour, type OncaState } from './onca.ts';
 export { buildPostures, POSTURES, type Posture, posturesOf, SUSPENDED } from './postures.ts';
 export {

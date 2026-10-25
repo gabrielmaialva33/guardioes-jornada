@@ -3,6 +3,24 @@
  * tempo (ART.md §7 presets, scaled), look limits and tail motion. The behaviour
  * timings live with each behaviour; this table holds what the animator needs.
  *
+ * Size. ART.md §3 gives each species a HEIGHT, feet to the top of the head: the
+ * Cube Pets are cube-shaped, so scaling them by length made the onça 3.26 u tall,
+ * taller than the 3.0 u avatar. scale = size / MODELS[model].top (rigs.ts), and
+ * `length` is the scaled nose-to-rump length that follows from it.
+ *
+ * Time and speed follow the body length by dynamic similarity [AJ83]: animals
+ * of one shape move alike at equal Froude numbers v²/(gL), so with L the real
+ * scaled body length, frequencies go as 1/√L, strides as L and speeds as √L.
+ * - Spring tempo = √(L_mico / L): the mico (0.75 u) is the reference and plays
+ *   the presets as written; larger animals swing slower.
+ * - Stride tables and the behaviours' travel speeds were tuned when the
+ *   quadrupeds were sized by length (mico 0.9 u, bugio 1.4 u, onça 3.0 u long);
+ *   they were rescaled to the height-sized bodies by these rules (strides × r,
+ *   speeds × √r, r = new length / old length), so the swing angles and the
+ *   cadence per unit of tempo are what was tuned; so were the sloth's limb step
+ *   and the toucan's hop (× r). Accelerations, like g, stay, and so do jump
+ *   heights (similar animals jump about equally high).
+ *
  * Sources, cited per value below:
  * - [RS94] Rosenberger & Stafford 1994, "Locomotion in captive Leontopithecus and
  *   Callimico", Am. J. Phys. Anthropol. 94:379–394: L. rosalia walks with a
@@ -24,6 +42,8 @@
  * - [C86] Cant 1986, Folia Primatol. 46:1–14: howlers move quadrupedally and
  *   slowly and do not brachiate.
  * - [ICMBio] species sheets and action plans cited in assets-report.md §3.3.
+ * - [AJ83] Alexander & Jayes 1983, "A dynamic similarity hypothesis for the gaits
+ *   of quadrupedal mammals", J. Zool. 201:135–152.
  */
 import { SPRING } from '../../style/motion.ts';
 import type { SpringPreset } from './damped-spring.ts';
@@ -76,16 +96,20 @@ export interface SpeciesParams {
 	/** Common name in Brazilian Portuguese, for the HUD and debug overlays. */
 	readonly name: string;
 	readonly model: ModelId;
-	/** ART.md §3 size in world units (×1.5 life size against the 3.0 u avatar). */
+	/** ART.md §3 height in world units, feet to the top of the head (×1.5 life size against the 3.0 u avatar). */
 	readonly size: number;
-	/** World units per model unit: scale the placed group by this. */
+	/** World units per model unit: scale the placed group by this. size / MODELS[model].top. */
 	readonly scale: number;
+	/** Nose (bill) to rump, tail excluded, in world units at this scale: the L of the tempo rule. */
+	readonly length: number;
+	/** Eyes above the feet when standing, world units (look-at targets). */
+	readonly eyeHeight: number;
 	/** Static limb stretch (node scale y), for long-limbed species. */
 	readonly limbScale: { readonly front: number; readonly hind: number };
 	/**
-	 * Frequency factor applied to every SPRING preset. Rule: √(0.9 u / size), the
-	 * pendulum scaling of a swinging part (f ∝ 1/√length) with the mico as the
-	 * reference, times a behavioural factor where noted.
+	 * Frequency factor applied to every SPRING preset. Rule: √(L_mico / length),
+	 * the pendulum scaling of a swinging part (f ∝ 1/√length) with the mico's
+	 * 0.75 u body as 1, times a behavioural factor where noted.
 	 */
 	readonly tempo: number;
 	/** Preset for head (or body) look turns. */
@@ -96,11 +120,15 @@ export interface SpeciesParams {
 	readonly runFrom: number;
 	readonly runTo: number;
 	readonly stride: StrideParams;
-	/** Look limits with a head node, radians; without one the body takes `bodyLook` of it. */
+	/**
+	 * Look limits, radians: how far the gaze turns. The body takes `bodyLook` of
+	 * the look and the head node (a child of the body) the rest, so the gaze
+	 * reaches the full look; a model without a head turns only the body share.
+	 */
 	readonly lookYaw: number;
 	readonly lookPitch: number;
 	readonly bodyLook: number;
-	/** Birds cock the head to look with one eye: roll per radian of look yaw. */
+	/** Birds cock the head to look with one eye: head roll per radian of look yaw. */
 	readonly headTilt: number;
 	/** Idle tail sway (radians, seconds); decorative, so 0 with reduced motion. */
 	readonly tailSway: number;
@@ -114,11 +142,33 @@ export interface SpeciesParams {
 	readonly sources: readonly string[];
 }
 
-/** √(0.9 / size): f ∝ 1/√length, mico = 1. */
-const tempoFor = (size: number) => Math.sqrt(0.9 / size);
+const MICO_SIZE = 0.9;
+const MURIQUI_SIZE = 1.7;
+const BUGIO_SIZE = 1.4;
+/** About 0.7 m at the shoulder × 1.5; the head top stays at the avatar's chin. */
+const ONCA_SIZE = 2.2;
+const PREGUICA_SIZE = 1.4;
+const TUCANO_SIZE = 0.9;
 
-const scaleFor = (model: ModelId, size: number, measure: 'bodyLength' | 'totalLength' = 'bodyLength') =>
-	size / MODELS[model][measure];
+/** World units per model unit for an ART.md height: feet to the top of the silhouette. */
+const scaleFor = (model: ModelId, size: number) => size / MODELS[model].top;
+/** Nose (bill) to rump at that scale, world units. */
+const lengthFor = (model: ModelId, size: number) => scaleFor(model, size) * MODELS[model].bodyLength;
+const eyesFor = (model: ModelId, size: number) => scaleFor(model, size) * MODELS[model].eyeY;
+
+/** The mico's body length, ≈ 0.749 u: the tempo reference. */
+const REFERENCE_LENGTH = lengthFor('monkey', MICO_SIZE);
+/** √(L_mico / L): f ∝ 1/√length, mico = 1. */
+const tempoFor = (model: ModelId, size: number) => Math.sqrt(REFERENCE_LENGTH / lengthFor(model, size));
+
+/** The placement fields every species derives from its model and ART.md height. */
+const sized = (model: ModelId, size: number) => ({
+	model,
+	size,
+	scale: scaleFor(model, size),
+	length: lengthFor(model, size),
+	eyeHeight: eyesFor(model, size)
+});
 
 /** Primate walk, diagonal sequence: LH 0, RF 0.2, RH 0.5, LF 0.7 (limb phase 0.7) [H67, CLS02, RS94]. */
 const DS_WALK: GaitParams = {
@@ -171,30 +221,21 @@ const LS_WALK: GaitParams = {
 
 const NO_STRIDE: StrideParams = { slowSpeed: 0, slowStride: 1, fastSpeed: 1, fastStride: 1 };
 
-const MICO_SIZE = 0.9;
-const MURIQUI_SIZE = 1.7;
-const BUGIO_SIZE = 1.4;
-const ONCA_SIZE = 3;
-const PREGUICA_SIZE = 1.4;
-const TUCANO_SIZE = 0.9;
-
 export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'mico-leao-dourado': {
 		id: 'mico-leao-dourado',
 		name: 'Mico-leão-dourado',
-		model: 'monkey',
-		size: MICO_SIZE,
-		scale: scaleFor('monkey', MICO_SIZE),
+		...sized('monkey', MICO_SIZE),
 		limbScale: { front: 1, hind: 1 },
-		tempo: tempoFor(MICO_SIZE),
+		tempo: tempoFor('monkey', MICO_SIZE),
 		// Quick vigilance scans: the snappy "pop" preset instead of "body".
 		lookPreset: SPRING.pop,
 		walk: DS_WALK,
 		run: BOUND,
-		runFrom: 2,
-		runTo: 3.5,
-		// A small primate: short quick strides walking, ~2.3 body lengths per bound at the player's speed.
-		stride: { slowSpeed: 0.5, slowStride: 0.4, fastSpeed: 10, fastStride: 2.2 },
+		runFrom: 1.8,
+		runTo: 3.2,
+		// A small primate: short quick strides walking, ~2.4 body lengths per bound at the player's speed.
+		stride: { slowSpeed: 0.46, slowStride: 0.33, fastSpeed: 9.1, fastStride: 1.83 },
 		lookYaw: 70 * DEG,
 		lookPitch: 30 * DEG,
 		bodyLook: 0.4,
@@ -212,12 +253,10 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	muriqui: {
 		id: 'muriqui',
 		name: 'Muriqui',
-		model: 'monkey',
-		size: MURIQUI_SIZE,
-		scale: scaleFor('monkey', MURIQUI_SIZE),
+		...sized('monkey', MURIQUI_SIZE),
 		// Long forelimbs for arm-swinging [E63]; the Cube Pets leg is a short block.
 		limbScale: { front: 2.4, hind: 1.4 },
-		tempo: tempoFor(MURIQUI_SIZE),
+		tempo: tempoFor('monkey', MURIQUI_SIZE),
 		lookPreset: SPRING.body,
 		walk: null,
 		run: null,
@@ -242,18 +281,16 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'bugio-ruivo': {
 		id: 'bugio-ruivo',
 		name: 'Bugio-ruivo',
-		model: 'monkey',
-		size: BUGIO_SIZE,
-		scale: scaleFor('monkey', BUGIO_SIZE),
+		...sized('monkey', BUGIO_SIZE),
 		limbScale: { front: 1, hind: 1 },
-		tempo: tempoFor(BUGIO_SIZE),
+		tempo: tempoFor('monkey', BUGIO_SIZE),
 		lookPreset: SPRING.body,
 		walk: { ...DS_WALK, duty: [0.75, 0.75, 0.75, 0.75], maxSwing: 32 * DEG, lift: 0.03, bob: 0.015 },
 		run: null,
 		runFrom: 0,
 		runTo: 1,
 		// Slow, deliberate quadrupedal walking along branches [C86].
-		stride: { slowSpeed: 0.3, slowStride: 0.5, fastSpeed: 1.4, fastStride: 0.75 },
+		stride: { slowSpeed: 0.27, slowStride: 0.42, fastSpeed: 1.28, fastStride: 0.62 },
 		lookYaw: 60 * DEG,
 		lookPitch: 25 * DEG,
 		bodyLook: 0.35,
@@ -273,18 +310,16 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'onca-pintada': {
 		id: 'onca-pintada',
 		name: 'Onça-pintada',
-		model: 'tiger',
-		size: ONCA_SIZE,
-		scale: scaleFor('tiger', ONCA_SIZE),
+		...sized('tiger', ONCA_SIZE),
 		limbScale: { front: 1, hind: 1 },
-		tempo: tempoFor(ONCA_SIZE),
+		tempo: tempoFor('tiger', ONCA_SIZE),
 		lookPreset: SPRING.body,
 		walk: LS_WALK,
 		run: null,
 		runFrom: 0,
 		runTo: 1,
-		// A calm walk near 0.7 body lengths per second with strides the short legs can cover.
-		stride: { slowSpeed: 1, slowStride: 1.1, fastSpeed: 4, fastStride: 1.8 },
+		// A calm walk near 0.9 body lengths per second with strides the short legs can cover.
+		stride: { slowSpeed: 0.82, slowStride: 0.74, fastSpeed: 3.3, fastStride: 1.22 },
 		lookYaw: 60 * DEG,
 		lookPitch: 20 * DEG,
 		bodyLook: 0.3,
@@ -303,14 +338,12 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'preguica-de-coleira': {
 		id: 'preguica-de-coleira',
 		name: 'Preguiça-de-coleira',
-		model: 'koala',
-		size: PREGUICA_SIZE,
-		scale: scaleFor('koala', PREGUICA_SIZE),
+		...sized('koala', PREGUICA_SIZE),
 		// Forelimbs much longer than hindlimbs [M25]; both longer than the Cube Pets block.
 		limbScale: { front: 1.8, hind: 1.4 },
 		// ×0.4 on top of the size rule: sloths move slowly, with little muscle and a very
 		// low metabolic rate (Gilmore, da Costa & Duarte 2001, Braz. J. Biol. 61:2).
-		tempo: tempoFor(PREGUICA_SIZE) * 0.4,
+		tempo: tempoFor('koala', PREGUICA_SIZE) * 0.4,
 		lookPreset: SPRING.body,
 		walk: null,
 		run: null,
@@ -336,12 +369,10 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'tucano-de-bico-verde': {
 		id: 'tucano-de-bico-verde',
 		name: 'Tucano-de-bico-verde',
-		model: 'parrot',
-		size: TUCANO_SIZE,
-		// Birds are measured bill tip to tail tip.
-		scale: scaleFor('parrot', TUCANO_SIZE, 'totalLength'),
+		// Feet to the top of the crown (the crest), like the other species' head tops.
+		...sized('parrot', TUCANO_SIZE),
 		limbScale: { front: 1, hind: 1 },
-		tempo: tempoFor(TUCANO_SIZE),
+		tempo: tempoFor('parrot', TUCANO_SIZE),
 		lookPreset: SPRING.body,
 		walk: null,
 		run: null,

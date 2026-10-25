@@ -15,6 +15,10 @@
  * The pendulum runs in fixed 1/240 s steps with its own accumulator, so its
  * trajectory and its swing period do not depend on the frame rate or on LOD
  * skipping; the render interpolates between the last two steps.
+ *
+ * Handholds: everything above is scale-free in arm lengths (the period is the
+ * real animal's), so the spacing a level can use follows the arm in world
+ * units; see MURIQUI_HOLDS.
  */
 import { SPRING } from '../../style/motion.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
@@ -23,6 +27,7 @@ import type { AnimalWorld } from './motion.ts';
 import { MODELS } from './rigs.ts';
 import type { Route } from './route.ts';
 import { clamp01, DEG, TAU, wrapAngle } from './scalar.ts';
+import { SPECIES } from './species.ts';
 
 export const MURIQUI_STATES = ['idle', 'move', 'rest', 'tail-hang'] as const;
 export type MuriquiState = (typeof MURIQUI_STATES)[number];
@@ -59,7 +64,35 @@ export const MURIQUI = {
 	glance: [1.2, 3],
 	glanceYaw: 50 * DEG,
 	/** Crossfade between the arm hang and the tail hang. */
-	hangFade: 0.6
+	hangFade: 0.6,
+	/**
+	 * Highest swing the pump raises its target to when a hold is short of reach
+	 * (horizontal), and the apexes it swings there before giving up on that hold
+	 * and turning back. Without a cap the target grew 15% per apex until the
+	 * body went over the top and spun around the hand.
+	 */
+	swingCap: 90 * DEG,
+	giveUp: 4
+} as const;
+
+/** Arm length in world units: the stretched Cube Pets front leg at the species scale. */
+const ARM = MODELS.monkey.legLength * SPECIES.muriqui.limbScale.front * SPECIES.muriqui.scale;
+
+/**
+ * Handhold spacing for level design, world units (holds below a branch, in a
+ * row). Measured with the behaviour's pendulum over spacings in arm lengths
+ * (p3-animals-height.md): 1.3–1.63 arms swing 43–60° and take 0.83–0.85 s per
+ * hold; 1.73 arms (a 68° swing) is the widest that still reads as arm-over-arm
+ * brachiation; past ~2.08 arms no swing below horizontal reaches, and the
+ * muriqui gives up and turns back. At the ART.md 1.7 u height the arm is
+ * 0.77 u: space holds 1.0–1.25 u apart, never more than 1.33 u.
+ */
+export const MURIQUI_HOLDS = {
+	arm: ARM,
+	min: 1.3 * ARM,
+	max: 1.63 * ARM,
+	reach: 1.73 * ARM,
+	limit: 2.08 * ARM
 } as const;
 
 /**
@@ -93,7 +126,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 	lastSwitchTime = 0;
 	/** Gripping hand: 1 left, -1 right. */
 	grip = 1;
-	/** Arm length in world units (the stretched Cube Pets front leg). */
+	/** Arm length in world units (the stretched Cube Pets front leg; MURIQUI_HOLDS.arm). */
 	readonly arm: number;
 	readonly tilt: DampedSpring;
 	#previousTheta = 0;
@@ -114,6 +147,9 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 	#probeTheta = 0;
 	#probeSnapForward = 0;
 	#probeSnapUp = 0;
+	/** Energy of a MURIQUI.swingCap swing (with the pump offset), and apexes spent there short of the hold. */
+	readonly #maxEnergy: number;
+	#misses = 0;
 
 	constructor(options: MuriquiOptions) {
 		super('muriqui', 'idle', options);
@@ -121,6 +157,8 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		this.anchor = Math.min(Math.max(options.start ?? 0, 0), this.anchors.count - 1);
 		this.arm = MODELS.monkey.legLength * this.species.limbScale.front * this.species.scale;
 		this.#reachLimit = this.arm * MURIQUI.reachSlack;
+		const w = TAU / MURIQUI.period;
+		this.#maxEnergy = w * w * (1 - Math.cos(MURIQUI.swingCap)) + PUMP_OFFSET;
 		const segments = Math.max(1, this.anchors.count - 1);
 		this.#amplitudes = new Float64Array(segments);
 		this.#energies = new Float64Array(segments);
@@ -274,9 +312,16 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		}
 		this.#probe();
 		if (this.#probeReach > this.#reachLimit) {
-			this.energyTarget *= 1.15;
+			// Swing higher, up to horizontal; a hold still out of reach there is given up.
+			if (this.energyTarget < this.#maxEnergy)
+				this.energyTarget = Math.min(this.#maxEnergy, this.energyTarget * 1.15);
+			else if (++this.#misses >= MURIQUI.giveUp) {
+				this.direction = -this.direction;
+				this.#stop();
+			}
 			return;
 		}
+		this.#misses = 0;
 		this.#snapForward = this.#probeSnapForward;
 		this.#snapUp = this.#probeSnapUp;
 		this.theta = this.#probeTheta;
@@ -346,6 +391,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 			return;
 		}
 		this.#handholdsLeft = handholds;
+		this.#misses = 0;
 		this.enter('move', 1e9);
 		this.#faceAlong();
 		this.#aimFor(next);

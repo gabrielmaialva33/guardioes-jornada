@@ -1,21 +1,23 @@
 /**
  * Logical joints of the Cube Pets bases (Kenney Cube Pets 2.0, CC0) and where
  * they live in game/src/assets/models/{monkey,tiger,koala,parrot}.glb
- * (assets-report.md §2, re-read from the GLBs on 25/10/2026).
+ * (assets-report.md §2; re-measured from the GLBs on 25/10/2026 after the head
+ * split of commit d165b4a, see ModelMeasures).
  *
  * Every base is a rigid node tree facing +z, left side +x, feet at y = 0:
  *   root
- *   ├─ body (0, 0.181, 0)            bottom centre of the body block; the head is part of this mesh
+ *   ├─ body (0, 0.181, 0)            bottom centre of the body block
+ *   │  ├─ head (0, 0.625, 0.3125)    neck pivot on the block's front face; the face, ears, muzzle or bill
  *   │  ├─ tail                        monkey (0, 0.538, -0.525), tiger (0, 0.638, -0.548), parrot (0, 0.537, -0.495)
  *   │  ├─ wing-left / wing-right      parrot only, (0.625 | -0.525, 0.463, 0.031), wings rest spread sideways
- *   │  └─ Group                       parrot only: the crest (not animated; a toucan has none, see the report)
+ *   │  └─ Group                       parrot only: the crest, recoloured as the toucan's black crown (not animated)
  *   └─ leg-front-left … leg-back-right   hips at (±0.25, 0.3, ±0.25); each leg is a 0.3 block hanging down
  * The parrot has only the two front legs, at z = 0. The koala has no tail.
  *
  * Both layouts share slots 0–3 (root, body, head, tail) and put the four limbs
- * in slots 4–7, so the animator handles them alike. `head` has no node in these
- * models: bindRig lists it in `missing` and the animator folds look-at into the
- * body. If the assets split a head node out of `body`, it is picked up by name.
+ * in slots 4–7, so the animator handles them alike. The head is picked up by
+ * name: an asset without one gets `head` in bindRig's `missing`, and the
+ * animator then folds the head's share of a look into the body.
  *
  * Rotation signs (same as the avatar's joints.ts): x < 0 swings a limb's tip
  * forward and pitches the body nose up; y > 0 turns left; z > 0 raises the left
@@ -54,10 +56,28 @@ export const LIMB_BR = 7;
 
 export type ModelId = 'monkey' | 'tiger' | 'koala' | 'parrot';
 
-/** Native measures of each base in its own units, from the GLB node translations and mesh bounds. */
+/**
+ * Native measures of each base in its own units, from the GLB node translations
+ * and mesh bounds. Measured on 25/10/2026 with three's GLTFLoader and
+ * MeshoptDecoder in Node over every vertex in root space, rest pose
+ * (~/.cache/agents/2026-10-25-trilha-secreta/p3-height/measure-glb.mjs).
+ */
 export interface ModelMeasures {
-	/** Feet to the top of the body mesh (the rig height pose offsets are fractions of). */
+	/**
+	 * Feet to the top of the head mesh: the rig height pose offsets are fractions
+	 * of. The head split left these unchanged (the head was the top of the old
+	 * one-piece body mesh).
+	 */
 	readonly height: number;
+	/**
+	 * Feet to the top of the silhouette in every posture, the reference species
+	 * are scaled by (ART.md §3: by height, never by length). It is the head top,
+	 * and the crest on the parrot. Tails are left out: the rest mesh curls them
+	 * up (monkey to 1.61, tiger to 1.71), but every posture swings them down.
+	 */
+	readonly top: number;
+	/** Height of the eyes (centre of the eye decals on the face). */
+	readonly eyeY: number;
 	/** Nose to rump along z, tail excluded. */
 	readonly bodyLength: number;
 	/** Nose to tail tip along z (birds are measured bill to tail). */
@@ -86,6 +106,8 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 	monkey: {
 		...PET_HIPS,
 		height: 1.594,
+		top: 1.594,
+		eyeY: 0.894,
 		bodyLength: 1.326,
 		totalLength: 1.781,
 		hipZFront: 0.25,
@@ -97,6 +119,8 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 	tiger: {
 		...PET_HIPS,
 		height: 1.543,
+		top: 1.543,
+		eyeY: 0.984,
 		bodyLength: 1.421,
 		totalLength: 1.899,
 		hipZFront: 0.25,
@@ -108,6 +132,8 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 	koala: {
 		...PET_HIPS,
 		height: 1.463,
+		top: 1.463,
+		eyeY: 0.904,
 		bodyLength: 1.389,
 		totalLength: 1.389,
 		hipZFront: 0.25,
@@ -118,7 +144,10 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 	},
 	parrot: {
 		...PET_HIPS,
+		// The head and body blocks top out at 1.431; the crest stands above them to 1.681.
 		height: 1.431,
+		top: 1.681,
+		eyeY: 0.894,
 		bodyLength: 1.433,
 		// Bill tip to tail tip: the tail mesh reaches z -0.6 behind its pivot at -0.495.
 		totalLength: 1.902,

@@ -95,6 +95,9 @@ export class AnimalMotion {
 	}
 }
 
+/** The player's eye height above its feet, u (the avatar is 3 u tall; its head spans 2.1–3 u). */
+export const PLAYER_EYES = 2.6;
+
 /**
  * What behaviours read from the scene each frame. Create once with
  * createAnimalWorld() and refill it; all animals share it.
