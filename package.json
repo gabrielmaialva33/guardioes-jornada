@@ -15,7 +15,7 @@
 		"dev": "vite dev",
 		"build": "vite build && cp deploy/_headers build/_headers",
 		"preview": "vite preview",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && svelte-check --tsconfig ./src/service-worker/tsconfig.json",
+		"check": "svelte-kit sync && svelte-check --config ./vite.config.ts --tsconfig ./tsconfig.json && svelte-check --config ./vite.config.ts --tsconfig ./src/service-worker/tsconfig.json",
 		"db:new": "supabase migration new",
 		"db:push": "supabase db push --linked",
 		"db:lint": "supabase db advisors --linked",
