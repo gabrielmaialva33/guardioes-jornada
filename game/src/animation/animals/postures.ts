@@ -154,8 +154,10 @@ const HANG_ARM: PostureDef<QuadrupedSlot> = {
 	key: {
 		root: { r: [-36, 0, 0] },
 		tail: { r: [-130, 0, 0] },
-		// Hind legs get their dangle from the animator; here only a slight spread.
-		...legs({ r: [-90, 0, 0] }, { r: [0, 0, 6] })
+		// Arms move up to the top of the body block, where a primate's shoulders are
+		// (Cube Pets legs sit under the body); the animator rotates them. Hind legs
+		// get their dangle from the animator; here only a slight spread.
+		...legs({ p: [0.32, 0.82, -0.3] }, { r: [0, 0, 6] })
 	}
 };
 

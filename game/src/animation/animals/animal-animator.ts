@@ -568,6 +568,14 @@ export class AnimalAnimator {
 		this.#gripAngle = gripAngle;
 		this.#releaseElapsed += this.#dt;
 
+		const gripSlot = side > 0 ? LIMB_FL : LIMB_FR;
+		const freeSlot = side > 0 ? LIMB_FR : LIMB_FL;
+		// The shoulder: the hip plus the posture's offset for this arm (model units).
+		const g = gripSlot * JOINT_STRIDE;
+		const shoulderX = side * model.hipX + key[g + 3] * height;
+		const shoulderY = model.hipY + key[g + 4] * height;
+		const shoulderZ = model.hipZFront + key[g + 5] * height;
+
 		// Free arm: from rest toward the next handhold as the swing nears its apex.
 		const shoulderUp = -arm * Math.cos(theta);
 		const shoulderForward = arm * Math.sin(theta);
@@ -585,8 +593,6 @@ export class AnimalAnimator {
 			free = this.#releaseFrom + wrapAngle(free - this.#releaseFrom) * s;
 		}
 
-		const gripSlot = side > 0 ? LIMB_FL : LIMB_FR;
-		const freeSlot = side > 0 ? LIMB_FR : LIMB_FL;
 		key[R] = alpha;
 		key[gripSlot * JOINT_STRIDE] = gripAngle;
 		key[freeSlot * JOINT_STRIDE] = free;
@@ -596,9 +602,9 @@ export class AnimalAnimator {
 		key[LIMB_BR * JOINT_STRIDE] += dangle;
 
 		const pivot = this.#dynamicPivot;
-		pivot[0] = (side * model.hipX) / height;
-		pivot[1] = (model.hipY - arm * Math.cos(gripAngle)) / height;
-		pivot[2] = (model.hipZFront - arm * Math.sin(gripAngle)) / height;
+		pivot[0] = shoulderX / height;
+		pivot[1] = (shoulderY - arm * Math.cos(gripAngle)) / height;
+		pivot[2] = (shoulderZ - arm * Math.sin(gripAngle)) / height;
 		const anchor = this.#dynamicAnchor;
 		anchor[0] = 0;
 		anchor[1] = (motion.snapUp || 0) / height;
