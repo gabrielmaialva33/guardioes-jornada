@@ -1644,6 +1644,11 @@ function main() {
 			writeGlb(step1, json, nextBin);
 			runGltfTransform(['prune', step1, step2]);
 			runGltfpack(step2, path.join(OUT_MODELS, 'avatar.glb'), ['-vpf']);
+			execFileSync(
+				'/usr/sbin/blender',
+				['-b', '--factory-startup', '-P', path.join(__dirname, 'blender', 'models', 'avatar_hair.py')],
+				{ stdio: 'inherit' }
+			);
 		}
 
 		// 3. Cube Pets: monkey, tiger, parrot, koala (keep node hierarchy + 5 core clips + 64x64 NEAREST palette)

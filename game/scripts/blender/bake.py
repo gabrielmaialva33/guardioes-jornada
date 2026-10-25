@@ -467,7 +467,7 @@ def main() -> None:
                 out_name = f"{stem}.glb" if stem.startswith("custom-") else f"custom-{stem}.glb"
                 out_target = MODELS_DIR / out_name
                 is_attachment = any(
-                    k in stem for k in ("bico-", "juba-", "rosetas-", "garras-")
+                    k in stem for k in ("bico-", "juba-", "rosetas-", "garras-", "silhueta")
                 )
                 with tempfile.TemporaryDirectory() as tmp:
                     recolored = Path(tmp) / out_name

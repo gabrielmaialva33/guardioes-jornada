@@ -38,6 +38,7 @@ SIGNS = {
     "proibido-cacar": ["PROIBIDO", "CAÇAR"],
     "nao-jogue-lixo": ["NÃO JOGUE", "LIXO"],
     "area-de-soltura": ["ÁREA DE", "SOLTURA", "DE FAUNA"],
+    "trilha-da-reserva": ["TRILHA DA", "RESERVA"],
 }
 
 

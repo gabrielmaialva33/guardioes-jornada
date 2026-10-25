@@ -200,11 +200,15 @@ function readAccessorElement(json, bin, accIdx, index) {
 
 function budgetForModel(fileName, nodeName) {
 	if (fileName === 'avatar.glb') return { kind: 'Avatar', limit: 72 };
+	if (fileName === 'avatar-hair.glb') return { kind: 'Avatar Hair Accessory', limit: 80 };
 	if (fileName === 'tiger.glb' || fileName.includes('onca') || nodeName.includes('onca')) {
 		return { kind: 'Animal (Onça)', limit: 1200 };
 	}
 	if (['monkey.glb', 'parrot.glb', 'koala.glb'].includes(fileName)) {
 		return { kind: 'Animal', limit: 1000 };
+	}
+	if (fileName.includes('silhueta') || nodeName.includes('silhueta')) {
+		return { kind: 'Landmark Silhouette', limit: 80 };
 	}
 	if (
 		nodeName.startsWith('tree') ||
@@ -228,8 +232,8 @@ function budgetForModel(fileName, nodeName) {
 	) {
 		return { kind: 'Animal', limit: 1000 };
 	}
-	if (nodeName.startsWith('cabin')) {
-		return { kind: 'Landmark (cabin piece)', limit: 1500 };
+	if (nodeName.startsWith('cabin') || fileName.includes('ponte-madeira')) {
+		return { kind: 'Landmark (cabin / bridge)', limit: 1500 };
 	}
 	return { kind: 'Prop / Obby / Flora', limit: 200 };
 }

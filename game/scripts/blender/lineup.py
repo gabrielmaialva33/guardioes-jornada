@@ -208,6 +208,84 @@ def configure_scene_and_art_light() -> None:
     ground.data.materials.append(gmat)
 
 
+def make_tinted_vc_lambert_material(name: str, tint_hex: str, vc_attr_name: str = "Color") -> bpy.types.Material:
+    mat = bpy.data.materials.new(name=name)
+    nt = mat.node_tree
+    nodes = nt.nodes
+    links = nt.links
+    nodes.clear()
+    diff = nodes.new("ShaderNodeBsdfDiffuse")
+    diff.inputs["Roughness"].default_value = 0.0
+    out = nodes.new("ShaderNodeOutputMaterial")
+    links.new(diff.outputs["BSDF"], out.inputs["Surface"])
+
+    rgb_node = nodes.new("ShaderNodeRGB")
+    rgb_node.outputs[0].default_value = hex_to_linear_rgba(tint_hex)
+    vc = nodes.new("ShaderNodeVertexColor")
+    vc.layer_name = vc_attr_name
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.blend_type = "MULTIPLY"
+    mix.inputs["Factor"].default_value = 1.0
+    links.new(rgb_node.outputs[0], mix.inputs[6])
+    links.new(vc.outputs["Color"], mix.inputs[7])
+    links.new(mix.outputs[2], diff.inputs["Color"])
+    return mat
+
+
+def attach_avatar_hair(
+    av_root: bpy.types.Object,
+    preset: dict,
+    regions_spec: dict,
+    tmp_dir: Path,
+    style_override: str | None = None,
+) -> None:
+    style_id = style_override if style_override is not None else preset.get("hairStyle", "curto")
+    styles = {s["id"]: s for s in regions_spec.get("hairStyles", [])}
+    style = styles.get(style_id)
+    if not style or not style.get("mesh"):
+        return
+    hair_glb = MODELS_DIR / "avatar-hair.glb"
+    if not hair_glb.exists():
+        return
+    target_mesh_name = style["mesh"]
+    tint_slot = style.get("tint", "hair")
+    tint_hex = preset.get(tint_slot, preset.get("hair", "#2a201c"))
+
+    head_obj = next(
+        (o for o in [av_root, *av_root.children_recursive] if o.name.split(".")[0] == "head"),
+        None,
+    )
+    if head_obj is None:
+        return
+
+    imported_roots = import_single_glb(hair_glb, tmp_dir)
+    for r in imported_roots:
+        base_name = r.name.split(".")[0]
+        if base_name == target_mesh_name:
+            queue = [r]
+            while queue:
+                cur = queue.pop(0)
+                queue.extend(cur.children)
+                if cur.type == "MESH" and cur.data is not None:
+                    for poly in cur.data.polygons:
+                        poly.use_smooth = False
+                    ca_name = cur.data.color_attributes[0].name if cur.data.color_attributes else "Color"
+                    mat = make_tinted_vc_lambert_material(f"Hair_{target_mesh_name}_{preset['id']}", tint_hex, ca_name)
+                    cur.data.materials.clear()
+                    cur.data.materials.append(mat)
+            r.parent = head_obj
+            r.matrix_parent_inverse.identity()
+            r.location = Vector((0.0, 0.0, 0.0))
+            r.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+            r.scale = Vector((1.0, 1.0, 1.0))
+        else:
+            for ch in list(r.children_recursive):
+                bpy.data.objects.remove(ch, do_unlink=True)
+            bpy.data.objects.remove(r, do_unlink=True)
+    bpy.context.view_layer.update()
+
+
 def make_flat_color_material(name: str, hex_color: str) -> bpy.types.Material:
     mat = bpy.data.materials.new(name=name)
     nt = mat.node_tree
@@ -445,7 +523,7 @@ def main() -> None:
 
         regions_spec = json.loads((SKINS_DIR / "avatar-regions.json").read_text(encoding="utf-8"))
 
-        # 2. Avatar (3.0 u tall, in 3 Roblox-classic flat-colour presets: Iara, Dandara, Bento)
+        # 2. Avatar (3.0 u tall, in 3 Roblox-classic flat-colour presets with hair accessories: Iara/Trilha, Ipê-amarelo, Riacho)
         for idx, preset_idx in enumerate((0, 2, 3)):
             preset = regions_spec["presets"][preset_idx]
             preset_png = composite_preset_png(regions_spec, preset, tmp_dir / f"av-{preset['id']}.png")
@@ -454,6 +532,7 @@ def main() -> None:
                 av = roots[0]
                 convert_to_flat_lambert(av, preset_png)
                 place_and_scale_root(av, (-10.2 + idx * 1.6, 5.5), target_height=3.0, yaw_deg=165.0)
+                attach_avatar_hair(av, preset, regions_spec, tmp_dir)
 
         # 3. 7 Atlantic Forest Animals at true ART.md §3 height scale (front row y = 5.5) + custom attachments
         animal_specs = [
@@ -565,7 +644,7 @@ def main() -> None:
             if obj:
                 place_and_scale_root(obj, xy, target_height=th, target_length=tl, yaw_deg=12.0)
 
-        # 6. Custom Atlantic Forest Trees (back row y = -8.5) & Custom Props/Signs/Bromeliads
+        # 6. Custom Atlantic Forest Trees (back row y = -8.5) & Story Map Custom Assets
         custom_tree_layout = [
             ("custom-xaxim.glb", (-13.5, -8.5)),
             ("custom-palmeira-jucara.glb", (-9.2, -8.5)),
@@ -574,6 +653,8 @@ def main() -> None:
             ("custom-ipe-rosa.glb", (5.4, -8.5)),
             ("custom-araucaria.glb", (11.0, -8.5)),
             ("custom-jequitiba-rosa.glb", (17.2, -8.5)),
+            ("custom-ipe-amarelo-silhueta.glb", (-18.5, -9.5)),
+            ("custom-jequitiba-silhueta.glb", (23.5, -9.5)),
         ]
         for c_name, xy in custom_tree_layout:
             if (MODELS_DIR / c_name).exists():
@@ -582,13 +663,33 @@ def main() -> None:
                     place_and_scale_root(cr, xy, uniform_scale=1.0, yaw_deg=15.0)
 
         custom_prop_layout = [
-            ("custom-bromelia.glb", (11.8, 5.5)),
-            ("custom-bromelia-centro-vermelho.glb", (13.2, 5.5)),
-            ("custom-arapuca.glb", (14.8, 5.5)),
-            ("custom-laco.glb", (16.4, 5.5)),
-            ("custom-placa-nao-jogue-lixo.glb", (-13.8, -2.8)),
-            ("custom-placa-proibido-cacar.glb", (-15.6, -2.8)),
-            ("custom-placa-area-de-soltura.glb", (-17.4, -2.8)),
+            # Front-right row (y = 5.5): bromeliads, traps, radio, juçara bunch, seedlings, trash, marker flag
+            ("custom-bromelia.glb", (11.2, 5.5)),
+            ("custom-bromelia-centro-vermelho.glb", (12.6, 5.5)),
+            ("custom-arapuca.glb", (14.1, 5.5)),
+            ("custom-laco.glb", (15.5, 5.5)),
+            ("custom-bandeira-marcacao.glb", (16.8, 5.5)),
+            ("custom-radio.glb", (17.8, 5.5)),
+            ("custom-cacho-jucara.glb", (18.8, 5.5)),
+            ("custom-muda-etapa-1.glb", (19.9, 5.5)),
+            ("custom-muda-etapa-2.glb", (20.9, 5.5)),
+            ("custom-muda-etapa-3.glb", (22.2, 5.5)),
+            # Signs on the left of understorey row (y = -2.8)
+            ("custom-placa-trilha-da-reserva.glb", (-13.8, -2.8)),
+            ("custom-placa-nao-jogue-lixo.glb", (-15.6, -2.8)),
+            ("custom-placa-proibido-cacar.glb", (-17.4, -2.8)),
+            ("custom-placa-area-de-soltura.glb", (-19.2, -2.8)),
+            # Viveiro nursery, cut stump, observation boulder, river stones & mirante ledges (y = -3.2)
+            ("custom-viveiro.glb", (-22.0, 1.5)),
+            ("custom-toco-cortado.glb", (10.5, -2.8)),
+            ("custom-pedra-observacao.glb", (13.8, -3.2)),
+            ("custom-pedra-rio-1.glb", (17.5, -2.8)),
+            ("custom-pedra-rio-2.glb", (20.4, -2.8)),
+            ("custom-pedra-rio-3.glb", (23.3, -2.8)),
+            ("custom-degrau-rocha.glb", (18.8, 1.8)),
+            ("custom-degrau-raiz.glb", (21.6, 1.8)),
+            ("custom-degrau-tronco.glb", (24.4, 1.8)),
+            ("custom-ponte-madeira.glb", (-22.5, -7.5)),
         ]
         for c_name, xy in custom_prop_layout:
             if (MODELS_DIR / c_name).exists():
@@ -598,11 +699,11 @@ def main() -> None:
 
         # Render 1: Master Lineup Overview (2560x1440)
         render_camera_view(
-            cam_pos=(1.5, 41.0, 15.5),
+            cam_pos=(1.5, 48.0, 17.5),
             look_at=(1.5, -2.5, 6.2),
             out_file=OUT_DIR / "lineup.png",
             res=(2560, 1440),
-            fov_deg=50.0,
+            fov_deg=54.0,
         )
 
         # Render 2: Close-up Sheet — Avatars (3 skins), 1 u Scale Bar, Grey Card & 7 Animals
@@ -632,7 +733,7 @@ def main() -> None:
             fov_deg=50.0,
         )
 
-        # Render 5: 18 Roblox-Classic Flat-Colour Avatar Presets Sheet (6x3 grid in lineup light)
+        # Render 5: 18 Roblox-Classic Flat-Colour Avatar Presets Sheet (6x3 grid in lineup light, with tinted hair meshes)
         configure_scene_and_art_light()
         for idx, preset in enumerate(regions_spec["presets"]):
             col = idx % 6
@@ -646,14 +747,50 @@ def main() -> None:
                     av,
                     (-6.25 + col * 2.5, 3.5 - row * 3.5),
                     target_height=3.0,
-                    yaw_deg=165.0,
+                    yaw_deg=160.0,
                 )
+                attach_avatar_hair(av, preset, regions_spec, tmp_dir)
         render_camera_view(
-            cam_pos=(0.0, 21.0, 7.5),
-            look_at=(0.0, 0.0, 1.4),
+            cam_pos=(0.0, 21.5, 7.8),
+            look_at=(0.0, 0.0, 1.5),
             out_file=OUT_DIR / "avatar-presets-18.png",
             res=(1920, 1080),
             fov_deg=46.0,
+        )
+
+        # Render 6: 7 Hair Styles Turntable Strip on One Avatar (7 columns = styles, 3 rows = front-left / side / back-right)
+        configure_scene_and_art_light()
+        turntable_preset = {
+            "id": "turntable",
+            "skin": "#c98c63",
+            "hair": "#3b281e",
+            "shirt": "#3e9ccf",
+            "pants": "#5e4330",
+            "shoes": "#4f5c55",
+            "face": "smile",
+        }
+        turntable_png = composite_preset_png(regions_spec, turntable_preset, tmp_dir / "turntable-skin.png")
+        style_ids = [s["id"] for s in regions_spec.get("hairStyles", [])]
+        yaws = (155.0, 90.0, 25.0)
+        for col, st_id in enumerate(style_ids):
+            for row, yaw in enumerate(yaws):
+                roots = import_single_glb(MODELS_DIR / "avatar.glb", tmp_dir)
+                if roots:
+                    av = roots[0]
+                    convert_to_flat_lambert(av, turntable_png)
+                    place_and_scale_root(
+                        av,
+                        (-7.2 + col * 2.4, 3.4 - row * 3.4),
+                        target_height=3.0,
+                        yaw_deg=yaw,
+                    )
+                    attach_avatar_hair(av, turntable_preset, regions_spec, tmp_dir, style_override=st_id)
+        render_camera_view(
+            cam_pos=(0.0, 21.5, 7.8),
+            look_at=(0.0, 0.0, 1.5),
+            out_file=OUT_DIR / "avatar-hair-turntable.png",
+            res=(1920, 1080),
+            fov_deg=48.0,
         )
 
     print(f"[lineup.py] Rendered master lineup and 3 category sheets to {OUT_DIR}")
