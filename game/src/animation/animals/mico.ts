@@ -226,18 +226,18 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		const motion = this.motion;
 		const dx = motion.x - world.playerX;
 		const dz = motion.z - world.playerZ;
-		const distance = Math.hypot(dx, dz);
+		const distance = Math.sqrt(dx * dx + dz * dz);
 		const nx = distance > 1e-6 ? dx / distance : Math.sin(motion.yaw + Math.PI);
 		const nz = distance > 1e-6 ? dz / distance : Math.cos(motion.yaw + Math.PI);
 		const error = distance - MICO.followDistance;
-		const playerSpeed = Math.hypot(this.#playerVx, this.#playerVz);
+		const playerSpeed = Math.sqrt(this.#playerVx * this.#playerVx + this.#playerVz * this.#playerVz);
 
 		if (this.settled) {
 			if (Math.abs(error) > MICO.bandOut || playerSpeed > MICO.playerMoving) this.settled = false;
 		} else if (
 			Math.abs(error) < MICO.bandIn &&
 			playerSpeed < MICO.playerStill &&
-			Math.hypot(this.vx, this.vz) < 0.3
+			Math.sqrt(this.vx * this.vx + this.vz * this.vz) < 0.3
 		) {
 			this.settled = true;
 		}
@@ -253,7 +253,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 			const radial = error > 0 ? -pull : pull;
 			tvx = this.#playerVx + radial * nx;
 			tvz = this.#playerVz + radial * nz;
-			const target = Math.hypot(tvx, tvz);
+			const target = Math.sqrt(tvx * tvx + tvz * tvz);
 			if (target > MICO.maxSpeed) {
 				tvx *= MICO.maxSpeed / target;
 				tvz *= MICO.maxSpeed / target;
@@ -264,7 +264,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		this.#accelerate();
 
 		// Face the travel direction while moving; when settled, face the player if far off.
-		const speed = Math.hypot(this.vx, this.vz);
+		const speed = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
 		if (speed > 0.3) this.targetYaw = Math.atan2(this.vx, this.vz);
 		else if (this.settled) {
 			const toPlayer = Math.atan2(-nx, -nz);
@@ -299,13 +299,13 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		const h = this.h;
 		let dvx = this.#tvx - this.vx;
 		let dvz = this.#tvz - this.vz;
-		const dv = Math.hypot(dvx, dvz);
+		const dv = Math.sqrt(dvx * dvx + dvz * dvz);
 		const most = MICO.accel * h;
 		if (dv > most) {
 			dvx *= most / dv;
 			dvz *= most / dv;
 		}
-		const before = Math.hypot(this.vx, this.vz);
+		const before = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
 		const vx = this.vx + dvx;
 		const vz = this.vz + dvz;
 		// Trapezoid: exact for the constant acceleration of this substep.
@@ -315,8 +315,8 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		this.vz = vz;
 		motion.x += mx;
 		motion.z += mz;
-		const speed = Math.hypot(vx, vz);
-		motion.distance += Math.hypot(mx, mz);
+		const speed = Math.sqrt(vx * vx + vz * vz);
+		motion.distance += Math.sqrt(mx * mx + mz * mz);
 		motion.accel = (speed - before) / h;
 		this.#speed = speed;
 	}
@@ -370,7 +370,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 			const dz = world.playerZ - motion.z;
 			this.#lookYaw = wrapAngle(Math.atan2(dx, dz) - motion.yaw);
 			const rise = world.playerY + MICO.playerEyes - (motion.y + this.species.size * 0.8);
-			this.#lookPitch = clamp(Math.atan2(rise, Math.hypot(dx, dz)), -0.6, 0.6);
+			this.#lookPitch = clamp(Math.atan2(rise, Math.sqrt(dx * dx + dz * dz)), -0.6, 0.6);
 		}
 	}
 

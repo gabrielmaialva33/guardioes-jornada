@@ -47,8 +47,8 @@ import {
 	ROOT,
 	TAIL
 } from './rigs.ts';
-import { clamp, clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
-import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
+import { clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
+import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams, } from './species.ts';
 
 const STAND = POSTURE_INDEX.stand;
 const SIT = POSTURE_INDEX.sit;
@@ -303,17 +303,25 @@ export class AnimalAnimator {
 		const fade = this.reducedMotion ? REDUCED_MOTION_DURATION : DURATION.state;
 		const step = this.#dt / fade;
 		this.gaitWeight = moving ? Math.min(1, this.gaitWeight + step) : Math.max(0, this.gaitWeight - step);
-		this.runWeight =
-			species.run === null ? 0 : smoothstep((speed - species.runFrom) / (species.runTo - species.runFrom));
-
-		const stride = strideAt(species, speed);
+		// strideAt and smoothstep, written out: helpers that take and return numbers
+		// box them whenever V8 does not inline the call (p3-animation.md).
+		let run = species.run === null ? 0 : (speed - species.runFrom) / (species.runTo - species.runFrom);
+		run = Math.min(1, Math.max(0, run));
+		this.runWeight = run * run * (3 - 2 * run);
+		const strides = species.stride;
+		const share = Math.min(
+			1,
+			Math.max(0, (speed - strides.slowSpeed) / (strides.fastSpeed - strides.slowSpeed))
+		);
+		const stride = strides.slowStride + (strides.fastStride - strides.slowStride) * share;
 		this.stride = stride;
 		this.cadence = speed / stride;
 		if (distance === 0) return;
 		const before = this.phase;
 		const cycles = motion.cycles;
 		const advance = cycles >= 0 && Number.isFinite(cycles) ? cycles : distance / stride;
-		this.phase = wrap01(before + advance);
+		const next = before + advance;
+		this.phase = next - Math.floor(next);
 		if (this.gaitWeight < 0.5) return;
 		// Footfalls crossed during this update (the last one wins), for dust and sounds.
 		const gait = this.runWeight > 0.5 && species.run !== null ? species.run : species.walk;
@@ -322,8 +330,9 @@ export class AnimalAnimator {
 			return;
 		}
 		for (let leg = 0; leg < 4; leg++) {
-			const td = gait.touchdown[leg];
-			if (wrap01(before - td) > wrap01(before + advance - td)) this.footfall = LIMB_FL + leg;
+			const a = before - gait.touchdown[leg];
+			const b = a + advance;
+			if (a - Math.floor(a) > b - Math.floor(b)) this.footfall = LIMB_FL + leg;
 		}
 	}
 
@@ -353,7 +362,8 @@ export class AnimalAnimator {
 			// Swing that covers the stance sweep without sliding, capped (rigid stubby legs).
 			const sweep = (strideModel * duty) / (2 * length);
 			const amplitude = Math.min(gait.maxSwing, Math.asin(Math.min(1, sweep)));
-			const u = wrap01(phase - gait.touchdown[leg]);
+			const shifted = phase - gait.touchdown[leg];
+			const u = shifted - Math.floor(shifted);
 			let forward: number;
 			let lift: number;
 			if (u < duty) {
@@ -374,7 +384,7 @@ export class AnimalAnimator {
 		if (gait.arc > 0 && phase >= gait.arcStart && phase < gait.arcEnd) {
 			const t = (phase - gait.arcStart) / (gait.arcEnd - gait.arcStart);
 			// The arc grows with speed: a slow bound barely leaves the branch.
-			const speedShare = clamp01(this.cadence * this.stride * 0.1);
+			const speedShare = Math.min(1, Math.max(0, this.cadence * this.stride * 0.1));
 			this.#arc += ((gait.arc * Math.sin(Math.PI * t)) / height) * weight * speedShare * decorative;
 		}
 	}
@@ -399,13 +409,14 @@ export class AnimalAnimator {
 		const sp = Math.sin(pitch);
 		for (let leg = 0; leg < 4; leg++) {
 			const length = model.legLength * (leg < 2 ? this.species.limbScale.front : this.species.limbScale.hind);
-			const reach = clamp(Number.isFinite(reaches[leg]) ? reaches[leg] : 0, -1.5 * length, 1.5 * length);
-			const lift = clamp01(lifts[leg]);
+			const raw = Number.isFinite(reaches[leg]) ? reaches[leg] : 0;
+			const reach = Math.min(1.5 * length, Math.max(-1.5 * length, raw));
+			const lift = Math.min(1, Math.max(0, lifts[leg] || 0));
 			const at = (LIMB_FL + leg) * JOINT_STRIDE;
 			// The rest leg points along −y; the pitched branch-ward direction is p away from it.
 			const vy = -length * cp - reach * sp;
 			const vz = -length * sp + reach * cp;
-			const span = Math.hypot(vy, vz);
+			const span = Math.sqrt(vy * vy + vz * vz);
 			const angle = Math.atan2(-vz, -vy);
 			const slide = 1 - length / span;
 			const side = leg % 2 === 0 ? 1 : -1;
@@ -461,15 +472,24 @@ export class AnimalAnimator {
 	#lookLayer(motion: AnimalMotion, out: Float64Array) {
 		const species = this.species;
 		const share = this.reducedMotion ? 0.5 : 1;
-		const yawTarget = clamp(wrapAngle(motion.lookYaw || 0), -species.lookYaw, species.lookYaw) * share;
-		const pitchTarget = clamp(motion.lookPitch || 0, -species.lookPitch, species.lookPitch) * share;
-		const yaw = this.lookYaw.step(yawTarget, this.#dt);
-		const pitch = this.lookPitch.step(pitchTarget, this.#dt);
+		let look = Number.isFinite(motion.lookYaw) ? motion.lookYaw : 0;
+		look -= TAU * Math.round(look / TAU);
+		const tilt = Number.isFinite(motion.lookPitch) ? motion.lookPitch : 0;
+		const yawSpring = this.lookYaw;
+		yawSpring.target = Math.min(species.lookYaw, Math.max(-species.lookYaw, look)) * share;
+		yawSpring.dt = this.#dt;
+		yawSpring.update();
+		const pitchSpring = this.lookPitch;
+		pitchSpring.target = Math.min(species.lookPitch, Math.max(-species.lookPitch, tilt)) * share;
+		pitchSpring.dt = this.#dt;
+		pitchSpring.update();
+		const yaw = yawSpring.value;
+		const pitch = pitchSpring.value;
 		const at = this.hasHead ? H : B;
 		const gain = this.hasHead ? 1 : species.bodyLook;
 		// Hanging by the tail (a child of the body), turning the body would pull the
 		// tail tip off the branch: turn the whole animal about its pivot instead.
-		const anchored = this.hasHead ? 0 : this.#tailAnchored();
+		const anchored = this.hasHead ? 0 : Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
 		const free = 1 - anchored;
 		out[at + 1] += yaw * gain * free;
 		out[at] -= pitch * gain * free;
@@ -486,18 +506,23 @@ export class AnimalAnimator {
 			const sway =
 				species.tailSway * idle * Math.sin((TAU * this.time) / Math.max(0.1, species.tailSwayPeriod));
 			// The tail lags the body: it swings out of a turn and drops when the body accelerates.
-			yawTarget = clamp(-(motion.turnRate || 0) * species.tailTurn, -0.5, 0.5) + sway;
-			pitchTarget = clamp(-(motion.accel || 0) * species.tailAccel, -0.4, 0.4);
+			const turn = -(motion.turnRate || 0) * species.tailTurn;
+			const accel = -(motion.accel || 0) * species.tailAccel;
+			yawTarget = Math.min(0.5, Math.max(-0.5, turn)) + sway;
+			pitchTarget = Math.min(0.4, Math.max(-0.4, accel));
 		}
 		// A tail holding the branch does not sway.
-		const free = 1 - this.#tailAnchored();
-		out[T + 1] += this.tailYaw.step(yawTarget * free, this.#dt) * free;
-		out[T] += this.tailPitch.step(pitchTarget * free, this.#dt) * free;
-	}
-
-	/** Share of the pose hanging from the tail (muriqui tail hang, bugio feeding hang). */
-	#tailAnchored(): number {
-		return Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
+		const free = 1 - Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
+		const yaw = this.tailYaw;
+		yaw.target = yawTarget * free;
+		yaw.dt = this.#dt;
+		yaw.update();
+		const pitch = this.tailPitch;
+		pitch.target = pitchTarget * free;
+		pitch.dt = this.#dt;
+		pitch.update();
+		out[T + 1] += yaw.value * free;
+		out[T] += pitch.value * free;
 	}
 
 	#leanLayer(motion: AnimalMotion, out: Float64Array) {
@@ -506,21 +531,26 @@ export class AnimalAnimator {
 		let lean = 0;
 		let bank = 0;
 		if (!this.reducedMotion) {
-			lean = clamp((motion.accel || 0) * layers.leanGain, -layers.maxLean, layers.maxLean) * ground;
-			bank =
-				clamp(
-					(motion.turnRate || 0) * (motion.speed || 0) * layers.bankGain,
-					-layers.maxBank,
-					layers.maxBank
-				) * ground;
+			const accel = (motion.accel || 0) * layers.leanGain;
+			const turn = (motion.turnRate || 0) * (motion.speed || 0) * layers.bankGain;
+			lean = Math.min(layers.maxLean, Math.max(-layers.maxLean, accel)) * ground;
+			bank = Math.min(layers.maxBank, Math.max(-layers.maxBank, turn)) * ground;
 		}
-		out[B] += this.lean.step(lean, this.#dt);
-		out[B + 2] += this.bank.step(bank, this.#dt);
+		const leanSpring = this.lean;
+		leanSpring.target = lean;
+		leanSpring.dt = this.#dt;
+		leanSpring.update();
+		const bankSpring = this.bank;
+		bankSpring.target = bank;
+		bankSpring.dt = this.#dt;
+		bankSpring.update();
+		out[B] += leanSpring.value;
+		out[B + 2] += bankSpring.value;
 		// Flight attitude: the path pitch is essential (the bird points where it goes), the bank decorative.
 		const flight = this.weights[FLY];
 		if (flight > 0) {
-			out[R] += clamp(motion.pitch || 0, -0.8, 0.8) * flight;
-			if (!this.reducedMotion) out[R + 2] += clamp(motion.bank || 0, -0.6, 0.6) * flight;
+			out[R] += Math.min(0.8, Math.max(-0.8, motion.pitch || 0)) * flight;
+			if (!this.reducedMotion) out[R + 2] += Math.min(0.6, Math.max(-0.6, motion.bank || 0)) * flight;
 		}
 	}
 
@@ -560,7 +590,11 @@ export class AnimalAnimator {
 		const limit = LIMITS.squash;
 		if (motion.landing > 0) this.squash.kick(-limit * 0.8 * clamp01(motion.landing));
 		if (motion.takeoff > 0) this.squash.kick(limit * 0.6 * clamp01(motion.takeoff));
-		const value = clamp(this.squash.step(0, this.#dt), -limit, limit);
+		const squash = this.squash;
+		squash.target = 0;
+		squash.dt = this.#dt;
+		squash.update();
+		const value = Math.min(limit, Math.max(-limit, squash.value));
 		pose.scaleY = 1 + value;
 		pose.scaleXZ = 1 / Math.sqrt(1 + value);
 	}

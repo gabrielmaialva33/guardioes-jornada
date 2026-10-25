@@ -227,7 +227,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		const dx = p[q] - motion.x;
 		const dy = p[q + 1] - motion.y;
 		const dz = p[q + 2] - motion.z;
-		const span = Math.hypot(dx, dy, dz);
+		const span = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		curve[0] = motion.x;
 		curve[1] = motion.y;
 		curve[2] = motion.z;
@@ -284,7 +284,7 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		motion.z = a * c[2] + b * c[5] + d * c[8];
 		const mx = motion.x - px;
 		const mz = motion.z - pz;
-		this.#vh = Math.hypot(mx, mz) / h;
+		this.#vh = Math.sqrt(mx * mx + mz * mz) / h;
 		this.#vy = (motion.y - py) / h;
 		if (mx !== 0 || mz !== 0) this.targetYaw = Math.atan2(mx, mz);
 		this.turn();

@@ -240,7 +240,7 @@ export class Flock {
 				else if (k === 1) fy += f;
 				else fz += f;
 			}
-			const f = Math.hypot(fx, fy, fz);
+			const f = Math.sqrt(fx * fx + fy * fy + fz * fz);
 			const limit = f > p.maxAccel ? p.maxAccel / f : 1;
 			acc[ia] = fx * limit;
 			acc[ia + 1] = fy * limit;
@@ -262,11 +262,11 @@ export class Flock {
 			let vy = vel[ia + 1] + acc[ia + 1] * h;
 			let vz = vel[ia + 2] + acc[ia + 2] * h;
 			// Limit the climb angle, then the speed.
-			const flat = Math.hypot(vx, vz);
+			const flat = Math.sqrt(vx * vx + vz * vz);
 			const climb = maxClimb * Math.max(flat, p.minSpeed);
 			if (vy > climb) vy = climb;
 			else if (vy < -climb) vy = -climb;
-			let speed = Math.hypot(vx, vy, vz);
+			let speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
 			if (!(speed > 1e-6)) {
 				vx = p.minSpeed;
 				vy = 0;
@@ -333,7 +333,7 @@ export class Flock {
 			let fx = vel[ia];
 			let fy = vel[ia + 1];
 			let fz = vel[ia + 2];
-			const speed = Math.hypot(fx, fy, fz);
+			const speed = Math.sqrt(fx * fx + fy * fy + fz * fz);
 			if (speed > 1e-6) {
 				fx /= speed;
 				fy /= speed;
@@ -346,7 +346,7 @@ export class Flock {
 			// right = normalize(up × forward), up' = forward × right.
 			let rx = fz;
 			let rz = -fx;
-			const r = Math.hypot(rx, rz);
+			const r = Math.sqrt(rx * rx + rz * rz);
 			if (r > 1e-6) {
 				rx /= r;
 				rz /= r;

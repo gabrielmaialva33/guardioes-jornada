@@ -81,7 +81,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		const motion = this.motion;
 		const dx = this.#playerX - motion.x;
 		const dz = this.#playerZ - motion.z;
-		const distance = Math.hypot(dx, dz);
+		const distance = Math.sqrt(dx * dx + dz * dz);
 		this.#playerDistance = distance;
 
 		// Personal space: after noticing, get up and move off, never toward the player.

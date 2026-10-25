@@ -193,7 +193,9 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 			const ay = point[1];
 			const az = point[2];
 			this.#read(next, point);
-			const forward = Math.hypot(point[0] - ax, point[2] - az);
+			const fx = point[0] - ax;
+			const fz = point[2] - az;
+			const forward = Math.sqrt(fx * fx + fz * fz);
 			motion.reachForward = forward / scale;
 			motion.reachUp = (point[1] - ay) / scale;
 			if (this.omega > 0)
@@ -234,7 +236,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		const nz = point[2];
 		let ex = nx - ax;
 		let ez = nz - az;
-		const span = Math.hypot(ex, ez) || 1;
+		const span = Math.sqrt(ex * ex + ez * ez) || 1;
 		ex /= span;
 		ez /= span;
 		const arm = this.arm;
@@ -250,14 +252,14 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 			this.#read(after, point);
 			const gx = point[0] - nx;
 			const gz = point[2] - nz;
-			const g = Math.hypot(gx, gz);
+			const g = Math.sqrt(gx * gx + gz * gz);
 			if (g > 1e-6) {
 				fx = gx / g;
 				fz = gz / g;
 			}
 		}
 		const along = sx * fx + sz * fz;
-		const reach = Math.hypot(along, sy);
+		const reach = Math.sqrt(along * along + sy * sy);
 		if (reach > arm * MURIQUI.reachSlack) {
 			this.energyTarget *= 1.15;
 			return;
