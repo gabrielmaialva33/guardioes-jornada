@@ -131,9 +131,11 @@ export function getEngine(): Promise<Engine> {
 /** Hand the GPU to an independent renderer, including any in-flight diorama build. */
 export async function acquireGameGpu(): Promise<() => void> {
 	while (releaseGame) await gameFinished;
+	let resolveGame: () => void = () => undefined;
 	gameFinished = new Promise((resolve) => {
-		releaseGame = resolve;
+		resolveGame = resolve;
 	});
+	releaseGame = resolveGame;
 	clearTimeout(disposeTimer);
 	const previous = engine;
 	engine = null;
@@ -144,7 +146,7 @@ export async function acquireGameGpu(): Promise<() => void> {
 			() => {}
 		);
 	} catch (error) {
-		releaseGame?.();
+		resolveGame();
 		releaseGame = undefined;
 		throw error;
 	}
@@ -152,7 +154,7 @@ export async function acquireGameGpu(): Promise<() => void> {
 	return () => {
 		if (released) return;
 		released = true;
-		releaseGame?.();
+		resolveGame();
 		releaseGame = undefined;
 	};
 }
