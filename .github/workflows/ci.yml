@@ -1,41 +1,113 @@
-name: CI
+name: CI/CD
+
+# Public repository: actions are pinned to commit SHAs, the default token is
+# read-only, and the deploy job only runs for pushes to main inside the
+# `production` environment (pull requests, including forks, never see secrets).
 
 on:
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Public values only; the build reads them through src/env.ts.
+      # Public values only (publishable key and project URL), read through src/env.ts.
       - name: Write public env
+        env:
+          PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          echo "PUBLIC_SUPABASE_URL=${{ vars.PUBLIC_SUPABASE_URL }}" >> .env
-          echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" >> .env
+          printf 'PUBLIC_SUPABASE_URL=%s\n' "$PUBLIC_SUPABASE_URL" >> .env
+          printf 'PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\n' "$PUBLIC_SUPABASE_PUBLISHABLE_KEY" >> .env
       - run: pnpm lint
       - run: pnpm check
       - run: pnpm test
       - run: pnpm exec playwright install --with-deps chromium
+      # Builds the site and runs the journey, airplane-mode and crash tests on it.
       - run: pnpm test:e2e
         env:
           CI: true
           PLAYWRIGHT_CHANNEL: chromium
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-traces
           path: test-results/
+          retention-days: 7
+      - name: Package the tested build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: rm -f build/_headers
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: site
+          path: build/
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://xn--guardioesmataatlntica-c1b.site
+    # Never cancel a deploy halfway; queue the next one instead.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: build/
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      # The key is restricted on the server to "upload a release" and "activate a
+      # release" (deploy/guardioes-deploy.sh); it cannot open a shell.
+      - name: Upload and activate the release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          release="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::7}"
+          ssh_cmd="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          rsync -az --delete -e "$ssh_cmd" build/ "$DEPLOY_HOST:$release/"
+          $ssh_cmd "$DEPLOY_HOST" "activate $release"
+          echo "Released $release" >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke test
+        run: |
+          site=https://xn--guardioesmataatlntica-c1b.site
+          for path in / /journey/ /service-worker.js /manifest.webmanifest; do
+            curl -fsS -o /dev/null --retry 5 --retry-delay 3 --retry-all-errors "$site$path"
+            echo "ok $path"
+          done
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
