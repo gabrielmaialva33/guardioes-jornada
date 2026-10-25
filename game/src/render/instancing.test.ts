@@ -18,7 +18,13 @@ import {
 import { describe, expect, it } from 'vitest';
 import { BlockGrid } from './blocks.ts';
 import { lodRank } from './fog-lod.ts';
-import { createPoolsFromScene, InstancePool, mergePieces, placedMatrix } from './instancing.ts';
+import {
+	addPlacements,
+	createPoolsFromScene,
+	InstancePool,
+	mergePieces,
+	placedMatrix
+} from './instancing.ts';
 
 /** Every block visible and near, without a camera. */
 function showAll(grid: BlockGrid) {
@@ -346,5 +352,39 @@ describe('mergePieces', () => {
 		expect(merged.index?.count).toBe(6);
 		expect(merged.getAttribute('position').count).toBe(4);
 		expect(merged.getAttribute('color').getX(0)).toBe(0.5);
+	});
+});
+
+describe('addPlacements', () => {
+	it('feeds generator arrays to pools with base scale and colour per kind', () => {
+		const grid = new BlockGrid({ minX: 0, minZ: 0, columns: 4, rows: 4 });
+		const oak = boxPool(4, grid, true);
+		const placements = {
+			kinds: ['jucara', 'ipe-amarelo', 'xaxim'] as const,
+			count: 3,
+			kind: Uint8Array.from([0, 1, 2]),
+			x: Float32Array.from([10, 20, 30]),
+			y: Float32Array.from([0, 1, 2]),
+			z: Float32Array.from([10, 20, 30]),
+			scale: Float32Array.from([1, 1.5, 1]),
+			yawC: Float32Array.from([1, 0, 1]),
+			yawS: Float32Array.from([0, 1, 0])
+		};
+		const yellow = new Color(1, 0.8, 0.2);
+		const ids = addPlacements(placements, (kind) => (kind === 'xaxim' ? undefined : oak), {
+			scaleFor: () => 10,
+			colorFor: (kind) => (kind === 'ipe-amarelo' ? yellow : null)
+		});
+		expect(Array.from(ids)).toEqual([0, 1, -1]);
+		const m = oak.getMatrix(1, new Matrix4());
+		expect(new Vector3().setFromMatrixScale(m).y).toBeCloseTo(15);
+		showAll(grid);
+		oak.sync();
+		const index = oak.idAt(0) === 1 ? 0 : 1;
+		expect(Array.from(oak.meshes[0].instanceColor?.array.slice(index * 3, index * 3 + 3) ?? [])).toEqual([
+			1,
+			expect.closeTo(0.8),
+			expect.closeTo(0.2)
+		]);
 	});
 });

@@ -42,6 +42,7 @@ export {
 	NIGHT_FOG_END
 } from './fog-lod.ts';
 export {
+	type AddPlacementsOptions,
 	addPlacements,
 	createPoolsFromScene,
 	extractParts,

@@ -910,17 +910,29 @@ export interface PlacementArrays<K extends string = string> {
 	readonly yawS: ArrayLike<number>;
 }
 
+export interface AddPlacementsOptions<K extends string> {
+	/** Per-instance colour for a kind (null for none); the pool needs `colors: true`. */
+	colorFor?: (kind: K) => Color | null;
+	/**
+	 * Base scale of a kind, multiplied with the placement's own scale. Kenney kit
+	 * trees are about 1.2 u tall and ART.md §3 wants 6–18 u, so trees need ~5–15.
+	 */
+	scaleFor?: (kind: K) => number;
+}
+
 /**
  * Adds generator placements to pools. `poolFor` maps a kind to its pool (or
- * undefined to skip it) and may tint it with `colorFor`. Returns the id of
- * each placement (-1 when skipped or its pool was full), so the game can
- * remove or move one later (a tree cut, a seedling grown).
+ * undefined to skip it). Returns the id of each placement (-1 when skipped or
+ * its pool was full), so the game can remove or move one later (a tree cut, a
+ * seedling grown). Placements arrive sorted by block, so each block's run gets
+ * consecutive ids and LOD thins it evenly.
  */
 export function addPlacements<K extends string>(
 	placements: PlacementArrays<K>,
 	poolFor: (kind: K) => InstancePool | undefined,
-	colorFor?: (kind: K) => Color | null
+	options: AddPlacementsOptions<K> = {}
 ): Int32Array {
+	const { colorFor, scaleFor } = options;
 	const ids = new Int32Array(placements.count).fill(-1);
 	for (let i = 0; i < placements.count; i++) {
 		const kind = placements.kinds[placements.kind[i]];
@@ -932,7 +944,7 @@ export function addPlacements<K extends string>(
 			placements.z[i],
 			placements.yawC[i],
 			placements.yawS[i],
-			placements.scale[i]
+			placements.scale[i] * (scaleFor ? scaleFor(kind) : 1)
 		);
 		ids[i] = id;
 		const color = id >= 0 && colorFor ? colorFor(kind) : null;
