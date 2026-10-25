@@ -1,4 +1,5 @@
 export interface GameDebug {
+	worldKind: string;
 	fps: number;
 	frameP95Ms: number;
 	drawCalls: number;
@@ -6,6 +7,7 @@ export interface GameDebug {
 	dpr: number;
 	quality: string;
 	avatarStyle: string;
+	avatarHair: string;
 	avatarSkin: string;
 	avatarTextureVersion: number;
 	avatarAtlasSource: string;
@@ -31,6 +33,9 @@ export interface GameDebug {
 	animation: string;
 }
 export interface HudState {
+	target?: string;
+	distance?: number;
+	splash?: boolean;
 	notice: string;
 	shiftLock: boolean;
 	ready: boolean;

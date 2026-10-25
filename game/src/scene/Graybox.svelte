@@ -12,10 +12,9 @@
 	import { placeObject } from '../engine/character.ts';
 	import { CAMERA_FOV, CAMERA_NEAR } from '../engine/constants.ts';
 	import type { PlayerController } from '../engine/controller.ts';
-	import type { Graybox } from '../engine/graybox.ts';
+	import type { SceneEnvironment } from './environment.ts';
 	import { attachInput, type InputModel } from '../engine/input.ts';
 	import {
-		BlockGrid,
 		DprGovernor,
 		FrameBudget,
 		QUALITY,
@@ -29,13 +28,10 @@
 		pickQuality,
 		readCapabilities,
 		watchContextLoss,
-		type PlacementArrays,
 		type Quality
 	} from '../render/index.ts';
 	import { loadAvatar, type AvatarInstance } from './avatar.ts';
-	import { loadForest } from './forest.ts';
-	import type { ForestKind } from './forest-layout.ts';
-	import { createGrayboxVisual } from './graybox-visual.ts';
+
 	import { horizontalFov, verticalFov } from './projection.ts';
 	import type { GameDebug, HudState } from './types.ts';
 
@@ -43,8 +39,7 @@
 		wrapper,
 		controller,
 		input,
-		level,
-		forestPlacements,
+		environment,
 		avatarProfile,
 		bridge,
 		onHud,
@@ -54,8 +49,7 @@
 		wrapper: HTMLElement;
 		controller: PlayerController;
 		input: InputModel;
-		level: Graybox;
-		forestPlacements: PlacementArrays<ForestKind>;
+		environment: SceneEnvironment;
 		avatarProfile: AvatarProfile;
 		bridge: GameBridge;
 		onHud: (state: HudState) => void;
@@ -75,7 +69,7 @@
 	let quality: Quality = choice.quality;
 	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, fogSettings(quality).far);
 	const visual = new Group();
-	const proxies = untrack(() => createGrayboxVisual(level));
+	const proxies = untrack(() => environment.createVisual());
 	const actor = new Group();
 	visual.add(proxies.object, actor, createHemisphere());
 	const shadows = new ShadowRig(renderer, { blobs: 48 });
@@ -83,8 +77,8 @@
 	shadows.addReceiver(proxies.object);
 	shadows.addCaster(proxies.object, 'static');
 	const avatarBlob = shadows.blobs.add('actor');
-	const grid = BlockGrid.covering(-40, -30, 40, 80);
-	let forest: Awaited<ReturnType<typeof loadForest>> | undefined;
+	const grid = untrack(() => environment.grid);
+	let forest: Awaited<ReturnType<SceneEnvironment['loadPlacements']>> | undefined;
 	const budget = new FrameBudget(renderer, { quality });
 	const preset = QUALITY[quality];
 	const governor = new DprGovernor({ start: preset.dprStart, max: preset.dprMax });
@@ -109,8 +103,9 @@
 	let hidden = $state(document.hidden);
 	let contextLost = $state(false);
 	let loadError = '';
-	let notice = 'Siga em frente até as plataformas de madeira. Arraste à direita para olhar.';
+	let notice = 'Siga em frente e explore. Arraste à direita para olhar.';
 	let lastHud = 0;
+	let splashUntil = 0;
 	let lastYaw = 0;
 	$effect(() => {
 		if (paused) input.releaseAll();
@@ -137,7 +132,8 @@
 		// The CSS sky is a gradient whose horizon matches the fog. Do not replace it with a flat clear colour.
 		scene.background = null;
 		shadows.setTier(next, scene);
-		if (forest) for (const pool of forest.pools.pools.values()) pool.lod = lodProfilesFor(next).tree;
+		if (forest?.setQuality) forest.setQuality(next);
+		else if (forest) for (const pool of forest.pools.pools.values()) pool.lod = lodProfilesFor(next).tree;
 		governor.reset();
 		budget.reset();
 		fit();
@@ -146,6 +142,7 @@
 		const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
 		return {
 			...debugSnapshot(),
+			worldKind: environment.kind,
 			ready,
 			verticalFov: camera.fov,
 			horizontalFov: horizontalFov(camera.fov, camera.aspect),
@@ -157,12 +154,13 @@
 			checkpoint: controller.checkpoints?.current.id ?? 'start',
 			animation: animator.state,
 			avatarStyle: currentProfile?.style ?? avatarProfile.style,
+			avatarHair: currentProfile?.hairStyle ?? avatarProfile.hairStyle ?? 'curto',
 			avatarSkin: currentProfile?.kenneySkin ?? avatarProfile.kenneySkin,
 			avatarTextureVersion: avatarInstance?.appearance.texture.version ?? 0,
 			avatarAtlasSource: ATLAS_SOURCE,
 			proxyDraws: proxies.object.children.length,
 			floraDraws: forest?.pools.drawCalls ?? 0,
-			floraInstances: forestPlacements.count,
+			floraInstances: environment.placements,
 			qualityReason: choice.reason,
 			shadowRenders: shadows.renders,
 			fogNear: fogSettings(quality).near,
@@ -228,7 +226,7 @@
 				shadows.addCaster(actor, 'actor');
 				shadows.addReceiver(actor);
 			}),
-			loadForest(grid, quality, forestPlacements, abort.signal).then((value) => {
+			environment.loadPlacements(quality, abort.signal).then((value) => {
 				if (abort.signal.aborted) {
 					value.dispose();
 					return;
@@ -306,19 +304,30 @@
 				shadows.markMoved();
 			lastYaw = frame.yaw;
 			for (const event of frame.events) {
+				if (event.type === 'fell') {
+					splashUntil = performance.now() + 450;
+					notice = 'Água funda ou queda. Voltando ao ponto seguro…';
+				}
 				if (event.type === 'respawn') {
 					animator.reset();
 					notice = 'Você voltou ao último ponto seguro.';
 				}
 				if (event.type === 'checkpoint') {
-					if (event.checkpoint.id === 'summit') {
+					if (environment.kind === 'graybox' && event.checkpoint.id === 'summit') {
 						bridge.earnBadge();
 						notice = 'Você chegou! Seu emblema ficou guardado neste celular.';
-					} else notice = 'Ponto seguro alcançado. Pule perto da borda para atravessar.';
+					} else
+						notice =
+							environment.kind === 'map'
+								? 'Você alcançou um ponto seguro.'
+								: 'Ponto seguro alcançado. Pule perto da borda para atravessar.';
 				}
 			}
-			if (frameInput.actionPressed)
-				notice = 'Explore rampas e troncos. As plataformas de madeira ficam em frente à base.';
+			if (frameInput.actionPressed) {
+				environment.nextTarget();
+				notice = environment.target.name;
+			}
+			proxies.update?.(frame.position.x, frame.position.y, frame.position.z, environment.target);
 			shadowRay.origin.copy(frame.position);
 			shadowRay.origin.y += 0.1;
 			const hit = controller.world.raycast(shadowRay, 12);
@@ -355,6 +364,14 @@
 				notice: loadError || notice,
 				shiftLock: input.shiftLock,
 				ready,
+				target: environment.target.name,
+				distance: Math.round(
+					Math.hypot(
+						environment.target.x - controller.frame.position.x,
+						environment.target.z - controller.frame.position.z
+					) * 0.47
+				),
+				splash: performance.now() < splashUntil,
 				debug: debug ? readDebug() : null
 			});
 		},

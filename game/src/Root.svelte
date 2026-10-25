@@ -15,6 +15,13 @@
 	import HudIcon from './scene/HudIcon.svelte';
 	import { DURATION } from './style/motion.ts';
 	import { LIGHT } from './style/palette.ts';
+	import { generateWorld } from './survival/generate.ts';
+	import { buildStoryWorld } from './level/build.ts';
+	import { createMapEnvironment } from './world-runtime/environment.ts';
+	import { BlockGrid } from './render/index.ts';
+	import { createGrayboxVisual } from './scene/graybox-visual.ts';
+	import { loadForest } from './scene/forest.ts';
+	import type { SceneEnvironment } from './scene/environment.ts';
 	import type { HudState } from './scene/types.ts';
 
 	let {
@@ -40,12 +47,43 @@
 	const rotate = $derived(portrait && !allowPortrait && !choosing);
 	const showNotice = $derived(saveMessage || !hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
-	const level = createGraybox();
-	const forest = forestLayout();
-	level.proxies.push(...forest.colliders);
-	const world = buildCollisionWorld(level);
-	const checkpoints = new CheckpointTracker(level.start, level.checkpoints, level.killY);
-	const controller = new PlayerController(world, level.start.spawn, { yaw: level.start.yaw, checkpoints });
+	const query = new URLSearchParams(location.search);
+	const debugGraybox = query.has('graybox');
+	const mapData = debugGraybox
+		? null
+		: query.get('world') === 'survival'
+			? { world: generateWorld(20261025), level: undefined }
+			: buildStoryWorld();
+	const map = mapData ? createMapEnvironment(mapData.world, mapData.level, gameSave) : null;
+	const level = debugGraybox ? createGraybox() : null;
+	const forest = debugGraybox ? forestLayout() : null;
+	function oldEnvironment(): SceneEnvironment {
+		if (!level || !forest) throw new Error('graybox-fixture');
+		level.proxies.push(...forest.colliders);
+		const grid = BlockGrid.covering(-40, -30, 40, 80);
+		const target = { ...level.checkpoints[1].spawn, name: 'Plataformas de madeira' };
+		return {
+			kind: 'graybox',
+			start: level.start,
+			checkpoints: level.checkpoints,
+			collision: buildCollisionWorld(level),
+			grid,
+			placements: forest.placements.count,
+			createVisual: () => createGrayboxVisual(level),
+			loadPlacements: (quality, signal) => loadForest(grid, quality, forest.placements, signal),
+			target,
+			nextTarget() {}
+		};
+	}
+	const environment = map?.environment ?? oldEnvironment();
+	const world = environment.collision;
+	const checkpoints =
+		map?.tracker ?? new CheckpointTracker(environment.start, environment.checkpoints, level?.killY ?? -20);
+	const initial =
+		(query.has('debug') ? map?.debugPoses[query.get('pose') ?? ''] : undefined) ??
+		map?.checkpoint ??
+		environment.start;
+	const controller = new PlayerController(world, initial.spawn, { yaw: initial.yaw, checkpoints });
 	onDestroy(() => {
 		disposed = true;
 		chooserGeneration++;
@@ -116,7 +154,7 @@
 	function backToBase() {
 		input.releaseAll();
 		checkpoints.reset();
-		controller.respawnAt(level.start);
+		controller.respawnAt(environment.start);
 		controller.resume();
 		wrapper?.focus({ preventScroll: true });
 	}
@@ -141,8 +179,7 @@
 					{avatarProfile}
 					{controller}
 					{input}
-					{level}
-					forestPlacements={forest.placements}
+					{environment}
 					{bridge}
 					onHud={(state) => (hud = state)}
 					onFrame={drawControls}
@@ -193,6 +230,12 @@
 		</div>
 		<div bind:this={stickBase} class="stick-base" aria-hidden="true"></div>
 		<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
+		{#if environment.kind === 'map'}<div class="mission" aria-live="polite">
+				<span>Exploração do mapa</span><strong>{hud.target ?? environment.target.name}</strong><span
+					>{hud.distance ?? 0} m · Toque na bússola para mudar o destino</span
+				>
+			</div>{/if}
+		{#if hud.splash}<div class="splash" role="status">Água funda. Voltando ao ponto seguro…</div>{/if}
 		{#if hud.shiftLock}<div class="crosshair" aria-hidden="true"><HudIcon name="lock" /></div>{/if}
 		<div bind:this={sideButtons} class="side-buttons">
 			<button
@@ -407,6 +450,29 @@
 		width: 38px;
 		height: 38px;
 		background: #f1f6edb0;
+	}
+	.mission {
+		position: absolute;
+		top: max(12px, env(safe-area-inset-top));
+		right: max(12px, env(safe-area-inset-right));
+		display: grid;
+		gap: 3px;
+		max-width: 30vw;
+		padding: 8px 10px;
+		background: #173a2be8;
+		border-radius: 12px;
+		font-size: 0.7rem;
+	}
+	.mission strong {
+		font-size: 0.8rem;
+	}
+	.splash {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: #2f7fb066;
+		text-shadow: 0 1px 3px #173a2b;
 	}
 	.crosshair {
 		position: absolute;

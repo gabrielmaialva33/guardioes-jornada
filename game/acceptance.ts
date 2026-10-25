@@ -323,7 +323,7 @@ try {
 	// SPA navigation deliberately exercises the diorama's 1.5-second release grace.
 	await page.evaluate(() => {
 		const a = document.createElement('a');
-		a.href = '/secret-trail/?debug';
+		a.href = '/secret-trail/?debug&graybox';
 		a.textContent = 'test navigation';
 		document.body.append(a);
 		a.click();
@@ -505,6 +505,19 @@ try {
 		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
 	result.atomicReplacementAndOfflineC = true;
+	// The fixture query must not mask missing map-only assets in the completed pack.
+	const storyUrl = new URL(page.url());
+	storyUrl.searchParams.delete('graybox');
+	const beforeStory = requests.length;
+	await page.goto(storyUrl.href);
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
+		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().worldKind), 'map');
+	assert.equal(requests.length, beforeStory);
+	result.defaultStoryWorldOfflineAtC = true;
+	await page.screenshot({ path: join(output, 'story-offline-at-C.png') });
 	assert.deepEqual(errors, []);
 	assert.deepEqual(workerErrors, []);
 	result.pageErrors = errors;
