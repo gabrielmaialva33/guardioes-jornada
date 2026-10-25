@@ -1248,7 +1248,8 @@ function generateSpeciesPalettes(outSkinsDir) {
 
 /**
  * Generate `avatar-regions.json` matching `/home/gabrielmaia/.cache/agents/2026-10-25-trilha-secreta/avatar-regions-contract.md`
- * (version 1) and return a 64x64 PNG buffer of Preset p01 to embed in `avatar.glb`.
+ * (version 2, with `hairStyles` and `hairStyle` per preset, at most 2 green shirts), `palette-iara.png` (64x64 ranger skin),
+ * and return a 64x64 PNG buffer of Preset p01 to embed in `avatar.glb`.
  */
 function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 	// Clean up any legacy face-*.png files so only contract files remain in skins/
@@ -1258,7 +1259,7 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 	}
 
 	const avatarRegions = {
-		version: 1,
+		version: 2,
 		size: 64,
 		uvSource: 'character-a.glb',
 		slots: {
@@ -1320,6 +1321,15 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				]
 			}
 		},
+		hairStyles: [
+			{ id: 'curto', name: 'Curto', mesh: null },
+			{ id: 'longo', name: 'Longo', mesh: 'hair-long' },
+			{ id: 'rabo', name: 'Rabo de cavalo', mesh: 'hair-ponytail' },
+			{ id: 'coque', name: 'Coque', mesh: 'hair-bun' },
+			{ id: 'black-power', name: 'Black power', mesh: 'hair-afro' },
+			{ id: 'trancas', name: 'Tranças', mesh: 'hair-braids' },
+			{ id: 'bone', name: 'Boné', mesh: 'cap', tint: 'shirt' }
+		],
 		presets: [
 			{
 				id: 'p01',
@@ -1329,17 +1339,19 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#2d6a4f',
 				pants: '#5e4330',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'bone'
 			},
 			{
 				id: 'p02',
 				name: 'Semente',
 				skin: '#8c583a',
 				hair: '#241c18',
-				shirt: '#4f9a6e',
+				shirt: '#c9a27a',
 				pants: '#5a4232',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'curto'
 			},
 			{
 				id: 'p03',
@@ -1347,9 +1359,10 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				skin: '#5c3b28',
 				hair: '#241c18',
 				shirt: '#f2c94c',
-				pants: '#2d6a4f',
+				pants: '#2f7fb0',
 				shoes: '#5e4330',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'longo'
 			},
 			{
 				id: 'p04',
@@ -1359,7 +1372,8 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#3e9ccf',
 				pants: '#4f5c55',
 				shoes: '#5a4232',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'black-power'
 			},
 			{
 				id: 'p05',
@@ -1369,27 +1383,30 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#ff9fb7',
 				pants: '#2f7fb0',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'trancas'
 			},
 			{
 				id: 'p06',
 				name: 'Copa',
 				skin: '#6e4730',
 				hair: '#241c18',
-				shirt: '#74c69d',
+				shirt: '#73cbf0',
 				pants: '#4f5c55',
 				shoes: '#5e4330',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'curto'
 			},
 			{
 				id: 'p07',
 				name: 'Serra',
 				skin: '#a66843',
 				hair: '#241c18',
-				shirt: '#5fa36a',
+				shirt: '#b08f70',
 				pants: '#6b4f3a',
 				shoes: '#5a4232',
-				face: 'neutral'
+				face: 'neutral',
+				hairStyle: 'rabo'
 			},
 			{
 				id: 'p08',
@@ -1399,17 +1416,19 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#2f7fb0',
 				pants: '#6f7d74',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'coque'
 			},
 			{
 				id: 'p09',
 				name: 'Clareira',
 				skin: '#c98c63',
 				hair: '#3b281e',
-				shirt: '#3f7d4f',
+				shirt: '#8e9b92',
 				pants: '#8a6448',
 				shoes: '#5e4330',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'curto'
 			},
 			{
 				id: 'p10',
@@ -1419,7 +1438,8 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#f2c94c',
 				pants: '#5e4330',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'trancas'
 			},
 			{
 				id: 'p11',
@@ -1427,19 +1447,21 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				skin: '#e2ae86',
 				hair: '#5a4232',
 				shirt: '#73cbf0',
-				pants: '#2f5e3c',
-				shoes: '#5a4232',
-				face: 'neutral'
+				pants: '#5e4330',
+				shoes: '#4f5c55',
+				face: 'neutral',
+				hairStyle: 'curto'
 			},
 			{
 				id: 'p12',
 				name: 'Brotinho',
 				skin: '#7d5035',
 				hair: '#241c18',
-				shirt: '#86bf7c',
+				shirt: '#b6e6f7',
 				pants: '#5a4232',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'coque'
 			},
 			{
 				id: 'p13',
@@ -1447,9 +1469,10 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				skin: '#b0744d',
 				hair: '#2a201c',
 				shirt: '#a8805c',
-				pants: '#2d6a4f',
+				pants: '#2f7fb0',
 				shoes: '#5e4330',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'black-power'
 			},
 			{
 				id: 'p14',
@@ -1459,7 +1482,8 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#4f9a6e',
 				pants: '#2f7fb0',
 				shoes: '#4f5c55',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'longo'
 			},
 			{
 				id: 'p15',
@@ -1469,7 +1493,8 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#3e9ccf',
 				pants: '#6b4f3a',
 				shoes: '#4f5c55',
-				face: 'neutral'
+				face: 'neutral',
+				hairStyle: 'rabo'
 			},
 			{
 				id: 'p16',
@@ -1479,27 +1504,30 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 				shirt: '#ff9fb7',
 				pants: '#4f5c55',
 				shoes: '#5a4232',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'bone'
 			},
 			{
 				id: 'p17',
 				name: 'Musgo',
 				skin: '#825439',
 				hair: '#2a201c',
-				shirt: '#5fa36a',
+				shirt: '#8f6e52',
 				pants: '#4f5c55',
 				shoes: '#5e4330',
-				face: 'smile'
+				face: 'smile',
+				hairStyle: 'curto'
 			},
 			{
 				id: 'p18',
 				name: 'Mirante',
 				skin: '#be8158',
 				hair: '#3b281e',
-				shirt: '#2d6a4f',
+				shirt: '#b3bdb5',
 				pants: '#8f6e52',
 				shoes: '#5a4232',
-				face: 'neutral'
+				face: 'neutral',
+				hairStyle: 'curto'
 			}
 		]
 	};
@@ -1509,6 +1537,17 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 		`${JSON.stringify(avatarRegions, null, '\t')}\n`,
 		'utf8'
 	);
+
+	// Also write palette-iara.png (64x64 ranger uniform palette for NPC Iara)
+	const iaraPng = compositeAvatarPresetPng(avatarRegions, {
+		skin: '#b87b52',
+		hair: '#2a201c',
+		shirt: '#2d6a4f',
+		pants: '#8a6448',
+		shoes: '#4f5c55',
+		face: 'smile'
+	});
+	fs.writeFileSync(path.join(outSkinsDir, 'palette-iara.png'), iaraPng);
 
 	// Composite Preset p01 into a 64x64 PNG buffer for avatar.glb's default embedded texture
 	return compositeAvatarPresetPng(avatarRegions, avatarRegions.presets[0]);
