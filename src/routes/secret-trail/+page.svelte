@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { GAME_ABI, type GameDispose, type GameManifest, type GameModule } from '../../../game/abi.ts';
+	import Icon from '#lib/components/Icon.svelte';
+	import SecretBadge from '#lib/components/SecretBadge.svelte';
 	import { beginGamePresentation, type GamePresentation } from '#lib/data/game-presentation.ts';
 	import { GamePacks, getGamePackInfo, type DownloadProgress } from '#lib/data/game-pack.ts';
 	import { gameFileUrl } from '#lib/data/game-pack-cache.ts';
@@ -29,8 +31,9 @@
 	let stopping: Promise<void> = Promise.resolve();
 	const busy = $derived(status === 'downloading' || status === 'mounting');
 	const percent = $derived(progress.total ? Math.floor((100 * progress.loaded) / progress.total) : 0);
+	const megabytes = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 	const size = (bytes: number) =>
-		new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(bytes / 1024);
+		bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${megabytes.format(bytes / 1024 / 1024)} MB`;
 
 	onMount(() => {
 		manager = new GamePacks({ root: new URL(resolve('/'), location.href) });
@@ -205,97 +208,225 @@
 <svelte:head><title>Trilha secreta · Guardiões da Mata Atlântica</title></svelte:head>
 
 <main bind:this={launcherRoot} class="page launcher" data-game-launcher data-pack-id={pack?.packId}>
-	<header>
-		<a class="button quiet" href={resolve('/')}>Voltar para a jornada</a>
+	<header class="bar">
+		<a class="icon-button" href={resolve('/')} aria-label="Voltar para o início"><Icon name="back" /></a>
 		<h1>{status === 'unsupported' ? 'A Trilha Secreta precisa de gráficos 3D' : 'Trilha secreta'}</h1>
 	</header>
 	<div bind:this={element} class="game" hidden={status !== 'playing' && status !== 'mounting'}></div>
 	{#if status === 'unsupported'}
-		<section class="card">
-			<p>
-				Este celular está no modo leve para economizar memória e bateria, por isso o minijogo 3D não abre
-				aqui. Sua jornada principal pelos Guardiões da Mata Atlântica continua funcionando normalmente!
+		<section class="card intro">
+			<div class="emblem" aria-hidden="true"><Icon name="compass" weight="duotone" size={44} /></div>
+			<p class="lead">
+				Este celular não consegue abrir o mundo 3D da trilha. Sua jornada pelos Guardiões da Mata Atlântica
+				continua funcionando normalmente!
 			</p>
 		</section>
 	{:else if status === 'playing'}
 		<button class="button quiet" type="button" onclick={exit}>Sair da aventura</button>
 	{:else}
-		<section class="card" aria-busy={busy}>
-			<p>
-				Entre as árvores da Mata Atlântica há um mundo 3D escondido onde você pode caminhar pela reserva,
-				saltar pelas pedras do rio e ajudar a guarda-parque Iara.
+		<section class="card intro" aria-busy={busy}>
+			<div class="emblem" aria-hidden="true"><Icon name="compass" weight="duotone" size={44} /></div>
+			<p class="lead">
+				Entre as árvores da Mata Atlântica há um mundo 3D escondido, onde você caminha pela reserva, salta
+				pelas pedras do rio e ajuda a guarda-parque Iara.
 			</p>
-			<div role="status" aria-live="polite">
-				{#if status === 'checking'}<p>Procurando a aventura neste aparelho…</p>
+			<div class="status" role="status" aria-live="polite">
+				{#if status === 'checking'}
+					<p class="note"><Icon name="compass" size={20} /> Procurando a aventura neste aparelho…</p>
 				{:else if status === 'downloading'}
-					<p>Guardando a aventura… {percent}%</p>
+					<p class="note"><Icon name="download" size={20} /> Guardando a aventura… {percent}%</p>
 					<progress max={progress.total || 1} value={progress.loaded} aria-label="Download da aventura"
 					></progress>
-					{#if progress.total}<p class="hint">
-							{size(progress.loaded)} de {size(progress.total)} KB guardados
-						</p>{/if}
-				{:else if status === 'mounting'}<p>Abrindo a clareira…</p>
-				{:else if status === 'error'}<p>{message}</p>
-				{:else if pack}<p>Pronto para jogar neste celular, mesmo sem internet.</p>
-				{:else if !pwa.online}<p>Sem internet. Conecte-se uma vez para baixar a aventura.</p>
-				{:else if sizeKB !== null}<p>
-						Primeiro acesso: baixa cerca de {sizeKB} KB (depois fica guardado neste celular).
+					{#if progress.total}<p class="hint">{size(progress.loaded)} de {size(progress.total)}</p>{/if}
+				{:else if status === 'mounting'}
+					<p class="note"><Icon name="sparkle" size={20} /> Abrindo a clareira…</p>
+				{:else if status === 'error'}
+					<p class="note" data-tone="danger"><Icon name="warning" size={20} /> {message}</p>
+				{:else if pack}
+					<p class="note" data-tone="success">
+						<Icon name="check" size={20} /> A trilha está guardada neste celular e funciona sem internet.
 					</p>
-				{:else}<p>O jogo só será baixado quando você entrar.</p>{/if}
+				{:else if !pwa.online}
+					<p class="note" data-tone="warning">
+						<Icon name="wifi-off" size={20} /> Sem internet. Conecte-se uma vez para baixar a aventura.
+					</p>
+				{:else if sizeKB !== null}
+					<p class="note">
+						<Icon name="download" size={20} /> Na primeira vez, baixa cerca de {size(sizeKB * 1024)} e depois
+						fica guardada neste celular.
+					</p>
+				{:else}
+					<p class="note"><Icon name="download" size={20} /> O jogo só é baixado quando você entrar.</p>
+				{/if}
 			</div>
 			<div class="actions">
-				{#if busy}<button class="button quiet" type="button" onclick={exit}>Cancelar</button>
+				{#if busy}
+					<button class="button quiet wide" type="button" onclick={exit}>Cancelar</button>
+				{:else if pack}
+					<button class="button wide" type="button" onclick={enter}>
+						<Icon name="footprints" weight="duotone" size={22} /> Entrar na trilha
+					</button>
+					{#if pwa.online}
+						<button class="text-button" type="button" onclick={downloadFromGesture}>
+							<Icon name="download" size={18} />
+							{status === 'error' ? 'Tentar o download de novo' : 'Baixar versão mais recente'}
+						</button>
+					{/if}
 				{:else if status !== 'checking'}
-					{#if pack}<button class="button" type="button" onclick={enter}>Entrar na trilha</button>{/if}
-					<button
-						class="button"
-						class:quiet={!!pack}
-						type="button"
-						disabled={!pwa.online}
-						onclick={downloadFromGesture}
-					>
-						{status === 'error'
-							? 'Tentar o download de novo'
-							: pack
-								? 'Baixar versão mais recente'
-								: 'Entrar na trilha'}
+					<button class="button wide" type="button" disabled={!pwa.online} onclick={downloadFromGesture}>
+						<Icon name="footprints" weight="duotone" size={22} />
+						{status === 'error' ? 'Tentar o download de novo' : 'Entrar na trilha'}
 					</button>
 				{/if}
 			</div>
 		</section>
+		<SecretBadge />
 	{/if}
 </main>
 
 <style>
+	.launcher {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 1.25rem;
+		padding-bottom: max(2rem, env(safe-area-inset-bottom));
+	}
+
+	/* The page itself goes fullscreen before the game mounts, so it keeps the app's background. */
 	.launcher:fullscreen {
-		box-sizing: border-box;
 		width: 100%;
 		max-width: none;
 		height: 100dvh;
 		overflow: auto;
-		background: var(--canopy, #10271b);
+		background: var(--bg-image);
+		background-color: var(--bg);
 	}
-	.launcher {
-		padding-block: 1rem 2rem;
-	}
-	header {
-		margin-bottom: 1.25rem;
-	}
-	h1 {
-		margin-block: 1rem;
-		font-family: var(--font-story);
-	}
-	.actions {
+
+	.bar {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-		margin-top: 1rem;
+		align-items: center;
+		gap: 0.25rem;
+		padding-block: 0.25rem;
 	}
+
+	.bar .icon-button {
+		margin-left: -0.75rem;
+	}
+
+	h1 {
+		flex: 1;
+		font-size: var(--step-2);
+	}
+
+	.intro {
+		display: grid;
+		gap: 1rem;
+		padding: 1.25rem;
+	}
+
+	/* Same emblem as the sheet that revealed the trail. */
+	.emblem {
+		display: grid;
+		place-items: center;
+		justify-self: center;
+		width: 4.5rem;
+		height: 4.5rem;
+		border-radius: 50%;
+		background: radial-gradient(
+			circle at 35% 30%,
+			color-mix(in oklab, var(--gold) 40%, transparent),
+			var(--surface-sunken) 72%
+		);
+		color: var(--gold);
+		--icon-tone: var(--accent);
+		--icon-tone-opacity: 0.5;
+	}
+
+	.lead {
+		color: var(--text-soft);
+	}
+
+	.status {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.note {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		font-size: var(--step--1);
+		font-weight: 700;
+		color: var(--accent-strong);
+	}
+
+	/* The icon sits on the first line of text, however many lines the message takes. */
+	.note :global(.icon) {
+		margin-top: 0.1em;
+	}
+
+	.note[data-tone='success'] :global(.icon) {
+		color: var(--success);
+	}
+
+	.note[data-tone='warning'] :global(.icon) {
+		color: var(--warning);
+	}
+
+	.note[data-tone='danger'] {
+		color: var(--danger);
+	}
+
+	.hint {
+		color: var(--text-faint);
+		font-size: var(--step--1);
+	}
+
 	progress {
+		appearance: none;
 		width: 100%;
-		accent-color: var(--spring);
+		height: 0.75rem;
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--surface-sunken);
+		overflow: hidden;
 	}
-	.game {
-		margin-bottom: 1rem;
+
+	progress::-webkit-progress-bar {
+		background: var(--surface-sunken);
+	}
+
+	progress::-webkit-progress-value {
+		background: var(--xp-gradient);
+	}
+
+	progress::-moz-progress-bar {
+		background: var(--xp-gradient);
+	}
+
+	/* One clear way in; updating is a quiet extra underneath. */
+	.actions {
+		display: grid;
+		justify-items: center;
+		gap: 0.25rem;
+		min-height: var(--tap);
+	}
+
+	.text-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		padding: 0 0.75rem;
+		border: 0;
+		background: none;
+		color: var(--accent-strong);
+		font-size: var(--step--1);
+		font-weight: 700;
+		text-decoration: underline;
+		text-underline-offset: 0.2em;
+		cursor: pointer;
+		touch-action: manipulation;
 	}
 </style>
