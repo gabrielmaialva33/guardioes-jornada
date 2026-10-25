@@ -67,7 +67,7 @@ self.addEventListener('fetch', (event) => {
 			}
 
 			// Open clients may still import the previous build's hashed modules.
-			if (url.pathname.startsWith(root.pathname + '_app/immutable/')) {
+			if (url.pathname.startsWith(`${root.pathname}_app/immutable/`)) {
 				const previous = await previousAsset(caches, PREFIX, CACHE, url.pathname);
 				if (previous) return previous;
 			}
