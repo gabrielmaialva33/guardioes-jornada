@@ -30,6 +30,12 @@ export type SpringPresetId = keyof typeof SPRING;
 export class DampedSpring {
 	value = 0;
 	velocity = 0;
+	/**
+	 * Target and time step for update(): hot paths set these fields instead of
+	 * passing numbers, which V8 boxes when a call is not inlined (p3-animation.md).
+	 */
+	target = 0;
+	dt = 0;
 	/** Angular frequency, rad/s. */
 	omega = 1;
 	/** Damping ratio in (0, 1]. */
@@ -59,13 +65,22 @@ export class DampedSpring {
 
 	/** Advances toward `target` by `dt` seconds and returns the new value. */
 	step(target: number, dt: number): number {
-		if (!(dt > 0)) return this.value;
-		if (dt !== this.#dt) this.#coefficients(dt);
+		this.target = target;
+		this.dt = dt;
+		this.update();
+		return this.value;
+	}
+
+	/** Advances toward `this.target` by `this.dt` seconds; read `value` after. */
+	update() {
+		const dt = this.dt;
+		if (!(dt > 0)) return;
+		if (dt !== this.#dt) this.#coefficients();
+		const target = Number.isFinite(this.target) ? this.target : 0;
 		const offset = this.value - target;
 		const velocity = this.velocity;
 		this.value = target + this.#cyy * offset + this.#cyv * velocity;
 		this.velocity = this.#cvy * offset + this.#cvv * velocity;
-		return this.value;
 	}
 
 	/**
@@ -82,7 +97,8 @@ export class DampedSpring {
 		this.velocity = 0;
 	}
 
-	#coefficients(dt: number) {
+	#coefficients() {
+		const dt = this.dt;
 		const omega = this.omega;
 		const zeta = this.zeta;
 		this.#dt = dt;
