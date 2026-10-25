@@ -101,9 +101,31 @@
 		min-height: 2.75rem;
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		color: var(--accent-strong);
 		font-weight: 700;
+		list-style: none;
 		cursor: pointer;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+
+	/* Chevron: points down when closed, up when open. */
+	summary::after {
+		content: '';
+		width: 0.55rem;
+		height: 0.55rem;
+		margin-right: 0.35rem;
+		border-right: 2px solid currentColor;
+		border-bottom: 2px solid currentColor;
+		transform: translateY(-25%) rotate(45deg);
+		transition: transform var(--dur-fast) var(--ease-out);
+	}
+
+	details[open] summary::after {
+		transform: translateY(25%) rotate(225deg);
 	}
 
 	ul {
