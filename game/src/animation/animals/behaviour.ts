@@ -14,8 +14,8 @@
  * (p3-animation.md, V8 rule 1).
  */
 import { AnimalMotion, type AnimalWorld } from './motion.ts';
-import { approachAngle, MAX_DT, Rng, safeDt, wrapAngle } from './scalar.ts';
-import { SPECIES, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
+import { MAX_DT, Rng, safeDt, TAU } from './scalar.ts';
+import { SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
 
 /** Longest substep, seconds. */
 export const MAX_SUBSTEP = 1 / 30;
@@ -105,7 +105,14 @@ export abstract class Behaviour<S extends string = string> {
 			// Gait cycles at this substep's mean speed: the phase then does not depend
 			// on how the frame was cut (one LOD update or three frames).
 			const covered = motion.distance - distance;
-			if (covered > 0) motion.cycles += covered / strideAt(this.species, 0.5 * (speed + motion.speed));
+			if (covered > 0) {
+				// strideAt, written out (see turn()).
+				const strides = this.species.stride;
+				const mean = 0.5 * (speed + motion.speed);
+				const t = (mean - strides.slowSpeed) / (strides.fastSpeed - strides.slowSpeed);
+				const share = Math.min(1, Math.max(0, t));
+				motion.cycles += covered / (strides.slowStride + (strides.fastStride - strides.slowStride) * share);
+			}
 			this.stateTime += h;
 			this.timer -= h;
 			this.clock += h;
@@ -169,10 +176,17 @@ export abstract class Behaviour<S extends string = string> {
 	 * an animal turning on the spot steps, so its gait moves with it.
 	 */
 	protected turn() {
+		// approachAngle written out: helpers that take and return numbers box them
+		// whenever V8 does not inline the call (p3-animation.md, V8 rule 1).
 		const motion = this.motion;
 		const before = motion.yaw;
-		motion.yaw = approachAngle(before, this.targetYaw, this.species.turnRate * this.h);
-		const turned = wrapAngle(motion.yaw - before);
+		let delta = this.targetYaw - before;
+		delta -= TAU * Math.round(delta / TAU);
+		const most = this.species.turnRate * this.h;
+		const turned = Math.min(most, Math.max(-most, Number.isFinite(delta) ? delta : 0));
+		let yaw = before + turned;
+		yaw -= TAU * Math.round(yaw / TAU);
+		motion.yaw = yaw;
 		motion.turnRate = this.h > 0 ? turned / this.h : 0;
 		motion.distance += Math.abs(turned) * this.footRadius;
 	}
