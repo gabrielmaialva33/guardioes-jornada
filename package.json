@@ -26,7 +26,8 @@
 		"icons": "node scripts/icons.ts",
 		"test": "vitest run",
 		"deploy": "pnpm build && pnpm dlx wrangler@4.152.0 deploy",
-		"db:config": "set -a && . ./supabase/.env && set +a && supabase config push"
+		"db:config": "set -a && . ./supabase/.env && set +a && supabase config push",
+		"deploy:vps": "deploy/vps.sh"
 	},
 	"dependencies": {
 		"@fontsource-variable/alegreya": "5.3.0",
