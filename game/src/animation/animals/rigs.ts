@@ -87,7 +87,7 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 		...PET_HIPS,
 		height: 1.594,
 		bodyLength: 1.326,
-		totalLength: 1.788,
+		totalLength: 1.781,
 		hipZFront: 0.25,
 		hipZBack: -0.25,
 		tailPivot: [0, 0.71875, -0.525],

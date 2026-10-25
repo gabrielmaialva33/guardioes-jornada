@@ -24,6 +24,7 @@ import {
 	Sphere,
 	Vector3
 } from 'three';
+import { RAMPS } from '../../style/palette.ts';
 import type { Flock, FlockKind } from './flock.ts';
 import {
 	createWingFlapUniforms,
@@ -62,7 +63,6 @@ export function createFlyerGeometry(kind: FlockKind): BufferGeometry {
 					[-hinge, 0, -0.08, -0.3, 0, -0.1, -0.34, 0, 0.0, -hinge, 0, 0.08]
 				];
 	const positions: number[] = [];
-	const normals: number[] = [];
 	for (const q of quads) {
 		const corners = [0, 1, 2, 0, 2, 3];
 		for (const c of corners) positions.push(q[c * 3], q[c * 3 + 1], q[c * 3 + 2]);
@@ -70,10 +70,19 @@ export function createFlyerGeometry(kind: FlockKind): BufferGeometry {
 	const geometry = new BufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
 	geometry.computeVertexNormals();
-	for (let i = 0; i < positions.length; i++) normals.push(0);
 	geometry.computeBoundingSphere();
 	return geometry;
 }
+
+/**
+ * Species colours, not accents (gold and the ipê accents are reserved for things
+ * to touch, ART.md §2): Morpho blues and a Heliconius orange for butterflies;
+ * the greens, turquoise and orange of the saíras (Tangara) for small birds.
+ */
+const DEFAULT_COLORS: Readonly<Record<FlockKind, readonly ColorRepresentation[]>> = {
+	butterfly: [RAMPS.water[1], RAMPS.water[2], '#d9822b', RAMPS.soil[2]],
+	bird: [RAMPS.leaf[2], RAMPS.water[1], '#d9822b']
+};
 
 export interface FlockMeshOptions {
 	/** One colour for all, or a palette cycled over the instances (per-instance colour keeps 1 draw call). */
@@ -110,9 +119,7 @@ export class FlockMesh {
 		mesh.instanceMatrix.setUsage(DynamicDrawUsage);
 		mesh.castShadow = false;
 		mesh.receiveShadow = false;
-		const colors =
-			options.colors ??
-			(flock.kind === 'butterfly' ? ['#3e9ccf', '#f2c94c', '#ff9fb7'] : ['#4f9a6e', '#73cbf0']);
+		const colors = options.colors ?? DEFAULT_COLORS[flock.kind];
 		const color = new Color();
 		for (let i = 0; i < flock.count; i++) mesh.setColorAt(i, color.set(colors[i % colors.length]));
 		const b = flock.bounds;

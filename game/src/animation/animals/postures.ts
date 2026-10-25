@@ -13,7 +13,15 @@
  * and are adjusted every update by the animator.
  */
 import { compileKey, JOINT_STRIDE, type JointKey, type Layout, type Vec3Tuple } from '../skeleton.ts';
-import { BIRD_LAYOUT, JOINT_COUNT, MODELS, type ModelId, QUADRUPED_LAYOUT } from './rigs.ts';
+import {
+	BIRD_LAYOUT,
+	type BirdJoint,
+	JOINT_COUNT,
+	MODELS,
+	type ModelId,
+	QUADRUPED_LAYOUT,
+	type QuadrupedJoint
+} from './rigs.ts';
 import { SPECIES, type SpeciesId } from './species.ts';
 
 export const POSTURES = [
@@ -48,8 +56,8 @@ export const SUSPENDED: readonly Posture[] = [
 	'hang-curl'
 ];
 
-type QuadrupedSlot = 'root' | 'body' | 'tail' | 'legFL' | 'legFR' | 'legBL' | 'legBR';
-type BirdSlot = 'root' | 'body' | 'tail' | 'wingL' | 'wingR' | 'legL' | 'legR';
+type QuadrupedSlot = QuadrupedJoint;
+type BirdSlot = BirdJoint;
 
 interface PostureDef<S extends string> {
 	/** Rotations in degrees (YXZ) and offsets in model units; the root takes rotation only. */
@@ -336,4 +344,4 @@ export function posturesOf(species: SpeciesId): Posture[] {
 /** Width of a packed key, for callers that blend keys themselves. */
 export const KEY_WIDTH = JOINT_COUNT * JOINT_STRIDE;
 
-export { QUADRUPED_LAYOUT };
+
