@@ -30,8 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common as C  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-GREEN = C.ramp("grass", 2)
-GREEN_UNDER = C.ramp("grass", 1)
+# Leaf ramp, not grass: the plant must not vanish into the grass[2] ground.
+GREEN = C.ramp("leaf", 3)
+GREEN_UNDER = C.ramp("leaf", 2)
 GREEN_YOUNG = C.ramp("grass", 3)
 RED = C.SPECIES["bromeliaVermelho"]
 WATER = C.ramp("water", 1)
@@ -69,8 +70,8 @@ def rosette(red_centre: bool) -> C.Mesh:
         a = i * 2 * math.pi / 7 + 0.15
         d = Vector((math.cos(a), math.sin(a), 0))
         root = d * 0.06 + UP * 0.08
-        tip = d * (0.82 + 0.06 * (i % 2)) + UP * (0.42 + 0.08 * (i % 3))
-        wedge_leaf(m, root, tip, 0.46, 0.1, 0.24, GREEN, GREEN_UNDER)
+        tip = d * (0.95 + 0.06 * (i % 2)) + UP * (0.3 + 0.08 * (i % 3))
+        wedge_leaf(m, root, tip, 0.5, 0.1, 0.36, GREEN, GREEN_UNDER)
     # Inner whorl: 4 narrower, more upright leaves around the tank.
     inner = RED if red_centre else GREEN_YOUNG
     for i in range(4):
@@ -78,7 +79,7 @@ def rosette(red_centre: bool) -> C.Mesh:
         d = Vector((math.cos(a), math.sin(a), 0))
         root = d * 0.05 + UP * 0.12
         tip = d * (0.5 + 0.05 * (i % 2)) + UP * (0.92 + 0.06 * (i % 3))
-        wedge_leaf(m, root, tip, 0.36, 0.09, 0.12, inner, inner if red_centre else GREEN)
+        wedge_leaf(m, root, tip, 0.36, 0.09, 0.12, inner, inner if red_centre else GREEN_UNDER)
     # Rain water held in the tank.
     m.add([Vector((math.cos(a) * 0.14, math.sin(a) * 0.14, 0.27)) for a in (2 * math.pi * k / 6 for k in range(6))], WATER)
     return m
