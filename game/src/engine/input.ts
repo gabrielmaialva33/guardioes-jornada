@@ -467,7 +467,13 @@ export function attachInput(
 	);
 	window.addEventListener('keyup', (event) => model.keyUp(event.code), { signal });
 	window.addEventListener('blur', () => model.releaseAll(), { signal });
-	document.addEventListener('visibilitychange', () => document.hidden && model.releaseAll(), { signal });
+	document.addEventListener(
+		'visibilitychange',
+		() => {
+			if (document.hidden) model.releaseAll();
+		},
+		{ signal }
+	);
 	document.addEventListener(
 		'pointerlockchange',
 		() => model.setPointerLocked(document.pointerLockElement === element),
