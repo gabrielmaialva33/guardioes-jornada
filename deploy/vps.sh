@@ -11,7 +11,7 @@ APP_DIR=/var/www/guardioes-jornada
 cd "$(dirname "$0")/.."
 
 if [[ "${1:-}" == "--rollback" ]]; then
-	ssh "$HOST" "set -e; cd $APP_DIR/releases; prev=\$(ls -1t | sed -n 2p); test -n \"\$prev\"; ln -sfn $APP_DIR/releases/\$prev $APP_DIR/current.tmp; mv -Tf $APP_DIR/current.tmp $APP_DIR/current; echo \"Rolled back to \$prev\""
+	ssh "$HOST" "set -e; cd $APP_DIR/releases; cur=\$(basename \$(readlink $APP_DIR/current)); prev=\$(ls -1 | sort -r | grep -vx \"\$cur\" | head -1); test -n \"\$prev\"; ln -sfn $APP_DIR/releases/\$prev $APP_DIR/current.tmp; mv -Tf $APP_DIR/current.tmp $APP_DIR/current; echo \"Rolled back to \$prev\""
 	exit 0
 fi
 
@@ -22,5 +22,5 @@ rsync -az --delete --exclude _headers build/ "$HOST:$APP_DIR/releases/$release/"
 ssh "$HOST" "set -e
 	ln -sfn $APP_DIR/releases/$release $APP_DIR/current.tmp
 	mv -Tf $APP_DIR/current.tmp $APP_DIR/current
-	cd $APP_DIR/releases && ls -1t | tail -n +6 | xargs -r rm -rf --"
+	cd $APP_DIR/releases && ls -1 | sort -r | tail -n +6 | grep -vx $release | xargs -r rm -rf --"
 echo "Published $release"
