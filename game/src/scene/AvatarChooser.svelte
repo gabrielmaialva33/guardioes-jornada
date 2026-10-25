@@ -56,6 +56,15 @@
 		message = '';
 		draft = { ...draft, style: 'classic', colors: { ...preset.colors }, face: preset.face };
 	}
+	function tabKey(event: KeyboardEvent) {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		draft = { ...draft, style: draft.style === 'classic' ? 'kenney' : 'classic' };
+		if (event.currentTarget instanceof HTMLElement)
+			event.currentTarget
+				.querySelector<HTMLElement>(draft.style === 'classic' ? '#classic-tab' : '#kenney-tab')
+				?.focus();
+	}
 	function keydown(event: KeyboardEvent) {
 		event.stopPropagation();
 		if (event.key === 'Escape') {
@@ -123,11 +132,12 @@
 			>
 		</header>
 		<fieldset class="choices" disabled={busy}>
-			<div class="tabs" role="tablist" aria-label="Estilos do personagem">
+			<div class="tabs" role="tablist" aria-label="Estilos do personagem" onkeydown={tabKey}>
 				<button
 					type="button"
 					role="tab"
 					id="classic-tab"
+					tabindex={draft.style === 'classic' ? 0 : -1}
 					aria-selected={draft.style === 'classic'}
 					aria-controls="classic-panel"
 					onclick={() => (draft = { ...draft, style: 'classic' })}>Cores clássicas</button
@@ -136,6 +146,7 @@
 					type="button"
 					role="tab"
 					id="kenney-tab"
+					tabindex={draft.style === 'kenney' ? 0 : -1}
 					aria-selected={draft.style === 'kenney'}
 					aria-controls="kenney-panel"
 					onclick={() => (draft = { ...draft, style: 'kenney' })}>Skins da Kenney</button
@@ -167,11 +178,15 @@
 							<span>Rosto</span><button
 								type="button"
 								aria-pressed={draft.face === 'smile'}
-								onclick={() => (draft = { ...draft, face: 'smile' })}>Sorriso</button
+								onclick={() => (draft = { ...draft, face: 'smile' })}
+								aria-label="Rosto com sorriso"
+								title="Sorriso"><HudIcon name="smile" /></button
 							><button
 								type="button"
 								aria-pressed={draft.face === 'neutral'}
-								onclick={() => (draft = { ...draft, face: 'neutral' })}>Neutra</button
+								onclick={() => (draft = { ...draft, face: 'neutral' })}
+								aria-label="Rosto neutro"
+								title="Neutra"><HudIcon name="neutral" /></button
 							>
 						</div>
 					</div>
@@ -237,6 +252,14 @@
 		justify-content: space-between;
 		gap: 12px;
 	}
+	.faces button {
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		padding: 0;
+		display: grid;
+		place-items: center;
+	}
 	.choices {
 		border: 0;
 		padding: 0;
@@ -244,10 +267,10 @@
 		min-width: 0;
 	}
 	.faces {
-		grid-column: 1/-1;
+		grid-column: 2;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 	}
 
 	h2 {
@@ -281,7 +304,7 @@
 	.tabs {
 		display: flex;
 		gap: 8px;
-		margin: 12px 0;
+		margin: 8px 0;
 	}
 	[aria-selected='true'],
 	[aria-pressed='true'] {
@@ -304,17 +327,17 @@
 	.preset {
 		display: grid;
 		place-items: center;
-		padding: 4px;
+		padding: 2px;
 	}
 	.mannequin {
 		display: block;
-		width: 48px;
-		height: 60px;
+		width: 38px;
+		height: 48px;
 	}
 	.custom {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 8px;
+		gap: 6px;
 		align-content: start;
 	}
 	.preview {
@@ -356,8 +379,8 @@
 	}
 	.skin img {
 		width: 100%;
-		height: auto;
-		aspect-ratio: 1;
+		height: 64px;
+		object-fit: contain;
 		image-rendering: pixelated;
 		display: block;
 	}
