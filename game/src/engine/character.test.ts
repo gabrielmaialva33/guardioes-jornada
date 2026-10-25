@@ -1,7 +1,7 @@
 import { Group, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Character, type CharacterInput, cameraRelativeMove, placeObject } from './character.ts';
-import { CAPSULE_RADIUS, JUMP_AIRTIME, JUMP_HEIGHT, STEP_HEIGHT } from './constants.ts';
+import { CAPSULE_RADIUS, JUMP_AIRTIME, JUMP_HEIGHT, STEP_HEIGHT, WALK_SPEED } from './constants.ts';
 import {
 	buildCollisionWorld,
 	createGraybox,
@@ -57,6 +57,23 @@ it('jumps the Roblox height and airtime', () => {
 	expect(Math.abs(airborne * DT - JUMP_AIRTIME)).toBeLessThanOrEqual(DT);
 });
 
+it('reaches full speed in one tick, stops in one, and steers fully in the air', () => {
+	const character = new Character(world, at(level.marks.spawn));
+	run(character, 1, forward);
+	expect(character.position.z).toBeCloseTo(WALK_SPEED * DT, 12);
+	expect(character.planarSpeed).toBeCloseTo(WALK_SPEED, 9);
+	run(character, 1, idle);
+	expect(character.planarSpeed).toBe(0);
+
+	character.pressJump();
+	run(character, 5, forward);
+	expect(character.grounded).toBe(false);
+	const before = character.position.clone();
+	run(character, 1, { ...idle, moveX: 1 });
+	expect(character.position.x - before.x).toBeCloseTo(WALK_SPEED * DT, 12);
+	expect(character.position.z - before.z).toBeCloseTo(0, 12);
+});
+
 it('re-jumps a held jump only after each new landing', () => {
 	const character = new Character(world, at(level.marks.spawn));
 	const log: string[] = [];
@@ -71,7 +88,7 @@ it('re-jumps a held jump only after each new landing', () => {
 		lastVy = character.velocity.y;
 	});
 	expect(log.length).toBeGreaterThanOrEqual(6);
-	log.forEach((event, i) => expect(event).toBe(i % 2 === 0 ? 'jump' : 'land'));
+	for (const [i, event] of log.entries()) expect(event).toBe(i % 2 === 0 ? 'jump' : 'land');
 });
 
 it('gives a short coyote time that one jump consumes', () => {
@@ -152,7 +169,10 @@ it('steps up to the step height and is blocked just above it', () => {
 	const high = new Character(world, at(level.marks.stepHigh));
 	run(high, 60, forward, () => expect(high.position.y).toBeLessThan(1e-9));
 	// Held off by the box's top edge, 0.05 below the bottom sphere's centre.
-	expect(high.position.z).toBeCloseTo(6 - Math.sqrt(CAPSULE_RADIUS ** 2 - (CAPSULE_RADIUS - STEP_HIGH) ** 2), 6);
+	expect(high.position.z).toBeCloseTo(
+		6 - Math.sqrt(CAPSULE_RADIUS ** 2 - (CAPSULE_RADIUS - STEP_HIGH) ** 2),
+		6
+	);
 	expect(STEP_HIGH).toBeGreaterThan(STEP_HEIGHT);
 });
 
@@ -265,7 +285,7 @@ it.each([
 	const avatar = new Group();
 	if (parentTransform) {
 		const parent = new Group();
-		parent.position.set(...parentTransform.position);
+		parent.position.fromArray(parentTransform.position);
 		parent.rotation.y = parentTransform.rotation;
 		parent.scale.setScalar(parentTransform.scale);
 		parent.add(avatar);
