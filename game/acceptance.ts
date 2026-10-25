@@ -96,7 +96,11 @@ await new Promise<void>((done, reject) => {
 const browser = await chromium.launch({
 	channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome',
 	headless: true,
-	args: ['--no-sandbox', '--remote-debugging-port=9238']
+	args: [
+		'--no-sandbox',
+		'--remote-debugging-port=9238',
+		...(process.env.GAME_TEST_ANGLE ? [`--use-angle=${process.env.GAME_TEST_ANGLE}`] : [])
+	]
 });
 const origin = 'http://127.0.0.1:4190';
 const result: Record<string, unknown> = { packIds: manifests.map((manifest) => manifest.packId) };
@@ -287,7 +291,9 @@ try {
 	const cdp = await context.newCDPSession(page);
 	await cdp.send('Network.enable');
 	await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
-	await page.goto(origin);
+	const initialResponse = await page.goto(origin);
+	assert.equal(initialResponse?.status(), 200);
+	console.info('Home loaded');
 	await page.evaluate(() => navigator.serviceWorker.ready.then(() => {}));
 	await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 	await page.waitForTimeout(500);
@@ -301,6 +307,7 @@ try {
 	);
 	assert.equal(shell.flat().filter((url) => url.includes('/game-packs/')).length, 0);
 	result.zeroGameBytesAtInstall = true;
+	console.info('Install: zero game bytes');
 	await page.locator('figure.scene').first().scrollIntoViewIfNeeded();
 	await page
 		.locator('.scene3d.ready canvas')
@@ -317,8 +324,8 @@ try {
 		a.click();
 		a.remove();
 	});
-	await page.getByRole('button', { name: 'Baixar e entrar', exact: true }).waitFor();
-	await page.getByRole('button', { name: 'Baixar e entrar', exact: true }).click();
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor({ timeout: 30000 });
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
 	await page.getByRole('button', { name: 'Conquistar o emblema da prévia' }).click();
@@ -366,6 +373,7 @@ try {
 	}
 	result.cycles = { baseline, after: cycles.at(-1), count: cycles.length };
 	result.badgeBridge = true;
+	console.info('20 lifecycle cycles passed');
 	const installRequests = requests.length;
 	for (const label of ['B', 'C']) {
 		served = label;
@@ -396,6 +404,7 @@ try {
 	assert.equal(requests.length, networkBefore);
 	assert.ok(sessions.size > 0);
 	result.offlineAtCUsesA = true;
+	console.info('A still opens offline at C');
 	await page.getByRole('button', { name: 'Sair da aventura', exact: true }).click();
 	await setOffline(false);
 	let arrived: () => void = () => {};
