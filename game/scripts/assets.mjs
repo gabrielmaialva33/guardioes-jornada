@@ -242,8 +242,33 @@ function cleanMaterialsAndAttributes(json, { replaceImages = [] } = {}, bin) {
 	return currentBin;
 }
 
-/** Bake non-unit scale on the avatar's 'head' node ([0.1, 0.1, 0.1]) into its mesh vertices so all 6 rigid nodes have scale=[1,1,1]. */
+/** Bake non-unit scale on the avatar's 'head' node ([0.1, 0.1, 0.1]) into its mesh vertices and wrap out-of-range UVs into [0, 1]. */
 function normalizeAvatarHeadScale(json, bin) {
+	for (const mesh of json.meshes || []) {
+		for (const prim of mesh.primitives || []) {
+			if (prim.attributes.TEXCOORD_0 !== undefined) {
+				const uvAcc = json.accessors[prim.attributes.TEXCOORD_0];
+				const uvBv = json.bufferViews[uvAcc.bufferView];
+				const uvBase = (uvBv.byteOffset || 0) + (uvAcc.byteOffset || 0);
+				const uvStride = uvBv.byteStride || 8;
+				const minUv = [Infinity, Infinity];
+				const maxUv = [-Infinity, -Infinity];
+				for (let i = 0; i < uvAcc.count; i++) {
+					const off = uvBase + i * uvStride;
+					const u = ((bin.readFloatLE(off) % 1) + 1) % 1;
+					const v = ((bin.readFloatLE(off + 4) % 1) + 1) % 1;
+					bin.writeFloatLE(u, off);
+					bin.writeFloatLE(v, off + 4);
+					if (u < minUv[0]) minUv[0] = u;
+					if (v < minUv[1]) minUv[1] = v;
+					if (u > maxUv[0]) maxUv[0] = u;
+					if (v > maxUv[1]) maxUv[1] = v;
+				}
+				uvAcc.min = minUv;
+				uvAcc.max = maxUv;
+			}
+		}
+	}
 	for (const node of json.nodes || []) {
 		if (node.name === 'head' && node.scale && node.mesh !== undefined) {
 			const [sx, sy, sz] = node.scale;

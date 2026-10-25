@@ -257,11 +257,102 @@ class Mesh:
         up = (l - root).cross(r - root).normalized() * thickness
         top = [root, l + up, tip, r + up] if thickness else [root, l, tip, r]
         # quads would be non-planar when bent: split into 2 triangles each side
-        self.add([top[0], top[3], top[2]], colour, uv)
-        self.add([top[0], top[2], top[1]], colour, uv)
         back = colour_under or colour
-        self.add([top[0], top[1], top[2]], back, uv)
-        self.add([top[0], top[2], top[3]], back, uv)
+        self.add([top[0], top[3], top[2]], back, uv)
+        self.add([top[0], top[2], top[1]], back, uv)
+        self.add([top[0], top[1], top[2]], colour, uv)
+        self.add([top[0], top[2], top[3]], colour, uv)
+
+    def chunk(self, base, rx, ry, h, n, colour, *, chamfer=0.3, twist=0.0, colour_top=None, colour_bottom=None,
+              top_scale=1.0, bottom=True, rot: Matrix | None = None, uv=None):
+        """The Kenney Nature Kit canopy block: an n-gon prism with a chamfer ring at the
+        bottom and at the top (8n-4 triangles). `base` is the centre of the bottom face."""
+        c = Vector(base)
+        r = rot or Matrix.Identity(3)
+        ch = chamfer
+
+        def ring(scale, z):
+            return [c + r @ Vector((math.cos(twist + 2 * math.pi * k / n) * rx * scale,
+                                    math.sin(twist + 2 * math.pi * k / n) * ry * scale, z)) for k in range(n)]
+
+        rings = [ring(1 - ch * 0.55, 0.0), ring(1.0, h * ch), ring(top_scale, h * (1 - ch)), ring(top_scale * (1 - ch * 0.55), h)]
+        cols = [colour_bottom or colour, colour, colour_top or colour]
+        for i in range(3):
+            a, b = rings[i], rings[i + 1]
+            for k in range(n):
+                self.add([a[k], a[(k + 1) % n], b[(k + 1) % n], b[k]], cols[i], uv)
+        self.add(rings[3], colour_top or colour, uv)
+        if bottom:
+            self.add(list(reversed(rings[0])), colour_bottom or colour, uv)
+
+    def tube(self, points, radii, n, colour, *, cap_end=True, cap_start=False, twist=0.0, colours=None, uv=None):
+        """A bent n-sided branch along a polyline, rings parallel-transported so the
+        faces never twist; colours: optional per-segment colour list."""
+        pts = [Vector(p) for p in points]
+        tangents = []
+        for i in range(len(pts)):
+            if i == 0:
+                t = pts[1] - pts[0]
+            elif i == len(pts) - 1:
+                t = pts[-1] - pts[-2]
+            else:
+                t = (pts[i + 1] - pts[i]).normalized() + (pts[i] - pts[i - 1]).normalized()
+            tangents.append(t.normalized())
+        basis = frame(tangents[0])
+        rings = []
+        for i, p in enumerate(pts):
+            if i > 0:
+                q = tangents[i - 1].rotation_difference(tangents[i])
+                basis = q.to_matrix() @ basis
+            rings.append([p + basis @ Vector((math.cos(twist + 2 * math.pi * k / n) * radii[i],
+                                              math.sin(twist + 2 * math.pi * k / n) * radii[i], 0)) for k in range(n)])
+        for i in range(len(pts) - 1):
+            col = (colours or [colour] * len(pts))[i]
+            a, b = rings[i], rings[i + 1]
+            if radii[i + 1] <= 1e-6:
+                for k in range(n):
+                    self.add([a[k], a[(k + 1) % n], pts[i + 1]], col, uv)
+            else:
+                for k in range(n):
+                    self.add([a[k], a[(k + 1) % n], b[(k + 1) % n], b[k]], col, uv)
+        if cap_end and radii[-1] > 1e-6:
+            self.add(rings[-1], (colours or [colour])[-1], uv)
+        if cap_start:
+            self.add(list(reversed(rings[0])), colour, uv)
+        return rings
+
+    def frond(self, path, widths, droops, colour, *, colour_under=None, normal_hint=None, uv=None):
+        """A palm or fern frond as a folded strip along `path` (list of points): at
+        each point the two edges sit `widths[i]/2` to the sides and `droops[i]` below
+        the rachis, so the leaflets hang down on both sides (a roof-shaped cross
+        section). The last width may be 0 for a pointed tip. Two-sided."""
+        pts = [Vector(p) for p in path]
+        hint = normal_hint or Vector((0, 0, 1))
+        left, right = [], []
+        for i, p in enumerate(pts):
+            t = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+            side = t.cross(hint)
+            if side.length < 1e-6:
+                side = t.cross(Vector((1, 0, 0)))
+            side.normalize()
+            down = Vector((0, 0, -droops[i]))
+            left.append(p + side * widths[i] / 2 + down)
+            right.append(p - side * widths[i] / 2 + down)
+        under = colour_under or colour
+        for i in range(len(pts) - 1):
+            for e in (left, right):
+                quad = [pts[i], pts[i + 1], e[i + 1], e[i]]
+                if (e[i + 1] - pts[i + 1]).length < 1e-6:
+                    tri = [pts[i], pts[i + 1], e[i]]
+                    self.add(tri if e is right else tri[::-1], colour, uv)
+                    self.add(tri[::-1] if e is right else tri, under, uv)
+                else:
+                    q = quad if e is right else quad[::-1]
+                    # keep each side as two triangles: the strip is usually non-planar
+                    self.add([q[0], q[1], q[2]], colour, uv)
+                    self.add([q[0], q[2], q[3]], colour, uv)
+                    self.add([q[2], q[1], q[0]], under, uv)
+                    self.add([q[3], q[2], q[0]], under, uv)
 
     def merge(self, other: "Mesh") -> None:
         base = len(self.verts)
