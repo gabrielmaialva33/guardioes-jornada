@@ -17,7 +17,8 @@ fi
 
 release="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD 2>/dev/null || echo local)"
 pnpm build
-rsync -az --delete build/ "$HOST:$APP_DIR/releases/$release/"
+# _headers is for Cloudflare Workers; nginx sets the same headers itself.
+rsync -az --delete --exclude _headers build/ "$HOST:$APP_DIR/releases/$release/"
 ssh "$HOST" "set -e
 	ln -sfn $APP_DIR/releases/$release $APP_DIR/current.tmp
 	mv -Tf $APP_DIR/current.tmp $APP_DIR/current
