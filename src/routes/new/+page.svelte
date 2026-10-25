@@ -90,7 +90,10 @@
 				autocomplete="nickname"
 				placeholder="Seu nome ou apelido"
 			/>
-			<p class="hint">É assim que você aparece no seu certificado.</p>
+			<!-- Data minimization (LGPD art. 6, III): a first name or nickname is enough. -->
+			<p class="hint">
+				Basta o primeiro nome ou um apelido. Ele aparece no seu certificado e fica guardado neste celular.
+			</p>
 			<button class="button wide" type="submit" disabled={!trimmed}>Continuar</button>
 		</form>
 	{:else}
