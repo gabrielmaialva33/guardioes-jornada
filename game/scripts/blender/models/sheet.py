@@ -36,7 +36,7 @@ LINEUP = [
     ("palmeira-jucara", "palmeira-juçara"),
     ("xaxim", "xaxim"),
     ("bromelia", "bromélia"),
-    ("bromelia-centro-vermelho", "bromélia (centro vermelho)"),
+    ("bromelia-centro-vermelho", "bromélia vermelha"),
     ("kenney:tree_palmTall", "Kenney tree_palmTall (ref.)"),
 ]
 
@@ -76,13 +76,15 @@ def lineup(png: Path):
         objs = load(key)
         lo, hi = C.world_bbox(objs)
         width = hi.x - lo.x
-        move(objs, Vector((x - lo.x, 0, 0)))
-        cx = x + width / 2
-        size = 0.55 if width > 3 else 0.42
-        C.label(title, (cx, -max(2.5, (hi.y - lo.y) / 2 + 1.0), 0.05), size=size, rot_z_deg=0)
-        C.label(f"{hi.z:.1f} u", (cx, -max(2.5, (hi.y - lo.y) / 2 + 1.0), 0.75), size=size, rot_z_deg=0)
+        size = 0.85 if width > 3 else 0.5
+        text = f"{title}, {hi.z:.1f} u"
+        slot = max(width, 0.56 * size * len(text))  # leave room for the label
+        move(objs, Vector((x + (slot - width) / 2 - lo.x, 0, 0)))
+        cx = x + slot / 2
+        front = -max(3.0, (hi.y - lo.y) / 2 + 1.5)
+        C.label(text, (cx, front, 0.1), size=size, rot_z_deg=0)
         everything += objs
-        x += width + (0.9 if width < 3 else 1.6)
+        x += slot + (0.8 if width < 3 else 1.6)
     C.ground(size=600)
     C.frame_camera(everything + props, azimuth_deg=0.0, elevation_deg=4.0, lens=50.0, res=(3600, 1200), margin=0.04)
     C.render(png, 128)

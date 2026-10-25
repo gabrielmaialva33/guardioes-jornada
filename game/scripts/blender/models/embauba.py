@@ -19,7 +19,8 @@ Shape decisions and sources:
   domed like umbrellas with drooping lobes. Tops are green (leaf ramp); the whitish
   underside (rock[3], the lightest grey-green in the ramps) shows only from below and as a
   sliver at the drooping margins, so from 10-20 m the crown reads green, not metallic.
-  Leaves are drawn about 3x real size so the umbrella crown reads on a phone.
+  Leaves are drawn about 4x real size (1.35-1.8 u radius) so the umbrella crown reads on a
+  phone at 10-20 m next to the chunkier canopy trees.
 """
 
 import math
@@ -68,18 +69,18 @@ def build():
         d = Vector((math.cos(a), math.sin(a), 0))
         bend = fork + d * reach * 0.62 + Vector((0, 0, rise * 0.22))
         tip = fork + d * reach + Vector((0, 0, rise))
-        m.tube([fork, bend, tip], [0.19, 0.15, 0.11], 4, BRANCH, cap_end=True, twist=a + math.pi / 4)
+        m.tube([fork, bend, tip], [0.23, 0.18, 0.13], 4, BRANCH, cap_end=True, twist=a + math.pi / 4)
         # Two leaves per tip: a big umbrella over the tip, and a smaller one hanging off to
         # the side, tipped towards the trunk so its whitish underside faces out (the silver
         # accent of the crown, not its main colour).
-        palmate_leaf(m, tip + Vector((0, 0, 0.12)), Vector((0, 0, 1)), 1.45, 7, a, LEAF if i % 2 else LEAF_DARK)
+        palmate_leaf(m, tip + Vector((0, 0, 0.14)), Vector((0, 0, 1)), 1.8, 7, a, LEAF if i % 2 else LEAF_DARK)
         out = d * math.cos(0.9) + Vector((-d.y, d.x, 0)) * math.sin(0.9) * (1 if i % 2 else -1)
         normal = (Vector((0, 0, 1)) * math.cos(0.7) - out * math.sin(0.7)).normalized()
-        palmate_leaf(m, tip + out * 0.95 - Vector((0, 0, 0.25)), normal, 1.1, 7, a + 0.4,
+        palmate_leaf(m, tip + out * 1.15 - Vector((0, 0, 0.3)), normal, 1.35, 7, a + 0.4,
                      LEAF_DARK if i % 2 else LEAF)
     leader = fork + Vector((0.05, -0.05, 3.0))
-    m.tube([fork, leader], [0.17, 0.11], 4, BRANCH, cap_end=True, twist=math.pi / 4)
-    palmate_leaf(m, leader + Vector((0, 0, 0.12)), Vector((0, 0, 1)), 1.25, 7, 0.2, LEAF)
+    m.tube([fork, leader], [0.2, 0.13], 4, BRANCH, cap_end=True, twist=math.pi / 4)
+    palmate_leaf(m, leader + Vector((0, 0, 0.14)), Vector((0, 0, 1)), 1.55, 7, 0.2, LEAF)
     return C.build_object(m, "embauba")
 
 

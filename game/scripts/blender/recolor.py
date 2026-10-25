@@ -309,7 +309,26 @@ def recolor_custom_glb(glb_path: Path, out_path: Path, cmap: dict) -> list[dict]
     buf = glb_path.read_bytes()
     j_len = struct.unpack_from("<I", buf, 12)[0]
     j_obj = json.loads(buf[20 : 20 + j_len].decode("utf-8"))
-    bin_chunk = buf[28 + j_len :] if len(buf) > 20 + j_len else b""
+    bin_chunk = bytearray(buf[28 + j_len :] if len(buf) > 20 + j_len else b"")
+
+    # Fix bico-tucano Y offset if exported with negative Y [-0.883, -0.463] instead of [+0.463, +0.883]
+    if "bico-tucano" in glb_path.stem:
+        for mesh in j_obj.get("meshes", []):
+            for prim in mesh.get("primitives", []):
+                pos_idx = prim.get("attributes", {}).get("POSITION")
+                if pos_idx is not None:
+                    acc = j_obj["accessors"][pos_idx]
+                    if acc.get("max", [0, 0, 0])[1] < 0:
+                        bv = j_obj["bufferViews"][acc["bufferView"]]
+                        base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+                        stride = bv.get("byteStride", 12)
+                        y_shift = 1.3467914
+                        for i in range(acc["count"]):
+                            off = base + i * stride + 4
+                            y_val = struct.unpack_from("<f", bin_chunk, off)[0]
+                            struct.pack_into("<f", bin_chunk, off, y_val + y_shift)
+                        acc["min"][1] = round(acc["min"][1] + y_shift, 6)
+                        acc["max"][1] = round(acc["max"][1] + y_shift, 6)
 
     has_vertex_colors = any(
         "COLOR_0" in prim.get("attributes", {})
