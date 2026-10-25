@@ -9,8 +9,7 @@
  *   ├─ body (0, 0.181, 0)            bottom centre of the body block
  *   │  ├─ head (0, 0.625, 0.3125)    neck pivot on the block's front face; the face, ears, muzzle or bill
  *   │  ├─ tail                        monkey (0, 0.538, -0.525), tiger (0, 0.638, -0.548), parrot (0, 0.537, -0.495)
- *   │  ├─ wing-left / wing-right      parrot only, (0.625 | -0.525, 0.463, 0.031), wings rest spread sideways
- *   │  └─ Group                       parrot only: the crest, recoloured as the toucan's black crown (not animated)
+ *   │  └─ wing-left / wing-right      parrot only, (0.625 | -0.525, 0.463, 0.031), wings rest spread sideways
  *   └─ leg-front-left … leg-back-right   hips at (±0.25, 0.3, ±0.25); each leg is a 0.3 block hanging down
  * The parrot has only the two front legs, at z = 0. The koala has no tail.
  *
@@ -71,8 +70,8 @@ export interface ModelMeasures {
 	readonly height: number;
 	/**
 	 * Feet to the top of the silhouette in every posture, the reference species
-	 * are scaled by (ART.md §3: by height, never by length). It is the head top,
-	 * and the crest on the parrot. Tails are left out: the rest mesh curls them
+	 * are scaled by (ART.md §3: by height, never by length). It is the head top
+	 * (the toucan has no crest; the asset pipeline removes the parrot's). Tails are left out: the rest mesh curls them
 	 * up (monkey to 1.61, tiger to 1.71), but every posture swings them down.
 	 */
 	readonly top: number;
@@ -144,9 +143,9 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 	},
 	parrot: {
 		...PET_HIPS,
-		// The head and body blocks top out at 1.431; the crest stands above them to 1.681.
+		// The head and body blocks top out at 1.431 (the crest is removed in the asset pipeline).
 		height: 1.431,
-		top: 1.681,
+		top: 1.431,
 		eyeY: 0.894,
 		bodyLength: 1.433,
 		// Bill tip to tail tip: the tail mesh reaches z -0.6 behind its pivot at -0.495.

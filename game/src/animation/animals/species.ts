@@ -369,7 +369,7 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'tucano-de-bico-verde': {
 		id: 'tucano-de-bico-verde',
 		name: 'Tucano-de-bico-verde',
-		// Feet to the top of the crown (the crest), like the other species' head tops.
+		// Feet to the top of the head, like the other species.
 		...sized('parrot', TUCANO_SIZE),
 		limbScale: { front: 1, hind: 1 },
 		tempo: tempoFor('parrot', TUCANO_SIZE),
