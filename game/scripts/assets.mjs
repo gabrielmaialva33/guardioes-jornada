@@ -1128,24 +1128,186 @@ function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
 		// 18 diverse Brazilian presets (skin tones from deep ebony/mahogany to warm bronze, indigenous terracotta, pardo & olive/light;
 		// clothes strictly from ART.md ramps + non-gold accents ipeAmarelo/ipeRosa)
 		presets: [
-			{ id: 'preset-01', name: 'Iara (Guardiã)', skin: '#b87b52', hair: '#2a201c', shirt: '#2d6a4f', pants: '#5e4330', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-02', name: 'Cauã', skin: '#8c583a', hair: '#241c18', shirt: '#4f9a6e', pants: '#5a4232', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-03', name: 'Dandara', skin: '#5c3b28', hair: '#241c18', shirt: '#f2c94c', pants: '#2d6a4f', shoes: '#5e4330', face: 'smile' },
-			{ id: 'preset-04', name: 'Bento', skin: '#d99e73', hair: '#5e4330', shirt: '#3e9ccf', pants: '#4f5c55', shoes: '#5a4232', face: 'smile' },
-			{ id: 'preset-05', name: 'Maitê', skin: '#e8b892', hair: '#8a6448', shirt: '#ff9fb7', pants: '#2f7fb0', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-06', name: 'Zuri', skin: '#6e4730', hair: '#241c18', shirt: '#74c69d', pants: '#4f5c55', shoes: '#5e4330', face: 'smile' },
-			{ id: 'preset-07', name: 'Raoni', skin: '#a66843', hair: '#241c18', shirt: '#5fa36a', pants: '#6b4f3a', shoes: '#5a4232', face: 'neutral' },
-			{ id: 'preset-08', name: 'Helena', skin: '#f0c8a8', hair: '#a8805c', shirt: '#2f7fb0', pants: '#6f7d74', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-09', name: 'Gael', skin: '#c98c63', hair: '#3b281e', shirt: '#3f7d4f', pants: '#8a6448', shoes: '#5e4330', face: 'smile' },
-			{ id: 'preset-10', name: 'Aiyra', skin: '#995f3d', hair: '#241c18', shirt: '#f2c94c', pants: '#5e4330', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-11', name: 'Lucas', skin: '#e2ae86', hair: '#5a4232', shirt: '#73cbf0', pants: '#2f5e3c', shoes: '#5a4232', face: 'neutral' },
-			{ id: 'preset-12', name: 'Tainá', skin: '#7d5035', hair: '#241c18', shirt: '#86bf7c', pants: '#5a4232', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-13', name: 'Ravi', skin: '#b0744d', hair: '#2a201c', shirt: '#a8805c', pants: '#2d6a4f', shoes: '#5e4330', face: 'smile' },
-			{ id: 'preset-14', name: 'Clara', skin: '#ecc2a0', hair: '#c9a27a', shirt: '#4f9a6e', pants: '#2f7fb0', shoes: '#4f5c55', face: 'smile' },
-			{ id: 'preset-15', name: 'Kauan', skin: '#63402b', hair: '#241c18', shirt: '#3e9ccf', pants: '#6b4f3a', shoes: '#4f5c55', face: 'neutral' },
-			{ id: 'preset-16', name: 'Lia', skin: '#d1946b', hair: '#5e4330', shirt: '#ff9fb7', pants: '#4f5c55', shoes: '#5a4232', face: 'smile' },
-			{ id: 'preset-17', name: 'Caio', skin: '#825439', hair: '#2a201c', shirt: '#5fa36a', pants: '#4f5c55', shoes: '#5e4330', face: 'smile' },
-			{ id: 'preset-18', name: 'Jaci', skin: '#be8158', hair: '#3b281e', shirt: '#2d6a4f', pants: '#8f6e52', shoes: '#5a4232', face: 'neutral' }
+			{
+				id: 'preset-01',
+				name: 'Iara (Guardiã)',
+				skin: '#b87b52',
+				hair: '#2a201c',
+				shirt: '#2d6a4f',
+				pants: '#5e4330',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-02',
+				name: 'Cauã',
+				skin: '#8c583a',
+				hair: '#241c18',
+				shirt: '#4f9a6e',
+				pants: '#5a4232',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-03',
+				name: 'Dandara',
+				skin: '#5c3b28',
+				hair: '#241c18',
+				shirt: '#f2c94c',
+				pants: '#2d6a4f',
+				shoes: '#5e4330',
+				face: 'smile'
+			},
+			{
+				id: 'preset-04',
+				name: 'Bento',
+				skin: '#d99e73',
+				hair: '#5e4330',
+				shirt: '#3e9ccf',
+				pants: '#4f5c55',
+				shoes: '#5a4232',
+				face: 'smile'
+			},
+			{
+				id: 'preset-05',
+				name: 'Maitê',
+				skin: '#e8b892',
+				hair: '#8a6448',
+				shirt: '#ff9fb7',
+				pants: '#2f7fb0',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-06',
+				name: 'Zuri',
+				skin: '#6e4730',
+				hair: '#241c18',
+				shirt: '#74c69d',
+				pants: '#4f5c55',
+				shoes: '#5e4330',
+				face: 'smile'
+			},
+			{
+				id: 'preset-07',
+				name: 'Raoni',
+				skin: '#a66843',
+				hair: '#241c18',
+				shirt: '#5fa36a',
+				pants: '#6b4f3a',
+				shoes: '#5a4232',
+				face: 'neutral'
+			},
+			{
+				id: 'preset-08',
+				name: 'Helena',
+				skin: '#f0c8a8',
+				hair: '#a8805c',
+				shirt: '#2f7fb0',
+				pants: '#6f7d74',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-09',
+				name: 'Gael',
+				skin: '#c98c63',
+				hair: '#3b281e',
+				shirt: '#3f7d4f',
+				pants: '#8a6448',
+				shoes: '#5e4330',
+				face: 'smile'
+			},
+			{
+				id: 'preset-10',
+				name: 'Aiyra',
+				skin: '#995f3d',
+				hair: '#241c18',
+				shirt: '#f2c94c',
+				pants: '#5e4330',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-11',
+				name: 'Lucas',
+				skin: '#e2ae86',
+				hair: '#5a4232',
+				shirt: '#73cbf0',
+				pants: '#2f5e3c',
+				shoes: '#5a4232',
+				face: 'neutral'
+			},
+			{
+				id: 'preset-12',
+				name: 'Tainá',
+				skin: '#7d5035',
+				hair: '#241c18',
+				shirt: '#86bf7c',
+				pants: '#5a4232',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-13',
+				name: 'Ravi',
+				skin: '#b0744d',
+				hair: '#2a201c',
+				shirt: '#a8805c',
+				pants: '#2d6a4f',
+				shoes: '#5e4330',
+				face: 'smile'
+			},
+			{
+				id: 'preset-14',
+				name: 'Clara',
+				skin: '#ecc2a0',
+				hair: '#c9a27a',
+				shirt: '#4f9a6e',
+				pants: '#2f7fb0',
+				shoes: '#4f5c55',
+				face: 'smile'
+			},
+			{
+				id: 'preset-15',
+				name: 'Kauan',
+				skin: '#63402b',
+				hair: '#241c18',
+				shirt: '#3e9ccf',
+				pants: '#6b4f3a',
+				shoes: '#4f5c55',
+				face: 'neutral'
+			},
+			{
+				id: 'preset-16',
+				name: 'Lia',
+				skin: '#d1946b',
+				hair: '#5e4330',
+				shirt: '#ff9fb7',
+				pants: '#4f5c55',
+				shoes: '#5a4232',
+				face: 'smile'
+			},
+			{
+				id: 'preset-17',
+				name: 'Caio',
+				skin: '#825439',
+				hair: '#2a201c',
+				shirt: '#5fa36a',
+				pants: '#4f5c55',
+				shoes: '#5e4330',
+				face: 'smile'
+			},
+			{
+				id: 'preset-18',
+				name: 'Jaci',
+				skin: '#be8158',
+				hair: '#3b281e',
+				shirt: '#2d6a4f',
+				pants: '#8f6e52',
+				shoes: '#5a4232',
+				face: 'neutral'
+			}
 		]
 	};
 
@@ -1279,11 +1441,7 @@ function main() {
 			const { json, bin } = readGlb(rawAvatar);
 			delete json.animations;
 			normalizeAvatarHeadScale(json, bin);
-			const nextBin = cleanMaterialsAndAttributes(
-				json,
-				{ replaceImages: [defaultAvatarSkinBytes] },
-				bin
-			);
+			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [defaultAvatarSkinBytes] }, bin);
 			const step1 = path.join(workDir, 'avatar-step1.glb');
 			const step2 = path.join(workDir, 'avatar-step2.glb');
 			writeGlb(step1, json, nextBin);

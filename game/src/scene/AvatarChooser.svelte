@@ -1,101 +1,381 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { AVATAR_PARTS, type AvatarColors, type AvatarPart, type AvatarProfile } from '../data/local-save.ts';
+	import {
+		AVATAR_PARTS,
+		type AvatarColors,
+		type AvatarPart,
+		type AvatarProfile
+	} from '../data/local-save.ts';
 	import { ACCENT, RAMPS } from '../style/palette.ts';
 	import HudIcon from './HudIcon.svelte';
 
-	export interface AvatarPreset { id: string; name: string; colors: AvatarColors; }
-	let { profile, presets, kenneyUrls, onapply, onclose }: {
-		profile: AvatarProfile; presets: readonly AvatarPreset[]; kenneyUrls: Readonly<Record<string,string>>;
-		onapply: (value: AvatarProfile) => void; onclose: () => void;
-	} = $props();
-	let draft = $state.raw<AvatarProfile>(untrack(() => ({...profile,colors:{...profile.colors}})));
-	let message = $state('');
-	const labels: Record<AvatarPart,string> = { skin:'Pele',hair:'Cabelo',shirt:'Camiseta',pants:'Calça' };
-	const clothing = [...RAMPS.leaf,...RAMPS.grass,...RAMPS.wood,...RAMPS.soil,...RAMPS.rock,...RAMPS.water,ACCENT.ipeAmarelo,ACCENT.ipeRosa];
-	function changeColor(part: AvatarPart, value: string) {
-		if ((part==='shirt'||part==='pants') && value.toLowerCase()===ACCENT.gold) { message='O dourado fica reservado aos objetivos da trilha.'; return; }
-		message='';draft={...draft,style:'classic',colors:{...draft.colors,[part]:value}};
+	export interface AvatarPreset {
+		id: string;
+		name: string;
+		colors: AvatarColors;
 	}
-	function selectPreset(preset: AvatarPreset) { message='';draft={...draft,style:'classic',colors:{...preset.colors}}; }
+	let {
+		profile,
+		presets,
+		kenneyUrls,
+		onapply,
+		onclose
+	}: {
+		profile: AvatarProfile;
+		presets: readonly AvatarPreset[];
+		kenneyUrls: Readonly<Record<string, string>>;
+		onapply: (value: AvatarProfile) => void;
+		onclose: () => void;
+	} = $props();
+	let draft = $state.raw<AvatarProfile>(untrack(() => ({ ...profile, colors: { ...profile.colors } })));
+	let message = $state('');
+	const labels: Record<AvatarPart, string> = {
+		skin: 'Pele',
+		hair: 'Cabelo',
+		shirt: 'Camiseta',
+		pants: 'Calça'
+	};
+	const clothing = [
+		...RAMPS.leaf,
+		...RAMPS.grass,
+		...RAMPS.wood,
+		...RAMPS.soil,
+		...RAMPS.rock,
+		...RAMPS.water,
+		ACCENT.ipeAmarelo,
+		ACCENT.ipeRosa
+	];
+	function changeColor(part: AvatarPart, value: string) {
+		if ((part === 'shirt' || part === 'pants') && value.toLowerCase() === ACCENT.gold) {
+			message = 'O dourado fica reservado aos objetivos da trilha.';
+			return;
+		}
+		message = '';
+		draft = { ...draft, style: 'classic', colors: { ...draft.colors, [part]: value } };
+	}
+	function selectPreset(preset: AvatarPreset) {
+		message = '';
+		draft = { ...draft, style: 'classic', colors: { ...preset.colors } };
+	}
 	function keydown(event: KeyboardEvent) {
 		event.stopPropagation();
-		if(event.key==='Escape') {event.preventDefault();onclose();}
-		if(event.key==='Tab') {
-			const root=event.currentTarget;
-			if(!(root instanceof HTMLElement))return;
-			const nodes=root.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]');
-			const first=nodes[0],last=nodes[nodes.length-1];
-			if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
-			else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			onclose();
+		}
+		if (event.key === 'Tab') {
+			const root = event.currentTarget;
+			if (!(root instanceof HTMLElement)) return;
+			const nodes = root.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]');
+			const first = nodes[0],
+				last = nodes[nodes.length - 1];
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault();
+				last?.focus();
+			} else if (!event.shiftKey && document.activeElement === last) {
+				event.preventDefault();
+				first?.focus();
+			}
 		}
 	}
 </script>
 
 {#snippet mannequin(colors: AvatarColors)}
 	<svg class="mannequin" viewBox="0 0 64 80" aria-hidden="true">
-		<rect x="22" y="4" width="20" height="21" rx="1" fill={colors.skin}/><path d="M22 4h20v7H22zM22 11h3v4h-3z" fill={colors.hair}/>
-		<path d="M27 15h2v2h-2zm10 0h-2v2h2zM28 20q4 4 8 0" fill="#24382c" stroke="#24382c" stroke-width="1"/>
-		<path d="M16 28h32v24H16z" fill={colors.shirt}/><path d="M7 28h8v25H7zm42 0h8v25h-8z" fill={colors.skin}/>
-		<path d="M17 53h14v24H17zm16 0h14v24H33z" fill={colors.pants}/>
+		<rect x="22" y="4" width="20" height="21" rx="1" fill={colors.skin} /><path
+			d="M22 4h20v7H22zM22 11h3v4h-3z"
+			fill={colors.hair}
+		/>
+		<path d="M27 15h2v2h-2zm10 0h-2v2h2zM28 20q4 4 8 0" fill="#24382c" stroke="#24382c" stroke-width="1" />
+		<path d="M16 28h32v24H16z" fill={colors.shirt} /><path
+			d="M7 28h8v25H7zm42 0h8v25h-8z"
+			fill={colors.skin}
+		/>
+		<path d="M17 53h14v24H17zm16 0h14v24H33z" fill={colors.pants} />
 	</svg>
 {/snippet}
 
-<div class="chooser" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="avatar-title" onpointerdown={(event)=>event.stopPropagation()} onkeydown={keydown} onkeyup={(event)=>event.stopPropagation()}>
+<div
+	class="chooser"
+	role="dialog"
+	tabindex="-1"
+	aria-modal="true"
+	aria-labelledby="avatar-title"
+	onpointerdown={(event) => event.stopPropagation()}
+	onkeydown={keydown}
+	onkeyup={(event) => event.stopPropagation()}
+>
 	<div class="panel">
-		<header><h2 id="avatar-title">Seu personagem</h2><button class="icon" type="button" aria-label="Fechar personalização" title="Fechar personalização" {@attach(node)=>{node.focus({preventScroll:true})}} onclick={onclose}><HudIcon name="back"/></button></header>
+		<header>
+			<h2 id="avatar-title">Seu personagem</h2>
+			<button
+				class="icon"
+				type="button"
+				aria-label="Fechar personalização"
+				title="Fechar personalização"
+				{@attach (node) => {
+					node.focus({ preventScroll: true });
+				}}
+				onclick={onclose}><HudIcon name="back" /></button
+			>
+		</header>
 		<div class="tabs" role="tablist" aria-label="Estilos do personagem">
-			<button type="button" role="tab" id="classic-tab" aria-selected={draft.style==='classic'} aria-controls="classic-panel" onclick={()=>draft={...draft,style:'classic'}}>Cores clássicas</button>
-			<button type="button" role="tab" id="kenney-tab" aria-selected={draft.style==='kenney'} aria-controls="kenney-panel" onclick={()=>draft={...draft,style:'kenney'}}>Skins da Kenney</button>
+			<button
+				type="button"
+				role="tab"
+				id="classic-tab"
+				aria-selected={draft.style === 'classic'}
+				aria-controls="classic-panel"
+				onclick={() => (draft = { ...draft, style: 'classic' })}>Cores clássicas</button
+			>
+			<button
+				type="button"
+				role="tab"
+				id="kenney-tab"
+				aria-selected={draft.style === 'kenney'}
+				aria-controls="kenney-panel"
+				onclick={() => (draft = { ...draft, style: 'kenney' })}>Skins da Kenney</button
+			>
 		</div>
-		{#if draft.style==='classic'}
+		{#if draft.style === 'classic'}
 			<div id="classic-panel" role="tabpanel" aria-labelledby="classic-tab" class="classic">
 				<div class="presets" aria-label="Combinações de cores">
-					{#each presets as preset(preset.id)}<button class="preset" type="button" aria-label={preset.name} title={preset.name} aria-pressed={AVATAR_PARTS.every(part=>draft.colors[part]===preset.colors[part])} onclick={()=>selectPreset(preset)}>{@render mannequin(preset.colors)}</button>{/each}
+					{#each presets as preset (preset.id)}<button
+							class="preset"
+							type="button"
+							aria-label={preset.name}
+							title={preset.name}
+							aria-pressed={AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
+							onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors)}</button
+						>{/each}
 				</div>
-				<div class="custom"><div class="preview">{@render mannequin(draft.colors)}</div>
-					{#each AVATAR_PARTS as part}<label>{labels[part]}<input type="color" value={draft.colors[part]} oninput={(event)=>changeColor(part,event.currentTarget.value)} /></label>{/each}
-					<p class="hint">Cores que combinam com a floresta</p><div class="swatches" aria-label="Cores para a camiseta">{#each clothing as color}<button type="button" style:background={color} aria-label={`Camiseta ${color}`} title="Usar na camiseta" onclick={()=>changeColor('shirt',color)}></button>{/each}</div>
+				<div class="custom">
+					<div class="preview">{@render mannequin(draft.colors)}</div>
+					{#each AVATAR_PARTS as part}<label
+							>{labels[part]}<input
+								type="color"
+								value={draft.colors[part]}
+								oninput={(event) => changeColor(part, event.currentTarget.value)}
+							/></label
+						>{/each}
+					<p class="hint">Cores que combinam com a floresta</p>
+					<div class="swatches" aria-label="Cores para a camiseta">
+						{#each clothing as color}<button
+								type="button"
+								style:background={color}
+								aria-label={`Camiseta ${color}`}
+								title="Usar na camiseta"
+								onclick={() => changeColor('shirt', color)}
+							></button>{/each}
+					</div>
 				</div>
 			</div>
 		{:else}
 			<div id="kenney-panel" role="tabpanel" aria-labelledby="kenney-tab" class="kenney">
 				<p class="hint">Texturas originais da Kenney. A prévia mostra o desenho da skin.</p>
-				<div class="skins">{#each Object.entries(kenneyUrls) as [id,url]}<button class="skin" type="button" aria-label={`Skin da Kenney ${id}`} title={`Skin da Kenney ${id}`} aria-pressed={draft.kenneySkin===id} onclick={()=>draft={...draft,kenneySkin:id}}><img src={url} alt="" loading="lazy" decoding="async" width="64" height="64"/></button>{/each}</div>
+				<div class="skins">
+					{#each Object.entries(kenneyUrls) as [id, url]}<button
+							class="skin"
+							type="button"
+							aria-label={`Skin da Kenney ${id}`}
+							title={`Skin da Kenney ${id}`}
+							aria-pressed={draft.kenneySkin === id}
+							onclick={() => (draft = { ...draft, kenneySkin: id })}
+							><img src={url} alt="" loading="lazy" decoding="async" width="64" height="64" /></button
+						>{/each}
+				</div>
 			</div>
 		{/if}
 		{#if message}<p role="status" class="message">{message}</p>{/if}
-		<footer><button type="button" onclick={onclose}>Cancelar</button><button class="apply" type="button" onclick={()=>onapply({...draft,colors:{...draft.colors}})}>Usar este personagem</button></footer>
+		<footer>
+			<button type="button" onclick={onclose}>Cancelar</button><button
+				class="apply"
+				type="button"
+				onclick={() => onapply({ ...draft, colors: { ...draft.colors } })}>Usar este personagem</button
+			>
+		</footer>
 	</div>
 </div>
 
 <style>
-	.chooser { position:absolute;inset:0;z-index:4;display:grid;place-items:center;padding:12px;background:#10271be8;color:#f1f6ed;font:0.875rem var(--font-ui,system-ui);box-sizing:border-box; }
-	.panel { width:min(100%,52rem);max-height:calc(100dvh - 24px);overflow:auto;background:#173a2b;border:1px solid #ffffff38;border-radius:20px;padding:16px;box-sizing:border-box; }
-	header,footer { display:flex;align-items:center;justify-content:space-between;gap:12px; }
-	h2 { margin:0;font:1.6rem var(--font-story,system-ui); }
-	button { border:1px solid #ffffff44;border-radius:12px;min-width:44px;min-height:44px;padding:8px 12px;font:inherit;color:inherit;background:#244c38;cursor:pointer; }
-	button:focus-visible,input:focus-visible { outline:3px solid #f2c94c;outline-offset:3px; }
-	.icon { border-radius:50%;padding:0;width:44px;height:44px;display:grid;place-items:center; }
-	.tabs { display:flex;gap:8px;margin:12px 0; }
-	[aria-selected='true'],[aria-pressed='true'] { outline:2px solid #74c69d;outline-offset:1px;background:#315f46; }
-	.classic { display:grid;grid-template-columns:minmax(0,1.3fr) minmax(12rem,1fr);gap:16px; }
-	.presets,.skins { display:grid;grid-template-columns:repeat(6,minmax(44px,1fr));gap:8px;align-content:start; }
-	.preset { display:grid;place-items:center;padding:4px; }
-	.mannequin { display:block;width:48px;height:60px; }
-	.custom { display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start; }
-	.preview { grid-row:span 2;display:grid;place-items:center; }
-	.preview .mannequin { width:72px;height:90px; }
-	label { display:flex;justify-content:space-between;align-items:center;gap:8px; }
-	input[type='color'] { width:48px;height:44px;padding:4px;border:1px solid #ffffff44;border-radius:8px;background:#244c38;cursor:pointer; }
-	.hint { font-size:0.75rem;color:#d4e8d6;margin:8px 0;grid-column:1/-1; }
-	.swatches { grid-column:1/-1;display:grid;grid-template-columns:repeat(6,1fr);gap:6px; }
-	.swatches button { min-width:0;min-height:44px;padding:0; }
-	.kenney .skins { grid-template-columns:repeat(9,minmax(44px,1fr)); }
-	.skin { padding:4px;overflow:hidden; }
-	.skin img { width:100%;height:auto;aspect-ratio:1;image-rendering:pixelated;display:block; }
-	.message { color:#f2c94c; }
-	footer { margin-top:16px;justify-content:flex-end; }
-	.apply { background:#74c69d;color:#173a2b;font-weight:700; }
-	@media(max-width:600px) { .classic { grid-template-columns:1fr; }.kenney .skins { grid-template-columns:repeat(6,minmax(44px,1fr)); }.custom { grid-template-columns:repeat(2,1fr); }.preview { grid-row:span 2; }.presets { grid-template-columns:repeat(6,minmax(38px,1fr)); } }
+	.chooser {
+		position: absolute;
+		inset: 0;
+		z-index: 4;
+		display: grid;
+		place-items: center;
+		padding: 12px;
+		background: #10271be8;
+		color: #f1f6ed;
+		font: 0.875rem var(--font-ui, system-ui);
+		box-sizing: border-box;
+	}
+	.panel {
+		width: min(100%, 52rem);
+		max-height: calc(100dvh - 24px);
+		overflow: auto;
+		background: #173a2b;
+		border: 1px solid #ffffff38;
+		border-radius: 20px;
+		padding: 16px;
+		box-sizing: border-box;
+	}
+	header,
+	footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	h2 {
+		margin: 0;
+		font: 1.6rem var(--font-story, system-ui);
+	}
+	button {
+		border: 1px solid #ffffff44;
+		border-radius: 12px;
+		min-width: 44px;
+		min-height: 44px;
+		padding: 8px 12px;
+		font: inherit;
+		color: inherit;
+		background: #244c38;
+		cursor: pointer;
+	}
+	button:focus-visible,
+	input:focus-visible {
+		outline: 3px solid #f2c94c;
+		outline-offset: 3px;
+	}
+	.icon {
+		border-radius: 50%;
+		padding: 0;
+		width: 44px;
+		height: 44px;
+		display: grid;
+		place-items: center;
+	}
+	.tabs {
+		display: flex;
+		gap: 8px;
+		margin: 12px 0;
+	}
+	[aria-selected='true'],
+	[aria-pressed='true'] {
+		outline: 2px solid #74c69d;
+		outline-offset: 1px;
+		background: #315f46;
+	}
+	.classic {
+		display: grid;
+		grid-template-columns: minmax(0, 1.3fr) minmax(12rem, 1fr);
+		gap: 16px;
+	}
+	.presets,
+	.skins {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(44px, 1fr));
+		gap: 8px;
+		align-content: start;
+	}
+	.preset {
+		display: grid;
+		place-items: center;
+		padding: 4px;
+	}
+	.mannequin {
+		display: block;
+		width: 48px;
+		height: 60px;
+	}
+	.custom {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+		align-content: start;
+	}
+	.preview {
+		grid-row: span 2;
+		display: grid;
+		place-items: center;
+	}
+	.preview .mannequin {
+		width: 72px;
+		height: 90px;
+	}
+	label {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 8px;
+	}
+	input[type='color'] {
+		width: 48px;
+		height: 44px;
+		padding: 4px;
+		border: 1px solid #ffffff44;
+		border-radius: 8px;
+		background: #244c38;
+		cursor: pointer;
+	}
+	.hint {
+		font-size: 0.75rem;
+		color: #d4e8d6;
+		margin: 8px 0;
+		grid-column: 1/-1;
+	}
+	.swatches {
+		grid-column: 1/-1;
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: 6px;
+	}
+	.swatches button {
+		min-width: 0;
+		min-height: 44px;
+		padding: 0;
+	}
+	.kenney .skins {
+		grid-template-columns: repeat(9, minmax(44px, 1fr));
+	}
+	.skin {
+		padding: 4px;
+		overflow: hidden;
+	}
+	.skin img {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 1;
+		image-rendering: pixelated;
+		display: block;
+	}
+	.message {
+		color: #f2c94c;
+	}
+	footer {
+		margin-top: 16px;
+		justify-content: flex-end;
+	}
+	.apply {
+		background: #74c69d;
+		color: #173a2b;
+		font-weight: 700;
+	}
+	@media (max-width: 600px) {
+		.classic {
+			grid-template-columns: 1fr;
+		}
+		.kenney .skins {
+			grid-template-columns: repeat(6, minmax(44px, 1fr));
+		}
+		.custom {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.preview {
+			grid-row: span 2;
+		}
+		.presets {
+			grid-template-columns: repeat(6, minmax(38px, 1fr));
+		}
+	}
 </style>
