@@ -1,206 +1,186 @@
 {
-	"canvasSize": 64,
-	"description": "64x64 UV region map for compositing a Roblox-classic flat-colour avatar skin on avatar.glb (origin top-left, flipY=false).",
-	"regions": {
-		"head": {
-			"all": [0, 0, 32, 24],
-			"top": [8, 0, 8, 8],
-			"bottom": [8, 16, 8, 8],
-			"right": [0, 8, 8, 8],
-			"front": [8, 8, 8, 8],
-			"left": [16, 8, 8, 8],
-			"back": [24, 8, 8, 8],
-			"hair": [
-				[8, 0, 8, 8],
-				[24, 8, 8, 6],
-				[0, 8, 8, 3],
-				[0, 11, 2, 3],
-				[16, 8, 8, 3],
-				[22, 11, 2, 3],
-				[8, 8, 8, 2]
+	"version": 1,
+	"size": 64,
+	"uvSource": "character-a.glb",
+	"slots": {
+		"skin": [
+			[
+				0,
+				0,
+				32,
+				24
+			],
+			[
+				30,
+				33,
+				16,
+				15
+			],
+			[
+				48,
+				33,
+				16,
+				15
 			]
-		},
-		"torso": {
-			"all": [0, 43, 28, 21],
-			"top": [6, 43, 8, 6],
-			"bottom": [6, 58, 8, 6],
-			"right": [0, 49, 6, 9],
-			"front": [6, 49, 8, 9],
-			"left": [14, 49, 6, 9],
-			"back": [20, 49, 8, 9]
-		},
-		"armRight": {
-			"top": [30, 33, 4, 4],
-			"bottom": [34, 33, 4, 4],
-			"right": [30, 37, 4, 11],
-			"front": [34, 37, 4, 11],
-			"left": [38, 37, 4, 11],
-			"back": [42, 37, 4, 11],
-			"sleeve": [30, 37, 16, 5],
-			"forearm": [30, 42, 16, 6]
-		},
-		"armLeft": {
-			"top": [48, 33, 4, 4],
-			"bottom": [52, 33, 4, 4],
-			"right": [48, 37, 4, 11],
-			"front": [52, 37, 4, 11],
-			"left": [56, 37, 4, 11],
-			"back": [60, 37, 4, 11],
-			"sleeve": [48, 37, 16, 5],
-			"forearm": [48, 42, 16, 6]
-		},
-		"legRight": {
-			"top": [30, 50, 4, 4],
-			"bottom": [34, 50, 4, 4],
-			"right": [30, 54, 4, 10],
-			"front": [34, 54, 4, 10],
-			"left": [38, 54, 4, 10],
-			"back": [42, 54, 4, 10],
-			"pants": [30, 54, 16, 8],
-			"shoe": [30, 62, 16, 2]
-		},
-		"legLeft": {
-			"top": [48, 50, 4, 4],
-			"bottom": [52, 50, 4, 4],
-			"right": [48, 54, 4, 10],
-			"front": [52, 54, 4, 10],
-			"left": [56, 54, 4, 10],
-			"back": [60, 54, 4, 10],
-			"pants": [48, 54, 16, 8],
-			"shoe": [48, 62, 16, 2]
-		}
+		],
+		"shirt": [
+			[
+				0,
+				43,
+				28,
+				21
+			],
+			[
+				30,
+				33,
+				4,
+				4
+			],
+			[
+				30,
+				37,
+				16,
+				5
+			],
+			[
+				48,
+				33,
+				4,
+				4
+			],
+			[
+				48,
+				37,
+				16,
+				5
+			]
+		],
+		"pants": [
+			[
+				30,
+				50,
+				16,
+				14
+			],
+			[
+				48,
+				50,
+				16,
+				14
+			]
+		],
+		"shoes": [
+			[
+				34,
+				50,
+				4,
+				4
+			],
+			[
+				30,
+				62,
+				16,
+				2
+			],
+			[
+				52,
+				50,
+				4,
+				4
+			],
+			[
+				48,
+				62,
+				16,
+				2
+			]
+		],
+		"hair": [
+			[
+				8,
+				0,
+				8,
+				8
+			],
+			[
+				24,
+				8,
+				8,
+				6
+			],
+			[
+				0,
+				8,
+				8,
+				3
+			],
+			[
+				0,
+				11,
+				2,
+				3
+			],
+			[
+				16,
+				8,
+				8,
+				3
+			],
+			[
+				22,
+				11,
+				2,
+				3
+			],
+			[
+				8,
+				8,
+				8,
+				2
+			]
+		]
 	},
-	"faces": {
-		"targetRect64": [8, 8, 8, 8],
-		"targetRect128": [16, 16, 16, 16],
-		"palette": {
-			"E": "#26201e",
-			"W": "#e4ece8",
-			"B": "#d98274"
-		},
-		"smile": {
-			"file": "face-smile.png",
-			"pixels8x8": [
-				{
-					"x": 2,
-					"y": 3,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 5,
-					"y": 3,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 2,
-					"y": 4,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 5,
-					"y": 4,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 3,
-					"y": 6,
-					"color": "#26201e",
-					"role": "mouth"
-				},
-				{
-					"x": 4,
-					"y": 6,
-					"color": "#26201e",
-					"role": "mouth"
-				}
+	"paintOrder": [
+		"skin",
+		"shirt",
+		"pants",
+		"shoes",
+		"hair"
+	],
+	"face": {
+		"rect": [
+			8,
+			8,
+			8,
+			8
+		],
+		"decals": {
+			"smile": [
+				"........",
+				"........",
+				"........",
+				"..k..k..",
+				"..k..k..",
+				".m....m.",
+				"..mmmm..",
+				"........"
 			],
-			"grid16x16": [
-				"................",
-				"................",
-				"................",
-				"................",
-				"................",
-				"....EE....EE....",
-				"....EW....EW....",
-				"....EE....EE....",
-				"....EE....EE....",
-				"..BB........BB..",
-				".....E....E.....",
-				"......EEEE......",
-				"................",
-				"................",
-				"................",
-				"................"
-			]
-		},
-		"neutral": {
-			"file": "face-neutral.png",
-			"pixels8x8": [
-				{
-					"x": 2,
-					"y": 3,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 5,
-					"y": 3,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 2,
-					"y": 4,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 5,
-					"y": 4,
-					"color": "#26201e",
-					"role": "eye"
-				},
-				{
-					"x": 3,
-					"y": 5,
-					"color": "#26201e",
-					"role": "mouth"
-				},
-				{
-					"x": 4,
-					"y": 5,
-					"color": "#26201e",
-					"role": "mouth"
-				}
-			],
-			"grid16x16": [
-				"................",
-				"................",
-				"................",
-				"................",
-				"................",
-				"....EE....EE....",
-				"....EW....EW....",
-				"....EE....EE....",
-				"....EE....EE....",
-				"................",
-				"......EEEE......",
-				"................",
-				"................",
-				"................",
-				"................",
-				"................"
+			"neutral": [
+				"........",
+				"........",
+				"........",
+				"..k..k..",
+				"..k..k..",
+				"........",
+				"..mmmm..",
+				"........"
 			]
 		}
 	},
 	"presets": [
 		{
-			"id": "preset-01",
-			"name": "Iara (Guardiã)",
+			"id": "p01",
+			"name": "Trilha",
 			"skin": "#b87b52",
 			"hair": "#2a201c",
 			"shirt": "#2d6a4f",
@@ -209,8 +189,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-02",
-			"name": "Cauã",
+			"id": "p02",
+			"name": "Semente",
 			"skin": "#8c583a",
 			"hair": "#241c18",
 			"shirt": "#4f9a6e",
@@ -219,8 +199,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-03",
-			"name": "Dandara",
+			"id": "p03",
+			"name": "Ipê-amarelo",
 			"skin": "#5c3b28",
 			"hair": "#241c18",
 			"shirt": "#f2c94c",
@@ -229,8 +209,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-04",
-			"name": "Bento",
+			"id": "p04",
+			"name": "Riacho",
 			"skin": "#d99e73",
 			"hair": "#5e4330",
 			"shirt": "#3e9ccf",
@@ -239,8 +219,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-05",
-			"name": "Maitê",
+			"id": "p05",
+			"name": "Ipê-rosa",
 			"skin": "#e8b892",
 			"hair": "#8a6448",
 			"shirt": "#ff9fb7",
@@ -249,8 +229,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-06",
-			"name": "Zuri",
+			"id": "p06",
+			"name": "Copa",
 			"skin": "#6e4730",
 			"hair": "#241c18",
 			"shirt": "#74c69d",
@@ -259,8 +239,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-07",
-			"name": "Raoni",
+			"id": "p07",
+			"name": "Serra",
 			"skin": "#a66843",
 			"hair": "#241c18",
 			"shirt": "#5fa36a",
@@ -269,8 +249,8 @@
 			"face": "neutral"
 		},
 		{
-			"id": "preset-08",
-			"name": "Helena",
+			"id": "p08",
+			"name": "Cachoeira",
 			"skin": "#f0c8a8",
 			"hair": "#a8805c",
 			"shirt": "#2f7fb0",
@@ -279,8 +259,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-09",
-			"name": "Gael",
+			"id": "p09",
+			"name": "Clareira",
 			"skin": "#c98c63",
 			"hair": "#3b281e",
 			"shirt": "#3f7d4f",
@@ -289,8 +269,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-10",
-			"name": "Aiyra",
+			"id": "p10",
+			"name": "Sol da Mata",
 			"skin": "#995f3d",
 			"hair": "#241c18",
 			"shirt": "#f2c94c",
@@ -299,8 +279,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-11",
-			"name": "Lucas",
+			"id": "p11",
+			"name": "Nascente",
 			"skin": "#e2ae86",
 			"hair": "#5a4232",
 			"shirt": "#73cbf0",
@@ -309,8 +289,8 @@
 			"face": "neutral"
 		},
 		{
-			"id": "preset-12",
-			"name": "Tainá",
+			"id": "p12",
+			"name": "Brotinho",
 			"skin": "#7d5035",
 			"hair": "#241c18",
 			"shirt": "#86bf7c",
@@ -319,8 +299,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-13",
-			"name": "Ravi",
+			"id": "p13",
+			"name": "Jequitibá",
 			"skin": "#b0744d",
 			"hair": "#2a201c",
 			"shirt": "#a8805c",
@@ -329,8 +309,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-14",
-			"name": "Clara",
+			"id": "p14",
+			"name": "Orvalho",
 			"skin": "#ecc2a0",
 			"hair": "#c9a27a",
 			"shirt": "#4f9a6e",
@@ -339,8 +319,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-15",
-			"name": "Kauan",
+			"id": "p15",
+			"name": "Lagoa",
 			"skin": "#63402b",
 			"hair": "#241c18",
 			"shirt": "#3e9ccf",
@@ -349,8 +329,8 @@
 			"face": "neutral"
 		},
 		{
-			"id": "preset-16",
-			"name": "Lia",
+			"id": "p16",
+			"name": "Bromélia",
 			"skin": "#d1946b",
 			"hair": "#5e4330",
 			"shirt": "#ff9fb7",
@@ -359,8 +339,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-17",
-			"name": "Caio",
+			"id": "p17",
+			"name": "Musgo",
 			"skin": "#825439",
 			"hair": "#2a201c",
 			"shirt": "#5fa36a",
@@ -369,8 +349,8 @@
 			"face": "smile"
 		},
 		{
-			"id": "preset-18",
-			"name": "Jaci",
+			"id": "p18",
+			"name": "Mirante",
 			"skin": "#be8158",
 			"hair": "#3b281e",
 			"shirt": "#2d6a4f",
