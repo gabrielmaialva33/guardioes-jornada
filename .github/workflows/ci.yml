@@ -97,9 +97,20 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           release="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::7}"
-          ssh_cmd="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes"
-          rsync -az --delete -e "$ssh_cmd" build/ "$DEPLOY_HOST:$release/"
-          $ssh_cmd "$DEPLOY_HOST" "activate $release"
+          ssh_args=(-i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15)
+          # The runner's route to the VPS sometimes drops for a minute. Both steps
+          # are idempotent (same release directory), so retry with backoff.
+          retry() {
+            for attempt in 1 2 3 4; do
+              "$@" && return 0
+              [ "$attempt" = 4 ] && break
+              echo "attempt $attempt failed, retrying in $((attempt * 15)) s" >&2
+              sleep $((attempt * 15))
+            done
+            return 1
+          }
+          retry rsync -az --delete -e "ssh ${ssh_args[*]}" build/ "$DEPLOY_HOST:$release/"
+          retry ssh "${ssh_args[@]}" "$DEPLOY_HOST" "activate $release"
           echo "Released $release" >> "$GITHUB_STEP_SUMMARY"
       - name: Smoke test
         run: |
