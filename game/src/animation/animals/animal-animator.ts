@@ -92,9 +92,9 @@ export const ANIMAL_LAYERS = {
 	/**
 	 * How upright a brachiator hangs: 1 would be vertical, but the Cube Pets head is
 	 * part of the body block, so a vertical trunk would point the face at the sky.
-	 * At 0.4 the trunk is pitched 36° and the face looks ahead to the next hold.
+	 * At 0.35 the trunk is pitched 32° and the face looks ahead to the next hold.
 	 */
-	hangUpright: 0.4,
+	hangUpright: 0.35,
 	/** A free arm at rest, radians from straight down (a little forward). */
 	freeArmRest: -15 * DEG,
 	/** Share of the swing the dangling legs lag behind. */
