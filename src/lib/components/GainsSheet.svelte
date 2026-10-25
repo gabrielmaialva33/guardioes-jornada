@@ -29,12 +29,7 @@
 <Sheet bind:open {title}>
 	{#if gains}
 		<div class="hero">
-			<ForestScene
-				missions={progress.missions}
-				oath={progress.oath}
-				compact
-				label="A floresta da turma cresceu"
-			/>
+			<ForestScene missions={progress.missions} oath={progress.oath} compact label="A floresta cresceu" />
 			{#key gains}<LeafBurst gold={big} count={big ? 30 : 18} />{/key}
 		</div>
 		<ul class="gains">
@@ -63,7 +58,7 @@
 			{#if gains.rank}
 				<li class="achievement">
 					<Icon name="crown" weight="duotone" size={32} />
-					<span class="label">A turma agora é</span>
+					<span class="label">Novo título</span>
 					<strong>{gains.rank.name}</strong>
 				</li>
 			{/if}

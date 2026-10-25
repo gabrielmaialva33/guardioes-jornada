@@ -1,4 +1,4 @@
-<!-- The current step, as the guide reads it to the class. -->
+<!-- The current step, read aloud to the group or alone. -->
 <script lang="ts">
 	import type { Journey, Step } from '#lib/content/types.ts';
 	import { missionCount, missionNumber, type Session } from '#lib/session.ts';
@@ -44,7 +44,7 @@
 	<h2>{step.title}</h2>
 
 	{#if !open}
-		<p class="waiting">Reúna a turma e revele a missão quando todos estiverem prontos.</p>
+		<p class="waiting">Revele a missão quando for a hora de começar.</p>
 	{:else if step.kind === 'opening'}
 		<p class="narrative">{step.callout}</p>
 	{:else if step.kind === 'oath'}

@@ -32,10 +32,12 @@
 <ul class="scores" class:large>
 	{#each scores as { group, score } (group.id)}
 		{@const leading = score === top && score > 0 && leaders === 1}
-		<li style:--group={group.color} style:--ink={GROUP_INK} class:leading>
+		{@const mine = group.id === session.myGroupId}
+		<li style:--group={group.color} style:--ink={GROUP_INK} class:leading class:mine>
 			<GroupMark name={group.name} color={group.color} size={large ? 2.75 : 2.25} />
 			<span class="name">
 				{group.name}
+				{#if mine}<small class="mine-tag">seu grupo</small>{/if}
 				{#if leading}<small><Icon name="crown" weight="duotone" size={14} /> na frente</small>{/if}
 			</span>
 			{#key score}
@@ -87,6 +89,10 @@
 		border-color: color-mix(in oklab, var(--gold) 50%, transparent);
 	}
 
+	li.mine {
+		border-color: color-mix(in oklab, var(--group) 60%, transparent);
+	}
+
 	.name {
 		display: grid;
 		min-width: 0;
@@ -101,6 +107,10 @@
 		color: var(--gold);
 		font-size: var(--step--1);
 		font-weight: 700;
+	}
+
+	.mine-tag {
+		color: var(--text-soft);
 	}
 
 	.score {

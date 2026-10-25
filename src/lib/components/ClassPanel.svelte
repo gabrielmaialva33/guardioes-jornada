@@ -1,11 +1,12 @@
 <!--
-	The class's progress at a glance, like the prototype's profile panel:
+	The journey's progress at a glance, like the prototype's profile panel:
 	rank seal, level, missions, XP and a bar with one segment per mission.
 	Ranks progress by fill, not new colors: mint outline, solid mint, gold.
 -->
 <script lang="ts">
 	import type { Journey } from '#lib/content/types.ts';
 	import { levelOf, missionCount, XP_PER_MISSION, type Session } from '#lib/session.ts';
+	import GroupMark from './GroupMark.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -20,14 +21,22 @@
 	const total = $derived(missionCount(journey));
 	const seal = $derived(level.number === 1 ? 'sprout' : level.number === 2 ? 'shield' : 'crown');
 	const toNext = $derived(level.next ? (level.next.missions - missions) * XP_PER_MISSION : 0);
+	const myGroup = $derived(session.groups.find((g) => g.id === session.myGroupId));
+	// Journeys saved before participant names were asked show the school instead.
+	const name = $derived(session.participant || session.school || 'Sua jornada');
 </script>
 
-<section class="panel card" aria-label="Progresso da turma">
+<section class="panel card" aria-label="Progresso da jornada">
 	<div class="seal" data-level={level.number} aria-hidden="true">
 		<Icon name={seal} weight="duotone" size={30} />
 	</div>
 	<div class="who">
-		<strong>{session.school || 'Turma sem nome'}</strong>
+		<strong>{name}</strong>
+		{#if myGroup}
+			<span class="group"
+				><GroupMark name={myGroup.name} color={myGroup.color} size={1.25} /> Grupo {myGroup.name}</span
+			>
+		{/if}
 		<span class="rank">{level.rank.name}</span>
 		<span class="stats">{missions}/{total} missões, {level.xp} XP</span>
 	</div>
@@ -43,7 +52,7 @@
 			{#if level.next}
 				<strong>{toNext} XP</strong> para {level.next.name}
 			{:else}
-				A turma chegou ao nível mais alto: <strong>{level.rank.name}</strong>
+				Nível mais alto alcançado: <strong>{level.rank.name}</strong>
 			{/if}
 		</p>
 	</div>
@@ -96,6 +105,16 @@
 		font-size: var(--step-1);
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.group {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-block: 0.15rem;
+		color: var(--text-soft);
+		font-size: var(--step--1);
+		font-weight: 700;
 	}
 
 	.rank {
