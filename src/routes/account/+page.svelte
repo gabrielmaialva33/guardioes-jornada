@@ -68,12 +68,12 @@
 </script>
 
 <svelte:head>
-	<title>Conta do guia | Guardiões da Mata Atlântica</title>
+	<title>Sua conta | Guardiões da Mata Atlântica</title>
 </svelte:head>
 
 <header class="bar page">
 	<a class="icon-button" href={resolve('/')} aria-label="Voltar para o início"><Icon name="back" /></a>
-	<h1>Conta do guia</h1>
+	<h1>Sua conta</h1>
 	<ThemeToggle />
 </header>
 
@@ -155,7 +155,7 @@
 		</section>
 	{:else if !codeSent}
 		<form class="card auth-form" onsubmit={sendCode}>
-			<h2><Icon name="user" weight="duotone" size={26} /> Entrar como guia</h2>
+			<h2><Icon name="user" weight="duotone" size={26} /> Entrar com e-mail</h2>
 			<div class="field">
 				<label for="{uid}-email">Seu e-mail</label>
 				<input
