@@ -466,10 +466,49 @@ def main() -> None:
                 stem = custom_in.stem
                 out_name = f"{stem}.glb" if stem.startswith("custom-") else f"custom-{stem}.glb"
                 out_target = MODELS_DIR / out_name
+                is_attachment = any(
+                    k in stem for k in ("bico-", "juba-", "rosetas-", "garras-")
+                )
                 with tempfile.TemporaryDirectory() as tmp:
                     recolored = Path(tmp) / out_name
                     recolor.recolor_custom_glb(custom_in, recolored, cmap)
-                    deltas.append(bake_static_glb(recolored, out_target))
+                    if is_attachment:
+                        pre_raw = len(recolored.read_bytes())
+                        pre_gz = len(gzip.compress(recolored.read_bytes(), compresslevel=9))
+                        subprocess.run(
+                            [
+                                "pnpm",
+                                "dlx",
+                                "gltfpack@1.3.0",
+                                "-i",
+                                str(recolored),
+                                "-o",
+                                str(out_target),
+                                "-cc",
+                                "-kn",
+                                "-vtf",
+                                "-vpf",
+                            ],
+                            check=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        post_raw = len(out_target.read_bytes())
+                        post_gz = len(gzip.compress(out_target.read_bytes(), compresslevel=9))
+                        deltas.append(
+                            {
+                                "file": out_target.name,
+                                "gpu": "direct-pack (character attachment)",
+                                "preRawBytes": pre_raw,
+                                "postRawBytes": post_raw,
+                                "deltaRawBytes": post_raw - pre_raw,
+                                "preGzipBytes": pre_gz,
+                                "postGzipBytes": post_gz,
+                                "deltaGzipBytes": post_gz - pre_gz,
+                            }
+                        )
+                    else:
+                        deltas.append(bake_static_glb(recolored, out_target))
 
     DELTA_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     existing: dict[str, dict] = {}
