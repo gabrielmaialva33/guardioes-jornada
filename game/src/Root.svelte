@@ -186,6 +186,7 @@
 		<div
 			class="rotate"
 			role="dialog"
+			tabindex="-1"
 			aria-modal="true"
 			aria-labelledby="rotate-title"
 			onpointerdown={(event) => event.stopPropagation()}
