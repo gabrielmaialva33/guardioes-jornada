@@ -43,13 +43,15 @@ Rules:
 
 One unit is about 0.47 m: the avatar is 3.0 u tall (1 stud = 0.6 u, as in `src/engine/constants.ts`). Animals and props are drawn larger than life by a fixed factor per category, so they read on a phone; the factor never changes within a category.
 
-| Category | Factor                                                                          | Examples (height or length)                                                           |
-| -------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Avatar   | 1                                                                               | 3.0 u                                                                                 |
-| Animals  | ×1.5                                                                            | mico 0.9 u, bugio 1.4 u, muriqui 1.7 u, preguiça 1.4 u, onça 3.0 u long, tucano 0.9 u |
-| Trees    | ×0.6 (kept below real height so the canopy stays in frame)                      | understorey 6–8 u, canopy 10–14 u, emergent (jequitibá) 18 u                          |
-| Props    | ×1.5                                                                            | bottle 0.5 u, can 0.3 u, trap 1.0 u, sign 2.2 u                                       |
-| Obby     | grid of 1 u, platform tops 2×2 or 3×3 u, gaps from the jump table in the engine |                                                                                       |
+| Category | Factor                                                                          | Examples (height or length)                                                                                             |
+| -------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Avatar   | 1                                                                               | 3.0 u                                                                                                                   |
+| Animals  | ×1.5                                                                            | heights: mico 0.9 u, bugio 1.4 u, muriqui 1.7 u, preguiça 1.4 u, onça 2.2 u (about 0.7 m at the shoulder), tucano 0.9 u |
+| Trees    | ×0.6 (kept below real height so the canopy stays in frame)                      | understorey 6–8 u, canopy 10–14 u, emergent (jequitibá) 18 u                                                            |
+| Props    | ×1.5                                                                            | bottle 0.5 u, can 0.3 u, trap 1.0 u, sign 2.2 u                                                                         |
+| Obby     | grid of 1 u, platform tops 2×2 or 3×3 u, gaps from the jump table in the engine |                                                                                                                         |
+
+Cube Pets are cube-shaped, so animals are always scaled by height, never by length: a jaguar must stay well below the avatar's head.
 
 Kenney's Nature Kit is modelled at about 1/9 of these tree heights. Scale it uniformly (never stretch one axis) and judge the result in the lineup, next to the custom trees.
 
