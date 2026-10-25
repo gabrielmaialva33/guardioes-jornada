@@ -252,7 +252,7 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
             mesh.materials.append(m)
         while len(mesh.color_attributes) > 0:
             mesh.color_attributes.remove(mesh.color_attributes[0])
-        ca = mesh.color_attributes.new(name="COLOR_0", type="BYTE_COLOR", domain="CORNER")
+        ca = mesh.color_attributes.new(name="COLOR_0", type="BYTE_COLOR", domain="POINT")
         mesh.color_attributes.active_color = ca
         mesh.color_attributes.active_color_index = 0
         mesh.color_attributes.render_color_index = 0
@@ -297,22 +297,23 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
             ca = mesh.color_attributes.get("COLOR_0")
             if ca is None:
                 continue
-            for loop_idx, loop in enumerate(mesh.loops):
-                wz = (mw @ mesh.vertices[loop.vertex_index].co).z
+            for v_idx, vert in enumerate(mesh.vertices):
+                wz = (mw @ vert.co).z
                 h = max(0.0, min(1.0, (wz - z_min) / span))
-                # Smoothstep height gradient
-                h_smooth = h * h * (3.0 - 2.0 * h)
-                ao_raw = ca.data[loop_idx].color[0]
+                # Smoothstep height gradient (quantized to 32 levels for high meshopt compression)
+                h_smooth = round(h * h * (3.0 - 2.0 * h) * 32.0) / 32.0
+                ao_raw = ca.data[v_idx].color[0]
                 if ao_raw <= 0.001:
                     ao_raw = 0.85
-                ao_term = 0.68 + 0.32 * max(0.0, min(1.0, ao_raw))
+                ao_q = round(max(0.0, min(1.0, ao_raw)) * 16.0) / 16.0
+                ao_term = 0.68 + 0.32 * ao_q
                 grad_term = 0.76 + 0.24 * h_smooth
                 shade = max(0.52, min(1.0, ao_term * grad_term))
                 # Subtle warm-sun top / cool-canopy base tint (multiply-ready)
                 r_val = min(1.0, shade * (0.96 + 0.04 * h_smooth))
                 g_val = shade
                 b_val = min(1.0, shade * (0.94 + 0.06 * h_smooth))
-                ca.data[loop_idx].color = (r_val, g_val, b_val, 1.0)
+                ca.data[v_idx].color = (r_val, g_val, b_val, 1.0)
 
     # Remove ground plane and restore original root positions
     bpy.data.objects.remove(ground_obj, do_unlink=True)
@@ -324,7 +325,7 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
     # Wire a Vertex Color node ('COLOR_0') into every material's node tree so Blender 5.2's
     # glTF 2.0 exporter includes COLOR_0 on every primitive without warnings.
     for mat in bpy.data.materials:
-        if not mat.use_nodes or not mat.node_tree:
+        if not mat.node_tree:
             continue
         nodes = mat.node_tree.nodes
         links = mat.node_tree.links
@@ -376,7 +377,6 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
                 "-cc",
                 "-kn",
                 "-vtf",
-                "-kv",
             ],
             check=True,
             stdout=subprocess.PIPE,
