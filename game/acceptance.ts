@@ -329,7 +329,7 @@ try {
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor({ timeout: 30000 });
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
-	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 	const obby = createGraybox().obby;
 	await page.evaluate(
 		async (edges) => {
@@ -394,7 +394,7 @@ try {
 	for (let cycle = 0; cycle < 20; cycle++) {
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 		await page.locator('[data-game-root] canvas').waitFor();
-		await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+		await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 		await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 		await page.waitForTimeout(50);
@@ -434,7 +434,7 @@ try {
 	await page.reload();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
 	assert.equal(requests.length, networkBefore);
 	assert.ok(sessions.size > 0);
@@ -460,14 +460,14 @@ try {
 	release();
 	hold = undefined;
 	await page.locator('[data-game-root] canvas').waitFor();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await setOffline(true);
 	await page.reload();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().textures === 1);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
 	result.atomicReplacementAndOfflineC = true;
 	assert.deepEqual(errors, []);
