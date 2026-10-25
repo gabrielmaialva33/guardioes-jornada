@@ -1,6 +1,14 @@
-import { Mesh, MeshLambertMaterial, NearestFilter, SRGBColorSpace, Texture, type Group, type Material } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {
+	type Group,
+	type Material,
+	Mesh,
+	MeshLambertMaterial,
+	NearestFilter,
+	SRGBColorSpace,
+	Texture
+} from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import modelUrl from '../assets/models/avatar.glb?url';
 import skinUrl from '../assets/skins/skin-a.webp?url';
 
@@ -31,11 +39,19 @@ export async function loadAvatar(signal: AbortSignal): Promise<Group> {
 		const response = await fetch(modelUrl, { signal });
 		if (!response.ok) throw new Error('avatar-download');
 		const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-		model = (await loader.parseAsync(await response.arrayBuffer(), new URL('.', new URL(modelUrl, location.href)).href)).scene;
+		model = (
+			await loader.parseAsync(
+				await response.arrayBuffer(),
+				new URL('.', new URL(modelUrl, location.href)).href
+			)
+		).scene;
 		signal.throwIfAborted();
 		const skin = await fetch(skinUrl, { signal });
 		if (!skin.ok) throw new Error('skin-download');
-		bitmap = await createImageBitmap(await skin.blob(), { imageOrientation: 'none', premultiplyAlpha: 'none' });
+		bitmap = await createImageBitmap(await skin.blob(), {
+			imageOrientation: 'none',
+			premultiplyAlpha: 'none'
+		});
 		signal.throwIfAborted();
 		const texture = new Texture(bitmap);
 		texture.colorSpace = SRGBColorSpace;
