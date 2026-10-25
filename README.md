@@ -27,7 +27,7 @@ títulos, conquistas e encerramento. O `id` do roteiro continua `penap` só porq
 apontam para ele; não aparece para ninguém. Para um roteiro de um lugar específico, copie o arquivo,
 ajuste os textos e registre em `journeys`.
 
-Os fatos sobre a canela-preta (*Ocotea catharinensis*) e o cedro-rosa (*Cedrela fissilis*) vêm da
+Os fatos sobre a canela-preta (_Ocotea catharinensis_) e o cedro-rosa (_Cedrela fissilis_) vêm da
 Embrapa, do CNCFlora e da Flora e Funga do Brasil. Os nomes populares também valem para outras espécies:
 confirme com um botânico quais árvores estão na trilha antes de usar o roteiro em campo.
 Os ícones de cada missão vêm do [Phosphor](https://phosphoricons.com); para usar um novo, inclua em
