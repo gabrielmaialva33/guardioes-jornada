@@ -687,8 +687,6 @@ def art_light(sun_azimuth_deg: float = -35.0) -> None:
     mapping). three.js lights a Lambert surface with albedo/pi * irradiance, and a Cycles
     world of radiance L gives pi*L of irradiance, so the hemisphere becomes a world split
     at the horizon (sky above, ground below) at strength 1/pi and the sun keeps 1.6."""
-    import mathutils
-
     ctx_light = _palette_light()
     scene = bpy.context.scene
     world = bpy.data.worlds.new("ART daylight")
@@ -743,7 +741,6 @@ def art_light(sun_azimuth_deg: float = -35.0) -> None:
     # direction towards the sun: from the front-left of the camera (front = -Y)
     to_sun = Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el)))
     sun.rotation_euler = (-to_sun).to_track_quat("-Z", "Y").to_euler()
-    _ = mathutils
 
 
 def _palette_light() -> dict:
@@ -786,7 +783,7 @@ def diffuse_material(name: str, hexc: str | None = None, use_attr: bool = True, 
     return mat
 
 
-def import_glb(path: Path, prefix: str | None = None) -> list:
+def import_glb(path: Path) -> list:
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(path))
     new = [o for o in bpy.data.objects if o not in before]

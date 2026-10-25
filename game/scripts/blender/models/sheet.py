@@ -110,8 +110,7 @@ def grove(png: Path):
             o.location = Vector((x, y, 0))
             o.rotation_euler.z += math.radians(rot)
         cache.setdefault(key, []).append(objs)
-    avatar = C.flat_box("avatar-3u", (1.5, 14.0, 1.5), (0.9, 0.6, 3.0), C.PREVIEW["avatar"])
-    _ = avatar
+    C.flat_box("avatar-3u", (1.5, 14.0, 1.5), (0.9, 0.6, 3.0), C.PREVIEW["avatar"])
     C.ground(size=600)
     scene = bpy.context.scene
     scene.render.resolution_x, scene.render.resolution_y = 1920, 1080
