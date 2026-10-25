@@ -11,6 +11,7 @@ import { MathUtils, NoToneMapping, PerspectiveCamera, Vector2, Vector3, WebGLRen
 import { softwareGpu, weakGpu } from '../tier.ts';
 import { readPalette } from './palette.ts';
 import { type Quality, type View, World } from './world.ts';
+import { yieldToMain } from './yield.ts';
 
 export type { View } from './world.ts';
 export type FailReason = 'slow' | 'lost';
@@ -57,6 +58,7 @@ export async function createEngine(opts: {
 	tier: Quality;
 	onFail: (reason: FailReason) => void;
 }): Promise<Engine> {
+	await yieldToMain();
 	performance.mark('forest-context-start');
 	const canvas = document.createElement('canvas');
 	canvas.setAttribute('aria-hidden', 'true');
@@ -79,9 +81,11 @@ export async function createEngine(opts: {
 		throw new Error('Software WebGL is too slow');
 	}
 	performance.measure('forest-context', 'forest-context-start');
+	await yieldToMain();
 	performance.mark('forest-renderer-start');
 	const renderer = new WebGLRenderer({ canvas, context: gl, ...attributes });
 	performance.measure('forest-renderer', 'forest-renderer-start');
+	await yieldToMain();
 	renderer.setClearColor(0x000000, 0);
 	renderer.toneMapping = NoToneMapping;
 	renderer.info.autoReset = true;
@@ -90,7 +94,7 @@ export async function createEngine(opts: {
 
 	let palette = readPalette(document.documentElement);
 	performance.mark('forest-world-start');
-	const world = new World(quality, palette);
+	const world = await World.create(quality, palette);
 	performance.measure('forest-world-build', 'forest-world-start');
 	const camera = new PerspectiveCamera(FOV, 2, 0.5, 40);
 	let distance = 11;
@@ -98,6 +102,7 @@ export async function createEngine(opts: {
 	// Compile every shader now (in parallel where supported), not mid-animation.
 	world.showAll();
 	placeCamera();
+	await yieldToMain();
 	performance.mark('forest-compile-start');
 	if (renderer.extensions.has('KHR_parallel_shader_compile'))
 		await renderer.compileAsync(world.scene, camera);

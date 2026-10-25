@@ -23,6 +23,7 @@ import {
 import { type Palette, TONE } from './palette.ts';
 import { buildRiver } from './river.ts';
 import { buildIsland, buildMountains, buildTrail } from './terrain.ts';
+import { yieldToMain } from './yield.ts';
 
 export type Quality = 'lite' | 'full';
 
@@ -76,13 +77,14 @@ interface StagePart {
 
 export class World {
 	readonly scene = new Scene();
-	readonly triangles: number;
+	private triangleCount = 0;
+	get triangles() { return this.triangleCount; }
 	private readonly paintables: Paintable[] = [];
 	private readonly parts: StagePart[][] = [[], [], [], [], [], []];
-	private readonly water: WaterUniforms;
-	private readonly birds: Birds;
-	private readonly fireflies: Fireflies;
-	private readonly glow: { mesh: Mesh; alpha: Float32Array };
+	private water!: WaterUniforms;
+	private birds!: Birds;
+	private fireflies!: Fireflies;
+	private glow!: { mesh: Mesh; alpha: Float32Array };
 
 	// Tweens: index 0..5 are stages (0 is always grown), 6 is the oath.
 	private readonly value = [1, 0, 0, 0, 0, 0, 0];
@@ -93,7 +95,20 @@ export class World {
 	private time = 0;
 	private motion = { elapsed: 0, remaining: 0, amp: 0 };
 
-	constructor(quality: Quality, palette: Palette) {
+	private building: Generator<void>;
+
+	constructor(quality: Quality, palette: Palette, deferred = false) {
+		this.building = this.build(quality, palette);
+		if (!deferred) while (!this.building.next().done) { /* Keep the synchronous constructor available. */ }
+	}
+
+	static async create(quality: Quality, palette: Palette, pause = yieldToMain): Promise<World> {
+		const world = new World(quality, palette, true);
+		while (!world.building.next().done) await pause();
+		return world;
+	}
+
+	private *build(quality: Quality, palette: Palette): Generator<void> {
 		const d = DETAIL[quality];
 		let triangles = 0;
 
@@ -125,12 +140,14 @@ export class World {
 		const island = new MeshBuilder();
 		buildIsland(island, d);
 		add(island, new MeshBasicMaterial({ vertexColors: true }), 0);
+		yield;
 
 		// Stage 1: the trail, then the first canelas and cedros.
 		growing(1, (b) => {
 			buildTrail(b, 0, 0.35);
 			buildFirstTrees(b, 0.2);
 		});
+		yield;
 
 		// Stage 2: the spring and the river.
 		const waterB = new MeshBuilder(2);
@@ -141,15 +158,18 @@ export class World {
 		add(waterB, water.material, 2, water.uniforms, 'aFlow');
 		const bed = growthMaterial();
 		add(bedB, bed.material, 2, bed.uniforms);
+		yield;
 
 		// Stage 3: the deep forest and the birds.
 		growing(3, (b) => buildDeepForest(b, d.forest));
 		this.birds = new Birds(d.birds);
 		this.scene.add(this.birds.mesh);
 		triangles += d.birds * 4;
+		yield;
 
 		// Stage 4: the mountains.
 		growing(4, (b) => buildMountains(b, d.peakSides));
+		yield;
 
 		// Stage 5: the araucária, with two young ones further back.
 		growing(5, (b) => {
@@ -167,12 +187,14 @@ export class World {
 		});
 		this.glow = glowDisc(1.55, quality === 'full' ? 24 : 16);
 		this.scene.add(this.glow.mesh);
+		yield;
 
 		// The oath: fireflies.
 		this.fireflies = new Fireflies(d.fireflies);
 		this.scene.add(this.fireflies.points);
 
-		this.triangles = triangles;
+		yield;
+		this.triangleCount = triangles;
 		this.scene.fog = new Fog(0x000000, 10, 24);
 		this.recolor(palette);
 		this.apply();
