@@ -62,6 +62,13 @@ export const MURIQUI = {
 	hangFade: 0.6
 } as const;
 
+/**
+ * The pump settles where k (E* − E) = c, so the swing would run c/k short of
+ * its target: targets are raised by that much, and the first apex reaches the
+ * next hold on time.
+ */
+const PUMP_OFFSET = MURIQUI.damping / MURIQUI.pump;
+
 export interface MuriquiOptions extends BehaviourOptions {
 	/** Handholds below a branch, in order (world points the hand grips). At least one. */
 	anchors: Route;
@@ -126,7 +133,7 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 			const sine = Math.min(0.97, Math.sqrt(dx * dx + dz * dz) / (2 * this.arm));
 			const amplitude = Math.min(80 * DEG, Math.asin(sine) + MURIQUI.margin);
 			this.#amplitudes[i] = amplitude;
-			this.#energies[i] = w0 * w0 * (1 - Math.cos(amplitude));
+			this.#energies[i] = w0 * w0 * (1 - Math.cos(amplitude)) + PUMP_OFFSET;
 			this.#yaws[i] = Math.atan2(dx, dz);
 		}
 		this.tilt = new DampedSpring(SPRING.body, this.species.tempo);
@@ -366,7 +373,8 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 	#setIdleEnergy() {
 		const w0 = TAU / MURIQUI.period;
 		const sway = this.reducedMotion ? 0 : MURIQUI.idleSway;
-		this.energyTarget = w0 * w0 * (1 - Math.cos(sway));
+		// With no sway the target stays 0: the pump then only adds damping and the body comes to rest.
+		this.energyTarget = sway > 0 ? w0 * w0 * (1 - Math.cos(sway)) + PUMP_OFFSET : 0;
 		this.#maxSwing = 0;
 	}
 

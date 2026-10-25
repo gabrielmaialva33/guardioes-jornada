@@ -40,10 +40,19 @@ describe('binding the real Cube Pets nodes', () => {
 		}
 		const sloth = instance('preguica-de-coleira', 'koala');
 		expect(sloth.rig.binding.missing).toEqual(['head', 'tail']);
-		expect(sloth.scene.getObjectByName('leg-front-left')?.scale.y).toBeCloseTo(1.8, 9);
-		expect(sloth.scene.getObjectByName('leg-back-left')?.scale.y).toBeCloseTo(1.4, 9);
+		expect(sloth.scene.getObjectByName('leg-front-left')?.scale.y).toBeCloseTo(
+			SPECIES['preguica-de-coleira'].limbScale.front,
+			9
+		);
+		expect(sloth.scene.getObjectByName('leg-back-left')?.scale.y).toBeCloseTo(
+			SPECIES['preguica-de-coleira'].limbScale.hind,
+			9
+		);
 		const muriqui = instance('muriqui', 'monkey');
-		expect(muriqui.scene.getObjectByName('leg-front-right')?.scale.y).toBeCloseTo(2.2, 9);
+		expect(muriqui.scene.getObjectByName('leg-front-right')?.scale.y).toBeCloseTo(
+			SPECIES.muriqui.limbScale.front,
+			9
+		);
 	});
 
 	it('scales each species to its ART.md size', () => {

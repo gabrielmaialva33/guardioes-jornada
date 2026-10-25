@@ -1,7 +1,8 @@
 /**
  * Small scalar helpers and a seeded random generator for the animal module.
- * Hot-path code calls these with values it already holds; V8 inlines them, so
- * they add no allocation (see p3-animation.md, "Two V8 rules").
+ * Use them at load and event time. The per-frame paths write the same math out
+ * instead: a call that takes or returns numbers boxes them whenever V8 does not
+ * inline it (p3-animation.md, "Two V8 rules"; measured again in p3-animals.md).
  */
 
 export const DEG = Math.PI / 180;
@@ -18,10 +19,6 @@ export const safeDt = (dt: number) => (dt > 0 ? Math.min(dt, MAX_DT) : 0);
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
-
-export const wrap01 = (value: number) => value - Math.floor(value);
-
-export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 export const smoothstep = (t: number) => {
 	const x = clamp01(t);

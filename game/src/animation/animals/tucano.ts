@@ -51,7 +51,9 @@ export const TUCANO = {
 	glance: [0.8, 2.2],
 	glanceYaw: 60 * DEG,
 	glancePitch: 15 * DEG,
-	bankGain: 0.04
+	bankGain: 0.04,
+	/** Largest body pitch in flight, radians. */
+	maxPitch: 20 * DEG
 } as const;
 
 /** One perch: a branch segment centred on (x, y, z), running along `yaw`, `halfLength` each way. */
@@ -183,7 +185,9 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		if (flying) {
 			motion.lookYaw = 0;
 			motion.lookPitch = 0;
-			motion.pitch = -Math.atan2(this.#vy, Math.max(0.1, this.#vh));
+			// Half the path's slope, at most 20°: the body stays near level, as in a real toucan.
+			const slope = -0.5 * Math.atan2(this.#vy, Math.max(0.1, this.#vh));
+			motion.pitch = Math.min(TUCANO.maxPitch, Math.max(-TUCANO.maxPitch, slope));
 			const bank = motion.turnRate * TUCANO.flightSpeed * TUCANO.bankGain;
 			motion.bank = Math.min(0.5, Math.max(-0.5, bank));
 			motion.speed = TUCANO.flightSpeed;
