@@ -57,6 +57,7 @@ export async function createEngine(opts: {
 	tier: Quality;
 	onFail: (reason: FailReason) => void;
 }): Promise<Engine> {
+	performance.mark('forest-context-start');
 	const canvas = document.createElement('canvas');
 	canvas.setAttribute('aria-hidden', 'true');
 	canvas.style.cssText =
@@ -77,7 +78,10 @@ export async function createEngine(opts: {
 		gl.getExtension('WEBGL_lose_context')?.loseContext();
 		throw new Error('Software WebGL is too slow');
 	}
+	performance.measure('forest-context', 'forest-context-start');
+	performance.mark('forest-renderer-start');
 	const renderer = new WebGLRenderer({ canvas, context: gl, ...attributes });
+	performance.measure('forest-renderer', 'forest-renderer-start');
 	renderer.setClearColor(0x000000, 0);
 	renderer.toneMapping = NoToneMapping;
 	renderer.info.autoReset = true;
