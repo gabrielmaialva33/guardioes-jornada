@@ -8,7 +8,7 @@
  * diorama is scrolled off-screen.
  */
 import { MathUtils, NoToneMapping, PerspectiveCamera, Vector2, Vector3, WebGLRenderer } from 'three';
-import { weakGpu } from '../tier.ts';
+import { softwareGpu, weakGpu } from '../tier.ts';
 import { readPalette } from './palette.ts';
 import { type Quality, type View, World } from './world.ts';
 
@@ -62,21 +62,26 @@ export async function createEngine(opts: {
 	canvas.style.cssText =
 		'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation';
 
-	// Throws when WebGL2 is unavailable: the caller falls back to the SVG.
-	const renderer = new WebGLRenderer({
-		canvas,
+	const attributes: WebGLContextAttributes = {
 		antialias: opts.tier === 'full',
 		alpha: true,
 		powerPreference: 'low-power',
 		stencil: false
-	});
+	};
+	// Probe before Three.js logs errors or builds geometry on software renderers.
+	const gl = canvas.getContext('webgl2', attributes);
+	if (!gl) throw new Error('WebGL2 unavailable');
+	const debug = gl.getExtension('WEBGL_debug_renderer_info');
+	const gpu = String(gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+	if (softwareGpu(gpu)) {
+		gl.getExtension('WEBGL_lose_context')?.loseContext();
+		throw new Error('Software WebGL is too slow');
+	}
+	const renderer = new WebGLRenderer({ canvas, context: gl, ...attributes });
 	renderer.setClearColor(0x000000, 0);
 	renderer.toneMapping = NoToneMapping;
 	renderer.info.autoReset = true;
 
-	const gl = renderer.getContext();
-	const debug = gl.getExtension('WEBGL_debug_renderer_info');
-	const gpu = String(gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
 	const quality: Quality = opts.tier === 'full' && !weakGpu(gpu) ? 'full' : 'lite';
 
 	let palette = readPalette(document.documentElement);

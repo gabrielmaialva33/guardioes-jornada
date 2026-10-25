@@ -7,12 +7,13 @@
 	gains sheet over the map); the others keep showing their SVG.
 -->
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import DioramaSvg from './DioramaSvg.svelte';
 	import { describe } from './describe.ts';
 	import { getEngine, host, join, leave, type Seen } from './host.svelte.ts';
 	import type { Engine } from './scene/createDiorama.ts';
+	import { deferVisible } from './visible.ts';
 
 	interface Props {
 		/** Missions completed (0..5): each one grows a new layer of the forest. */
@@ -33,15 +34,18 @@
 	let ready = $state(false);
 	const active = $derived(id !== 0 && host.tier !== 'svg' && host.active === id);
 
-	onMount(() => {
-		from = host.seen ?? { stage, oath };
-		host.seen = { stage, oath };
-		id = join();
-		return () => {
+	function visibleScene(element: HTMLElement) {
+		return deferVisible(element, () => {
+			from = host.seen ?? { stage, oath };
+			host.seen = { stage, oath };
+			id = join();
+			return () => {
 			host.seen = { stage, oath };
 			leave(id);
-		};
-	});
+				id = 0;
+			};
+		});
+	}
 
 	/** Borrows the page's 3D canvas while this diorama is the active one. */
 	function scene3d(el: HTMLElement) {
@@ -76,7 +80,7 @@
 	});
 </script>
 
-<div class="diorama" role="img" aria-label="{label}. {describe(stage, oath)}">
+<div class="diorama" role="img" aria-label="{label}. {describe(stage, oath)}" {@attach visibleScene}>
 	<DioramaSvg {stage} {oath} {from} hidden={active && ready} />
 	{#if active}
 		{#key host.generation}

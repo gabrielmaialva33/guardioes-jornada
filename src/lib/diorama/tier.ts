@@ -20,15 +20,18 @@ const WEAK_GPU =
 
 export function pickTier(): Tier {
 	if (typeof window === 'undefined' || typeof WebGL2RenderingContext === 'undefined') return 'svg';
+	const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean; effectiveType?: string } };
+	if (nav.onLine === false || nav.connection?.saveData || /^(slow-2g|2g|3g)$/.test(nav.connection?.effectiveType ?? '')) return 'svg';
+	if (nav.deviceMemory !== undefined && nav.deviceMemory <= 2) return 'svg';
+	if (nav.hardwareConcurrency > 0 && nav.hardwareConcurrency <= 2) return 'svg';
 	const saved = savedTier();
 	if (saved) return saved;
-
-	const nav = navigator as Navigator & { deviceMemory?: number };
-	if (nav.deviceMemory !== undefined && nav.deviceMemory <= 2) return 'lite';
-	// Safari reports few cores on every iPhone; Apple GPUs handle this scene fine.
-	const apple = /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
-	if (!apple && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4) return 'lite';
+	if (nav.hardwareConcurrency > 0 && nav.hardwareConcurrency <= 4) return 'lite';
 	return 'full';
+}
+
+export function softwareGpu(renderer: string): boolean {
+	return /SwiftShader|llvmpipe|softpipe|Software/i.test(renderer);
 }
 
 export function weakGpu(renderer: string): boolean {
