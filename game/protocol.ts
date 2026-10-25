@@ -39,6 +39,8 @@ export function decodeGameManifest(input: unknown): GameManifest {
 			!path.test(f.path) ||
 			f.path.split('/').some((p) => p === '.' || p === '..') ||
 			seen.has(f.path) ||
+			f.path === '__complete__.json' ||
+			f.path === 'manifest.json' ||
 			typeof f.sha256 !== 'string' ||
 			!hash.test(f.sha256) ||
 			typeof f.bytes !== 'number' ||
@@ -48,8 +50,17 @@ export function decodeGameManifest(input: unknown): GameManifest {
 			throw new Error('invalid-game-file');
 		seen.add(f.path);
 		total += f.bytes;
-		if (f.gzipBytes !== undefined && (!Number.isSafeInteger(f.gzipBytes) || f.gzipBytes < 0 || f.gzipBytes > 64 * 1024 * 1024)) throw new Error('invalid-game-file');
-		return { path: f.path, bytes: f.bytes, sha256: f.sha256, ...(f.gzipBytes !== undefined ? { gzipBytes: f.gzipBytes } : {}) };
+		if (
+			f.gzipBytes !== undefined &&
+			(!Number.isSafeInteger(f.gzipBytes) || f.gzipBytes < 0 || f.gzipBytes > 64 * 1024 * 1024)
+		)
+			throw new Error('invalid-game-file');
+		return {
+			path: f.path,
+			bytes: f.bytes,
+			sha256: f.sha256,
+			...(f.gzipBytes !== undefined ? { gzipBytes: f.gzipBytes } : {})
+		};
 	});
 	if (!seen.has(value.entry) || total > 64 * 1024 * 1024) throw new Error('invalid-game-manifest');
 	return { packId: value.packId, abi: value.abi, entry: value.entry, files };
