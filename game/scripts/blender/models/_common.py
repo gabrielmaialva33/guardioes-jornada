@@ -961,15 +961,21 @@ def render(png: Path, samples: int = 96) -> Path:
 
 def compose_side_by_side(left: Path, right: Path, out: Path) -> Path:
     """Join two renders of equal height (left: game scale lineup, right: close-up)."""
+    return compose_row([left, right], out)
+
+
+def compose_row(images: list, out: Path) -> Path:
+    """Join renders of equal height left to right, with a thin white gap."""
     import numpy as np
 
-    a = bpy.data.images.load(str(left))
-    b = bpy.data.images.load(str(right))
-    pa = np.array(a.pixels[:]).reshape(a.size[1], a.size[0], 4)
-    pb = np.array(b.pixels[:]).reshape(b.size[1], b.size[0], 4)
-    assert pa.shape[0] == pb.shape[0]
-    gap = np.ones((pa.shape[0], 8, 4))
-    joined = np.concatenate([pa, gap, pb], axis=1)
+    rows = []
+    for k, path in enumerate(images):
+        img = bpy.data.images.load(str(path))
+        px = np.array(img.pixels[:]).reshape(img.size[1], img.size[0], 4)
+        if k:
+            rows.append(np.ones((px.shape[0], 8, 4)))
+        rows.append(px)
+    joined = np.concatenate(rows, axis=1)
     img = bpy.data.images.new("joined", joined.shape[1], joined.shape[0])
     img.pixels[:] = joined.ravel()
     img.filepath_raw = str(out)
@@ -1108,9 +1114,9 @@ def attach_by_contract(pet_objs, att_objs, contract: dict) -> None:
 
 
 def preview_attachment(glb: Path, png: Path, pet: str, contract: dict, *, closeup_az=-35.0, closeup_el=18.0,
-                       samples=96) -> Path:
+                       views=None, samples=96) -> Path:
     """Left: the pet with the attachment at game size next to the 3.0 u avatar block and the
-    1 u rod. Right: a close-up of the same, in the ART light."""
+    1 u rod. Then one close-up per (azimuth, elevation) in `views`, in the ART light."""
     reset_scene()
     setup_cycles(samples)
     art_light()
@@ -1129,13 +1135,90 @@ def preview_attachment(glb: Path, png: Path, pet: str, contract: dict, *, closeu
     props = measuring_props(lo.x - 1.4, 0.0, rod_height=3.0)
     ground()
     frame_camera(everything + props, -28.0, 14.0, 50.0, (900, 900))
-    left = render(png.with_name(png.stem + "-lineup.png"), samples)
+    panels = [render(png.with_name(png.stem + "-lineup.png"), samples)]
     for o in props:
         o.hide_render = True
-    bpy.data.objects.remove(bpy.context.scene.camera, do_unlink=True)
-    frame_camera(everything, closeup_az, closeup_el, 50.0, (900, 900), margin=0.12)
-    right = render(png.with_name(png.stem + "-closeup.png"), samples)
-    out = compose_side_by_side(left, right, png)
-    left.unlink()
-    right.unlink()
+    for k, (az, el) in enumerate(views or [(closeup_az, closeup_el)]):
+        bpy.data.objects.remove(bpy.context.scene.camera, do_unlink=True)
+        frame_camera(everything, az, el, 50.0, (900, 900), margin=0.12)
+        panels.append(render(png.with_name(png.stem + f"-closeup{k}.png"), samples))
+    out = compose_row(panels, png)
+    for panel in panels:
+        panel.unlink()
     return out
+
+
+# --------------------------------------------------------------------------- conforming decals
+
+
+def _simplify(profile: list, tol: float) -> list:
+    """Douglas-Peucker on a 1D profile [(s, d)]: the s values where the slope changes."""
+    if len(profile) <= 2:
+        return [profile[0][0], profile[-1][0]]
+    (s0, d0), (s1, d1) = profile[0], profile[-1]
+    worst, idx = -1.0, 0
+    for k in range(1, len(profile) - 1):
+        s, d = profile[k]
+        line = d0 + (d1 - d0) * (s - s0) / (s1 - s0) if s1 != s0 else d0
+        if abs(d - line) > worst:
+            worst, idx = abs(d - line), k
+    if worst <= tol:
+        return [s0, s1]
+    left = _simplify(profile[: idx + 1], tol)
+    right = _simplify(profile[idx:], tol)
+    return left[:-1] + right
+
+
+def conform_quad(m: "Mesh", bvh, centre: Vector, axis_u: Vector, axis_v: Vector, normal: Vector, cu: float, cv: float,
+                 hu: float, hv: float, angle_deg: float, lift: float, colour: str, uv=None, tol: float = 0.009,
+                 merge: float = 0.015):
+    """A decal rectangle (centre (cu, cv) and half sizes in the patch's (u, v) plane, turned
+    by `angle_deg`) laid onto the surface below it: the surface is sampled along the
+    rectangle's own axes and only the breakpoints of that profile become vertices, so a
+    flat spot stays 2 triangles and one crossing a ridge bends over it. Vertices are
+    `centre`-relative world positions lifted `lift` along `normal`; keep `tol` below `lift`
+    so the surface between breakpoints never pokes through."""
+    assert tol < lift, "the decal would sink into the surface between breakpoints"
+    a = math.radians(angle_deg)
+    e1 = (math.cos(a), math.sin(a))
+    e2 = (-math.sin(a), math.cos(a))
+
+    def world(s, t):
+        du = cu + e1[0] * s + e2[0] * t
+        dv = cv + e1[1] * s + e2[1] * t
+        return centre + axis_u * du + axis_v * dv
+
+    def hit(s, t):
+        p = world(s, t)
+        loc, _n, _i, _d = bvh.ray_cast(p + normal * 0.6, -normal, 2.0)
+        assert loc is not None, f"decal off the surface at {tuple(round(c, 3) for c in p)}"
+        return loc
+
+    def depth(s, t):
+        return (hit(s, t) - centre).dot(normal)
+
+    def breaks(half, other_half, along_first: bool):
+        n = max(2, int(round(2 * half / 0.01)) + 1)
+        keys = set()
+        for o in (-other_half, 0.0, other_half):
+            prof = []
+            for k in range(n):
+                x = -half + 2 * half * k / (n - 1)
+                prof.append((x, depth(x, o) if along_first else depth(o, x)))
+            keys.update(_simplify(prof, tol))
+        out = []
+        for x in sorted(keys):
+            if not out or x - out[-1] > merge:
+                out.append(x)
+        out[0], out[-1] = -half, half
+        return out
+
+    ss = breaks(hu, hv, True)
+    ts = breaks(hv, hu, False)
+    for i in range(len(ss) - 1):
+        for j in range(len(ts) - 1):
+            corners = [(ss[i], ts[j]), (ss[i + 1], ts[j]), (ss[i + 1], ts[j + 1]), (ss[i], ts[j + 1])]
+            pts = [hit(s, t) + normal * lift - centre for s, t in corners]
+            # two triangles (the cell may be non-planar on a slope)
+            m.add([pts[0], pts[1], pts[2]], colour, uv)
+            m.add([pts[0], pts[2], pts[3]], colour, uv)
