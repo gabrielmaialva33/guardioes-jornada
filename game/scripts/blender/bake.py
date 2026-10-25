@@ -79,30 +79,35 @@ def configure_cycles_optix(samples: int = 32) -> str:
     return active_gpu
 
 
-def extract_glb_images_and_samplers(glb_path: Path) -> tuple[list[bytes], list[dict]]:
+def extract_glb_images_and_samplers(glb_path: Path) -> tuple[dict[str, bytes], list[bytes], list[dict]]:
     buf = glb_path.read_bytes()
     j_len = struct.unpack_from("<I", buf, 12)[0]
     j_obj = json.loads(buf[20 : 20 + j_len].decode("utf-8"))
     bin_chunk = buf[28 + j_len :] if len(buf) > 20 + j_len else b""
-    images = []
-    for img in j_obj.get("images", []):
+    by_name: dict[str, bytes] = {}
+    ordered: list[bytes] = []
+    for idx, img in enumerate(j_obj.get("images", [])):
         bv_idx = img.get("bufferView")
         if bv_idx is not None:
             bv = j_obj["bufferViews"][bv_idx]
             off = bv.get("byteOffset", 0)
             length = bv["byteLength"]
-            images.append(bin_chunk[off : off + length])
+            raw_img = bin_chunk[off : off + length]
+            ordered.append(raw_img)
+            by_name[img.get("name", f"palette-{idx}")] = raw_img
     samplers = j_obj.get(
         "samplers",
         [{"magFilter": 9728, "minFilter": 9728, "wrapS": 33071, "wrapT": 33071}],
     )
-    return images, samplers
+    return by_name, ordered, samplers
 
 
-def restore_glb_images_and_clean(glb_path: Path, orig_images: list[bytes], orig_samplers: list[dict]) -> None:
+def restore_glb_images_and_clean(
+    glb_path: Path, orig_by_name: dict[str, bytes], orig_ordered: list[bytes], orig_samplers: list[dict]
+) -> None:
     """
-    Re-inject compact PNG-8 images and NEAREST samplers into Blender's exported GLB,
-    and strip TANGENT before gltfpack.
+    Re-inject compact PNG-8 images (matched by image/material name) and NEAREST samplers
+    into Blender's exported GLB, and strip TANGENT before gltfpack.
     """
     buf = glb_path.read_bytes()
     j_len = struct.unpack_from("<I", buf, 12)[0]
@@ -115,10 +120,18 @@ def restore_glb_images_and_clean(glb_path: Path, orig_images: list[bytes], orig_
             if "TANGENT" in attrs:
                 del attrs["TANGENT"]
 
-    if orig_images and j_obj.get("images"):
-        for idx, img_bytes in enumerate(orig_images):
-            if idx >= len(j_obj["images"]):
-                break
+    if orig_ordered and j_obj.get("images"):
+        for idx, img_entry in enumerate(j_obj["images"]):
+            img_name = img_entry.get("name", "")
+            img_bytes = orig_by_name.get(img_name)
+            if img_bytes is None:
+                # Match prefix before '.001' if Blender renamed image
+                base_name = img_name.split(".")[0]
+                img_bytes = orig_by_name.get(base_name)
+            if img_bytes is None and idx < len(orig_ordered):
+                img_bytes = orig_ordered[idx]
+            if img_bytes is None:
+                continue
             pad = (4 - (len(bin_chunk) % 4)) % 4
             bin_chunk.extend(b"\x00" * pad)
             offset = len(bin_chunk)
@@ -130,7 +143,7 @@ def restore_glb_images_and_clean(glb_path: Path, orig_images: list[bytes], orig_
             j_obj["images"][idx] = {
                 "bufferView": bv_idx,
                 "mimeType": "image/png",
-                "name": j_obj["images"][idx].get("name", f"palette-{idx}"),
+                "name": img_name or f"palette-{idx}",
             }
 
     if j_obj.get("textures"):
@@ -210,7 +223,7 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
         pre_gz = len(gzip.compress(pre_bytes, compresslevel=9))
 
         importable_glb = ensure_uncompressed_glb(in_glb, Path(pre_tmp))
-        orig_images, orig_samplers = extract_glb_images_and_samplers(importable_glb)
+        orig_by_name, orig_ordered, orig_samplers = extract_glb_images_and_samplers(importable_glb)
 
         bpy.ops.wm.read_factory_settings(use_empty=True)
         gpu_name = configure_cycles_optix(samples=32)
@@ -364,7 +377,7 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
             export_all_vertex_colors=True,
             export_active_vertex_color_when_no_material=True,
         )
-        restore_glb_images_and_clean(exported_glb, orig_images, orig_samplers)
+        restore_glb_images_and_clean(exported_glb, orig_by_name, orig_ordered, orig_samplers)
         subprocess.run(
             [
                 "pnpm",
