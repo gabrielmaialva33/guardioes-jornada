@@ -103,6 +103,11 @@
 		font-size: var(--step-1);
 	}
 
+	/* A long title wraps; the close button keeps its full tap size. */
+	header .icon-button {
+		flex: none;
+	}
+
 	footer {
 		display: grid;
 		gap: 0.75rem;

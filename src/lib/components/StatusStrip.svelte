@@ -70,6 +70,13 @@
 		white-space: nowrap;
 	}
 
+	/* Large system text on a small phone: one chip alone can be wider than the strip. */
+	@media (max-width: 19.5em) {
+		.chip {
+			white-space: normal;
+		}
+	}
+
 	a.chip {
 		padding-inline: 0.5rem;
 		border-radius: var(--radius-pill);

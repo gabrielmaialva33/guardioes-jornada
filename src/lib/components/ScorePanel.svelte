@@ -209,6 +209,38 @@
 		}
 	}
 
+	/* Very narrow rows (large text on a small phone): mark and name, then the score,
+	   then both buttons, each on its own line. */
+	@container (width < 14rem) {
+		li,
+		.large li {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+		}
+
+		.name {
+			flex: 1 1 calc(100% - 2.25rem - 0.5rem);
+		}
+
+		.large .name {
+			flex-basis: calc(100% - 2.75rem - 0.5rem);
+		}
+
+		.score {
+			flex: 1 0 100%;
+		}
+
+		.minus {
+			width: var(--tap);
+			margin-left: auto;
+		}
+
+		.plus {
+			min-width: var(--tap);
+		}
+	}
+
 	@keyframes tick {
 		from {
 			transform: scale(1.25);
