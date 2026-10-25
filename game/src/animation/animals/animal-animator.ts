@@ -160,6 +160,8 @@ export class AnimalAnimator {
 	#dt = 0;
 	#arc = 0;
 	#gaitShare = 0;
+	readonly #stateFade: number = DURATION.state;
+	readonly #reducedFade: number = REDUCED_MOTION_DURATION;
 	#howlPhase = 0;
 	#eatPhase = 0;
 	#gripSide = 1;
@@ -301,7 +303,9 @@ export class AnimalAnimator {
 		const distance = motion.distance > 0 && Number.isFinite(motion.distance) ? motion.distance : 0;
 		// Turning on the spot covers foot travel at no speed: it steps too.
 		const moving = (speed > ANIMAL_LAYERS.moveThreshold || distance > 0) && this.#target === STAND;
-		const fade = this.reducedMotion ? REDUCED_MOTION_DURATION : DURATION.state;
+		// Copies in fields: a ternary between an imported binding and an imported
+		// object's property made TurboFan box the result every update (measured).
+		const fade = this.reducedMotion ? this.#reducedFade : this.#stateFade;
 		const step = this.#dt / fade;
 		this.gaitWeight = moving ? Math.min(1, this.gaitWeight + step) : Math.max(0, this.gaitWeight - step);
 		// strideAt and smoothstep, written out: helpers that take and return numbers
