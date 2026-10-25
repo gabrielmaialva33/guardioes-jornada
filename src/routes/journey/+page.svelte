@@ -9,6 +9,7 @@
 	import GroupMark from '#lib/components/GroupMark.svelte';
 	import Icon, { type IconName } from '#lib/components/Icon.svelte';
 	import ScorePanel from '#lib/components/ScorePanel.svelte';
+	import SecretBadge from '#lib/components/SecretBadge.svelte';
 	import SettingsSheet from '#lib/components/SettingsSheet.svelte';
 	import StepCard from '#lib/components/StepCard.svelte';
 	import StatusStrip from '#lib/components/StatusStrip.svelte';
@@ -206,9 +207,11 @@
 				missions={progress.missions}
 				oath={progress.oath}
 				label="Floresta com {progress.missions} missões concluídas"
+				secret
 			/>
 			<ForestMap {journey} {progress} />
 			<AchievementGrid {journey} {progress} />
+			<SecretBadge />
 		</div>
 	</main>
 

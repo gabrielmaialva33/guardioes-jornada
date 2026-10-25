@@ -5,6 +5,7 @@
 	import Calling from '#lib/components/Calling.svelte';
 	import ForestScene from '#lib/components/ForestScene.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import SecretBadge from '#lib/components/SecretBadge.svelte';
 	import SettingsSheet from '#lib/components/SettingsSheet.svelte';
 	import Sheet from '#lib/components/Sheet.svelte';
 	import StatusStrip from '#lib/components/StatusStrip.svelte';
@@ -119,7 +120,7 @@
 		{/if}
 
 		<section class="hero">
-			<ForestScene missions={grown} oath={grown >= 5} label="Floresta da Mata Atlântica crescendo" />
+			<ForestScene missions={grown} oath={grown >= 5} label="Floresta da Mata Atlântica crescendo" secret />
 			<h1>Guardiões da Mata Atlântica</h1>
 			<p>A floresta continua chamando. Volte à sua jornada ou comece uma nova.</p>
 			<a class="button wide" class:quiet={ongoing} href={resolve('/new')}>
@@ -167,6 +168,8 @@
 				</ul>
 			</section>
 		{/if}
+
+		<SecretBadge />
 
 		{#if pwa.iosNeedsInstall}
 			<section class="card ios-install">
