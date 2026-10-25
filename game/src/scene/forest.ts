@@ -1,4 +1,10 @@
 import { Box3 } from 'three';
+import araucaria from '../assets/models/custom-araucaria.glb?url';
+import embauba from '../assets/models/custom-embauba.glb?url';
+import ipeAmarelo from '../assets/models/custom-ipe-amarelo.glb?url';
+import ipeRosa from '../assets/models/custom-ipe-rosa.glb?url';
+import jequitiba from '../assets/models/custom-jequitiba-rosa.glb?url';
+import jucara from '../assets/models/custom-palmeira-jucara.glb?url';
 import kitUrl from '../assets/models/kit-flora.glb?url';
 import {
 	addPlacements,
@@ -18,7 +24,26 @@ export async function loadForest(
 	signal: AbortSignal
 ) {
 	const source = await loadModel(kitUrl, signal);
+	// Assets are produced concurrently: prefer the merged kit, with the same native GLBs as fallback.
+	const customFiles: Record<ForestKind, string> = {
+		embauba,
+		'jequitiba-rosa': jequitiba,
+		'ipe-amarelo': ipeAmarelo,
+		'ipe-rosa': ipeRosa,
+		'palmeira-jucara': jucara,
+		araucaria
+	};
+
 	try {
+		await Promise.all(
+			FOREST_KINDS.map(async (name) => {
+				if (source.getObjectByName(name)) return;
+				const model = await loadModel(customFiles[name], signal);
+				model.name = name;
+				source.add(model);
+			})
+		);
+		signal.throwIfAborted();
 		const scale = new Map<ForestKind, number>();
 		for (const name of FOREST_KINDS) {
 			const node = source.getObjectByName(name);
@@ -26,8 +51,8 @@ export async function loadForest(
 			const bounds = new Box3().setFromObject(node);
 			const height = bounds.max.y - bounds.min.y;
 			if (!(height > 0)) throw new Error('forest-size-invalid');
-			// Canopy target 10.8 u, usually about ×9 for the Kenney kit. Uniform only.
-			scale.set(name, 10.8 / height);
+			// Native models already carry the ART scale. Never stretch individual axes.
+			scale.set(name, 1);
 		}
 		const pools = createPoolsFromScene(source, FOREST_KINDS, {
 			grid,

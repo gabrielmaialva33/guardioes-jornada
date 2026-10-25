@@ -1,7 +1,14 @@
 import type { ColliderProxy } from '../engine/graybox.ts';
 import type { PlacementArrays } from '../render/index.ts';
 
-export const FOREST_KINDS = ['tree_oak', 'tree_palmTall'] as const;
+export const FOREST_KINDS = [
+	'embauba',
+	'jequitiba-rosa',
+	'ipe-amarelo',
+	'ipe-rosa',
+	'palmeira-jucara',
+	'araucaria'
+] as const;
 export type ForestKind = (typeof FOREST_KINDS)[number];
 /** A small render integration clearing; leave every graybox feature and the obby approach free. */
 export function forestLayout() {
@@ -19,7 +26,7 @@ export function forestLayout() {
 	const placements: PlacementArrays<ForestKind> = {
 		kinds: FOREST_KINDS,
 		count,
-		kind: Uint8Array.from(positions, (_, i) => i % 2),
+		kind: Uint8Array.from(positions, (_, i) => i % FOREST_KINDS.length),
 		x: Float32Array.from(positions, (p) => p[0]),
 		y: new Float32Array(count),
 		z: Float32Array.from(positions, (p) => p[1]),
