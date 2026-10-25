@@ -265,24 +265,26 @@
 		margin-right: -0.75rem;
 	}
 
+	/* The leaf flows with the text, so on narrow phones the name takes two balanced
+	   centered lines instead of running under the buttons. */
 	.brand {
-		display: flex;
 		flex: 1;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
 		min-width: 0;
 		color: var(--accent-strong);
 		font-family: var(--font-story);
 		font-size: var(--step-0);
 		font-weight: 700;
-		/* Two balanced lines on narrow phones instead of running under the buttons. */
 		line-height: 1.1;
 		text-align: center;
 		text-wrap: balance;
 	}
 
+	.brand :global(.icon) {
+		margin-right: 0.15rem;
+	}
+
 	.tabs {
+		container-type: inline-size;
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.25rem;
@@ -297,19 +299,13 @@
 		background: var(--surface-sunken);
 	}
 
-	/* Large system text on a phone: three tabs side by side no longer fit, so they stack. */
-	@media (max-width: 19.5em) {
-		.tabs {
-			grid-template-columns: minmax(0, 1fr);
-		}
-	}
-
 	[role='tab'] {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
 		min-height: 2.875rem;
+		padding: 0.2rem 0.25rem;
 		border: 0;
 		border-radius: calc(var(--radius-m) - 0.3rem);
 		background: transparent;
@@ -326,20 +322,43 @@
 			0 2px 10px rgb(0 0 0 / 0.25);
 	}
 
-	main {
-		/* Height of the fixed action bar: its border, the status strip (2.75rem), the buttons and the inset. */
-		--action-bar: calc(1px + 2.75rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		gap: 1rem;
-		padding-bottom: calc(var(--action-bar) + 1.25rem);
+	/* Narrow phones (under ~336px of tab bar): the icon goes above the label so "Jornada" stays whole. */
+	@container (width < 21rem) {
+		[role='tab'] {
+			flex-direction: column;
+			gap: 0.1rem;
+		}
 	}
 
-	/* Large system text on a phone: the status strip wraps onto a second row. */
+	/* Large system text on a phone: three tabs side by side no longer fit, so they stack. */
 	@media (max-width: 19.5em) {
-		main {
-			--action-bar: calc(1px + 5.5rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
+		.tabs {
+			grid-template-columns: minmax(0, 1fr);
 		}
+
+		.tabs [role='tab'] {
+			flex-direction: row;
+			gap: 0.4rem;
+		}
+	}
+
+	/*
+	 * The page is a column at least as tall as the screen, and the action bar sticks
+	 * to its bottom. At the end of the page the bar sits after the content, so it never
+	 * covers the last card, whatever its height (text size, a wrapped status strip).
+	 */
+	:global(body:has(.action-bar)) {
+		display: flex;
+		flex-direction: column;
+	}
+
+	main {
+		display: grid;
+		flex: 1 0 auto;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 1rem;
+		padding-bottom: 1.25rem;
 	}
 
 	/* All panels stay mounted so a running timer survives a look at the scoreboard. */
@@ -364,8 +383,8 @@
 	}
 
 	.action-bar {
-		position: fixed;
-		inset: auto 0 0;
+		position: sticky;
+		bottom: 0;
 		z-index: 5;
 		display: grid;
 		/* The status strip's 2.75rem row already spaces it from the border and the buttons. */
@@ -376,12 +395,9 @@
 		backdrop-filter: blur(12px);
 	}
 
-	/* A phone held sideways has little height: status and buttons share one row. */
-	@media (orientation: landscape) and (max-height: 30em) {
-		main {
-			--action-bar: calc(1px + 0.5rem + var(--tap) + max(0.75rem, env(safe-area-inset-bottom)));
-		}
-
+	/* A phone held sideways has little height: status and buttons share one row
+	   (not with large text, where the halves would be too narrow for the labels). */
+	@media (orientation: landscape) and (max-height: 480px) and (min-width: 40em) {
 		.action-bar {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			align-items: center;

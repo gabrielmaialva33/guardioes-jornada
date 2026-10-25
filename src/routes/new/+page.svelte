@@ -153,13 +153,10 @@
 		margin-left: -0.75rem;
 	}
 
+	/* The leaf flows with the text, so on narrow phones the name takes two balanced
+	   centered lines instead of pushing the theme button off screen. */
 	.brand {
-		display: flex;
 		flex: 1;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
-		/* Two balanced lines on narrow phones instead of pushing the theme button off screen. */
 		min-width: 0;
 		color: var(--accent-strong);
 		font-family: var(--font-story);
@@ -168,6 +165,10 @@
 		line-height: 1.1;
 		text-align: center;
 		text-wrap: balance;
+	}
+
+	.brand :global(.icon) {
+		margin-right: 0.15rem;
 	}
 
 	main {

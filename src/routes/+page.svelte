@@ -234,21 +234,32 @@
 		font-weight: 700;
 	}
 
+	/*
+	 * The page is a column at least as tall as the screen, and the status bar sticks to
+	 * its bottom. At the end of the page the bar sits after the content, so it never
+	 * covers the last journey, whatever its height.
+	 */
+	:global(body:has(.status-bar)) {
+		display: flex;
+		flex-direction: column;
+	}
+
 	main {
-		/* Height of the fixed status bar below: one 2.75rem row of chips, its border and the inset. */
-		--status-bar: calc(2.75rem + 1px + env(safe-area-inset-bottom));
-		/* Calling's sticky button stops above the status bar instead of under it. */
-		--sticky-bottom: calc(var(--status-bar) + 0.75rem);
+		/* Height of the status bar: one 2.75rem row of chips, its border and the inset.
+		   Calling's sticky button stops above it instead of under it. */
+		--sticky-bottom: calc(2.75rem + 1px + env(safe-area-inset-bottom) + 0.75rem);
 		display: grid;
+		flex: 1 0 auto;
 		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
 		gap: 1.25rem;
-		padding-bottom: calc(var(--status-bar) + 1.25rem);
+		padding-bottom: 1.25rem;
 	}
 
 	/* Large system text on a phone: the two status chips wrap onto a second row. */
 	@media (max-width: 19.5em) {
 		main {
-			--status-bar: calc(5.5rem + 1px + env(safe-area-inset-bottom));
+			--sticky-bottom: calc(5.5rem + 1px + env(safe-area-inset-bottom) + 0.75rem);
 		}
 	}
 
@@ -388,8 +399,8 @@
 	}
 
 	.status-bar {
-		position: fixed;
-		inset: auto 0 0;
+		position: sticky;
+		bottom: 0;
 		z-index: 5;
 		/* The chips are 2.75rem tall tap targets, so the bar needs no padding of its own. */
 		padding-block: 0 env(safe-area-inset-bottom);
