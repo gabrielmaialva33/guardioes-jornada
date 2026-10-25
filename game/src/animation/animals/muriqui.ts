@@ -21,8 +21,8 @@ import { Behaviour, type BehaviourOptions } from './behaviour.ts';
 import { DampedSpring } from './damped-spring.ts';
 import type { AnimalWorld } from './motion.ts';
 import { MODELS } from './rigs.ts';
-import { clamp01, DEG, smoothstep, TAU, wrapAngle } from './scalar.ts';
 import type { Route } from './route.ts';
+import { clamp01, DEG, smoothstep, TAU, wrapAngle } from './scalar.ts';
 
 export const MURIQUI_STATES = ['idle', 'move', 'rest', 'tail-hang'] as const;
 export type MuriquiState = (typeof MURIQUI_STATES)[number];

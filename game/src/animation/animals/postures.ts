@@ -349,5 +349,3 @@ export function posturesOf(species: SpeciesId): Posture[] {
 
 /** Width of a packed key, for callers that blend keys themselves. */
 export const KEY_WIDTH = JOINT_COUNT * JOINT_STRIDE;
-
-

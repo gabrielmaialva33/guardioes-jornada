@@ -47,8 +47,8 @@ import {
 	ROOT,
 	TAIL
 } from './rigs.ts';
-import { SPECIES, type GaitParams, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
 import { clamp, clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
+import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams, strideAt } from './species.ts';
 
 const STAND = POSTURE_INDEX.stand;
 const SIT = POSTURE_INDEX.sit;
@@ -296,7 +296,7 @@ export class AnimalAnimator {
 			this.gaitWeight = this.cadence = 0;
 			return;
 		}
-		const speed = motion.speed > 0 ? motion.speed : 0;
+		const speed = Number.isFinite(motion.speed) ? Math.max(0, motion.speed) : 0;
 		const distance = motion.distance > 0 && Number.isFinite(motion.distance) ? motion.distance : 0;
 		// Turning on the spot covers foot travel at no speed: it steps too.
 		const moving = (speed > ANIMAL_LAYERS.moveThreshold || distance > 0) && this.#target === STAND;

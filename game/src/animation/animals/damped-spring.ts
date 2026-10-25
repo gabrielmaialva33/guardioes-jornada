@@ -15,7 +15,7 @@
  * The coefficients depend only on dt, so they are cached: at a steady frame
  * rate each step is a few multiplications.
  */
-import { SPRING } from '../../style/motion.ts';
+import type { SPRING } from '../../style/motion.ts';
 import { TAU } from './scalar.ts';
 
 export interface SpringPreset {
