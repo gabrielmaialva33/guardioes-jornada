@@ -252,8 +252,8 @@
 					</p>
 				{:else if sizeKB !== null}
 					<p class="note">
-						<Icon name="download" size={20} /> Na primeira vez, baixa cerca de {size(sizeKB * 1024)} e depois
-						fica guardada neste celular.
+						<Icon name="download" size={20} /> Na primeira vez, baixa cerca de {size(sizeKB * 1024)} e depois fica
+						guardada neste celular.
 					</p>
 				{:else}
 					<p class="note"><Icon name="download" size={20} /> O jogo só é baixado quando você entrar.</p>
