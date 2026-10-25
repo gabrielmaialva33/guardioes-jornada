@@ -59,17 +59,19 @@ describe('ShadowRig', () => {
 		let jitter = 0;
 		for (let i = 0; i < 30; i++) if (rig.update(centre + (i % 2 ? 0.3 : -0.3) * texel, 0, 10)) jitter++;
 		expect(jitter).toBe(0);
-		// Walking: re-renders, at most every second frame on medium.
+		// Walking at 9.6 u/s on 60 Hz: re-renders every frame, so the shadow stays under the feet.
 		let renders = 0;
-		for (let i = 0; i < 60; i++) if (rig.update(10 + i * 0.16, 0, 10)) renders++;
-		expect(renders).toBe(30);
-		// Animating in place (markMoved) also re-renders, throttled.
+		for (let i = 1; i <= 60; i++) if (rig.update(10 + i * 0.16, 0, 10)) renders++;
+		expect(renders).toBe(60);
+		// Animating in place (markMoved) also re-renders; a thermal throttle halves it.
+		rig.setInterval(2);
 		renders = 0;
 		for (let i = 0; i < 20; i++) {
 			rig.markMoved();
 			if (rig.update(20, 0, 10)) renders++;
 		}
 		expect(renders).toBe(10);
+		rig.setInterval(undefined);
 		// Still again: nothing more.
 		expect(idle(rig, 60, 20, 10)).toBe(0);
 	});

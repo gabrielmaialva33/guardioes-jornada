@@ -52,14 +52,19 @@ export interface ShadowTierSettings {
 	readonly blobs: BlobMode;
 	/** Which registered casters cast into the map. */
 	readonly casters: 'none' | 'actors' | 'all';
-	/** Minimum frames between shadow renders while something moves (2 = at most 30 Hz on 60 Hz). */
+	/**
+	 * Minimum frames between shadow renders while something moves. 1 on both map
+	 * tiers: players judge jumps by the avatar's shadow, and a throttled map lets
+	 * it trail the feet (0.3 u at a run on 30 FPS with 2). Raise it through
+	 * ShadowRigOptions.interval under thermal pressure.
+	 */
 	readonly interval: number;
 }
 
 export const SHADOW_TIERS: Readonly<Record<Quality, ShadowTierSettings>> = {
 	low: { mapSize: 0, extent: 0, blobs: 'all', casters: 'none', interval: 0 },
 	// 36 u across: the avatar at any zoom and the animals near it; 0.035 u texels.
-	medium: { mapSize: 1024, extent: 18, blobs: 'items', casters: 'actors', interval: 2 },
+	medium: { mapSize: 1024, extent: 18, blobs: 'items', casters: 'actors', interval: 1 },
 	high: { mapSize: 2048, extent: 30, blobs: 'items', casters: 'all', interval: 1 }
 };
 
@@ -311,6 +316,8 @@ export interface ShadowRigOptions {
 	blobs?: number;
 	variant?: LightVariant;
 	azimuthDeg?: number;
+	/** Overrides the tier's `interval` (frames between shadow renders while moving), e.g. 2 when hot. */
+	interval?: number;
 }
 
 /**
@@ -337,6 +344,7 @@ export class ShadowRig {
 	#invalid = true;
 	#moved = false;
 	#frames = 0;
+	#interval: number | undefined;
 	#a = Number.NaN;
 	#b = Number.NaN;
 	#c = Number.NaN;
@@ -345,6 +353,7 @@ export class ShadowRig {
 		this.#renderer = renderer;
 		this.#variant = options.variant ?? 'daylight';
 		this.#azimuth = options.azimuthDeg ?? SUN_AZIMUTH_DEG;
+		this.#interval = options.interval;
 		this.sun = options.sun ?? new DirectionalLight();
 		this.sun.name = this.sun.name || 'sun';
 		this.blobs = new BlobShadows(options.blobs ?? 48, this.#variant);
@@ -450,6 +459,11 @@ export class ShadowRig {
 		this.#moved = true;
 	}
 
+	/** Frames between shadow renders while moving; undefined restores the tier's value. */
+	setInterval(frames: number | undefined): void {
+		this.#interval = frames;
+	}
+
 	/** Re-render the shadow map at the next update, whatever moved (static edits, context restored). */
 	invalidate(): void {
 		this.#invalid = true;
@@ -476,7 +490,7 @@ export class ShadowRig {
 		const b = Math.round((x * u.x + y * u.y + z * u.z) / texel) * texel;
 		const c = Math.round((x * d.x + y * d.y + z * d.z) / DEPTH_STEP) * DEPTH_STEP;
 		const followed = a !== this.#a || b !== this.#b || c !== this.#c;
-		const due = this.#frames >= settings.interval;
+		const due = this.#frames >= (this.#interval ?? settings.interval);
 		if (!this.#invalid && !((followed || this.#moved) && due)) return false;
 		this.#a = a;
 		this.#b = b;
