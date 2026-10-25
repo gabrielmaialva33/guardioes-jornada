@@ -9,15 +9,18 @@ export default defineConfig({
 	reporter: [['list']],
 	use: {
 		...devices['Pixel 7'],
-		baseURL: 'http://localhost:4180',
+		// E2E_BASE_URL runs the same suite as a smoke test against a deployed site.
+		baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:4180',
 		// Uses the Chrome installed on the machine instead of downloading a browser.
 		channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome',
 		trace: 'retain-on-failure'
 	},
-	webServer: {
-		command: 'pnpm build && pnpm preview --strictPort',
-		url: 'http://localhost:4180',
-		reuseExistingServer: !process.env.CI,
-		timeout: 120_000
-	}
+	webServer: process.env.E2E_BASE_URL
+		? undefined
+		: {
+				command: 'pnpm build && pnpm preview --strictPort',
+				url: 'http://localhost:4180',
+				reuseExistingServer: !process.env.CI,
+				timeout: 120_000
+			}
 });

@@ -7,7 +7,9 @@ const test = base.extend<{ pageErrors: string[] }>({
 			const errors: string[] = [];
 			page.on('pageerror', (e) => errors.push(e.message));
 			page.on('console', (m) => {
-				if (m.type() === 'error') errors.push(m.text());
+				// Cloudflare's edge analytics beacon (/cdn-cgi/rum) is not part of the app
+				// and cannot reach the network in airplane mode.
+				if (m.type() === 'error' && !m.location().url.includes('/cdn-cgi/')) errors.push(m.text());
 			});
 			await use(errors);
 			expect(errors, 'console or page errors').toEqual([]);
