@@ -5,12 +5,34 @@
 	import { renderSVG } from 'uqr';
 	import Icon from '#lib/components/Icon.svelte';
 	import { journeys, mataAtlantica } from '#lib/content/mata-atlantica.ts';
-	import { formatDate, groupScore, isFinished } from '#lib/session.ts';
+	import { formatDate, type Group, groupScore, isFinished } from '#lib/session.ts';
 	import { sessions } from '#lib/state/sessions.svelte.ts';
 
 	const session = $derived(sessions.find(page.url.searchParams.get('id')));
 	const journey = $derived(session ? (journeys[session.journeyId] ?? mataAtlantica) : mataAtlantica);
 	const powers = $derived(journey.steps.filter((step) => step.kind === 'mission' && step.power));
+
+	interface Holder {
+		key: string;
+		lead: string;
+		name: string;
+		group: Group | undefined;
+	}
+	// A participant gets their own certificate. Journeys saved before participant
+	// names were asked still get one certificate per group.
+	const holders = $derived.by((): Holder[] => {
+		if (!session) return [];
+		if (session.participant) {
+			const group = session.groups.find((g) => g.id === session.myGroupId);
+			return [{ key: 'participant', lead: 'Certificamos que', name: session.participant, group }];
+		}
+		return session.groups.map((group) => ({
+			key: group.id,
+			lead: 'Certificamos que o grupo',
+			name: group.name,
+			group
+		}));
+	});
 	let origin = $state('');
 	const verificationUrl = $derived(
 		session && origin
@@ -60,30 +82,31 @@
 			<button
 				class="button"
 				type="button"
-				disabled={!qr || session.groups.length === 0}
+				disabled={!qr || holders.length === 0}
 				onclick={() => window.print()}><Icon name="print" /> Imprimir ou salvar em PDF</button
 			>
 			<p>
-				Um certificado para cada grupo. Para verificar o código, é preciso conexão e uma cópia da jornada na
-				nuvem.
+				{session.participant ? 'Seu certificado.' : 'Um certificado para cada grupo.'} Para verificar o código,
+				é preciso conexão e uma cópia da jornada na nuvem.
 			</p>
 		</div>
-		{#if session.groups.length === 0}<p class="page">Nenhum grupo cadastrado nesta jornada.</p>{/if}
+		{#if holders.length === 0}<p class="page">Nenhum grupo cadastrado nesta jornada.</p>{/if}
 		<div class="certificates">
-			{#each session.groups as group (group.id)}
+			{#each holders as holder (holder.key)}
 				<article
 					class="certificate"
-					style:--group-color={group.color}
-					aria-label="Certificado do grupo {group.name}"
+					style:--group-color={holder.group?.color ?? 'var(--accent)'}
+					aria-label="Certificado de {holder.name}"
 				>
 					<header>
 						<p class="eyebrow">Certificado de participação</p>
 						<h1>Guardiões da Mata Atlântica</h1>
 					</header>
 					<div class="recognition">
-						<p>Certificamos que o grupo</p>
-						<h2 class="group-name">{group.name}</h2>
-						<p>concluiu a jornada na PENAP</p>
+						<p>{holder.lead}</p>
+						<h2 class="group-name">{holder.name}</h2>
+						{#if session.participant && holder.group}<p>do grupo {holder.group.name},</p>{/if}
+						<p>concluiu a jornada pela {journey.place}</p>
 						<p class="date">em {formatDate(session.date)}</p>
 						{#if session.school || session.className}<p class="school">
 								{session.school}{session.school && session.className ? ' · ' : ''}{session.className}
@@ -96,11 +119,18 @@
 						</ul>
 					</section>
 					<footer>
-						<div class="signature">
-							<p>{session.guide || ' '}</p>
-							<span>Guia</span>
-						</div>
-						<p class="score"><strong>{groupScore(session, group.id)}</strong> pontos na jornada</p>
+						{#if !session.participant || session.guide}
+							<div class="signature">
+								<p>{session.guide || ' '}</p>
+								<span>Guia</span>
+							</div>
+						{/if}
+						{#if holder.group}
+							<p class="score">
+								<strong>{groupScore(session, holder.group.id)}</strong>
+								{session.participant ? 'pontos do grupo na jornada' : 'pontos na jornada'}
+							</p>
+						{/if}
 						<div class="verification">
 							{#if qr}<img
 									src={qr}

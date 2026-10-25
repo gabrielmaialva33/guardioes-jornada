@@ -2,7 +2,7 @@ import type { Session } from './session.ts';
 
 /** Saves a session as a JSON file the guide can keep or share; photos stay on the phone. */
 export function downloadSession(session: Session) {
-	const name = [session.school || 'jornada', session.className, session.date]
+	const name = [session.participant || session.school || 'jornada', session.className, session.date]
 		.filter(Boolean)
 		.join('-')
 		.normalize('NFD')

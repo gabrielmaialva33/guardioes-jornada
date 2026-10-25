@@ -132,7 +132,7 @@
 		<div class="emblem" aria-hidden="true">
 			<Icon name="certificate" weight="duotone" size={40} />
 		</div>
-		<p>Confira uma jornada compartilhada pelo guia usando o código impresso no certificado.</p>
+		<p>Confira se um certificado é autêntico pelo código impresso nele.</p>
 	</section>
 
 	<form
@@ -187,9 +187,7 @@
 				<Icon name="warning" weight="duotone" size={30} />
 				<div class="state-text">
 					<p><strong>Nenhum certificado com este código.</strong></p>
-					<p class="hint">
-						Confira o código. A jornada só aparece depois de concluída e compartilhada pelo guia.
-					</p>
+					<p class="hint">Confira o código. A jornada só aparece depois de concluída e salva na nuvem.</p>
 				</div>
 			</section>
 		{:else if status === 'error'}
@@ -210,16 +208,21 @@
 				</div>
 
 				<dl>
+					<!-- Only journeys saved before participant profiles carry a school. -->
+					{#if certificate.school}
+						<div>
+							<dt>Escola</dt>
+							<dd>{certificate.school}</dd>
+						</div>
+					{/if}
+					{#if certificate.class_name}
+						<div>
+							<dt>Turma</dt>
+							<dd>{certificate.class_name}</dd>
+						</div>
+					{/if}
 					<div>
-						<dt>Escola</dt>
-						<dd>{certificate.school || 'Não informada'}</dd>
-					</div>
-					<div>
-						<dt>Turma</dt>
-						<dd>{certificate.class_name || 'Não informada'}</dd>
-					</div>
-					<div>
-						<dt>Data da visita</dt>
+						<dt>Data da jornada</dt>
 						<dd>{formatDate(certificate.visit_date)}</dd>
 					</div>
 					<div>
