@@ -30,16 +30,16 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 | `src/assets/models/kit-props.glb` | 1,978 | 2,642 | 39,500 B | 20,292 B | 18,509 B | 18 named obby/trash/cabin nodes, 3 kit palettes (`64×64`, `NEAREST`) |
 | `src/assets/models/koala.glb` | 594 | 464 | 18,388 B | 6,840 B | 6,132 B | Recolor base for sloth; 5 rigid nodes + 5 clips (`idle,walk,run,eat,gesture-positive`) |
 | `src/assets/models/monkey.glb` | 918 | 638 | 21,932 B | 9,173 B | 8,376 B | Recolor base for golden lion tamarin, howler & muriqui; 6 rigid nodes + 5 clips |
-| `src/assets/models/parrot.glb` | 530 | 434 | 20,808 B | 8,246 B | 7,395 B | Base for green-billed toucan & birds; 7 rigid nodes + 5 clips |
-| `src/assets/models/tiger.glb` | 951 | 720 | 22,648 B | 9,625 B | 8,805 B | Recolor base for jaguar; 6 rigid nodes + 5 clips |
+| `src/assets/models/parrot.glb` | 530 | 434 | 20,480 B | 8,018 B | 7,171 B | Base for green-billed toucan & birds; 7 rigid nodes + 5 clips |
+| `src/assets/models/tiger.glb` | 951 | 720 | 22,744 B | 9,751 B | 8,854 B | Recolor base for jaguar; 6 rigid nodes + 5 clips |
 | `src/assets/skins/palette-bugio-ruivo.png` | — | — | 369 B | 392 B | 373 B | `64×64` `NEAREST` PNG-8 for *Alouatta guariba clamitans* (adult male) on `monkey.glb` |
 | `src/assets/skins/palette-mico-leao-dourado.png` | — | — | 374 B | 397 B | 378 B | `64×64` `NEAREST` PNG-8 for *Leontopithecus rosalia* on `monkey.glb` |
 | `src/assets/skins/palette-muriqui.png` | — | — | 374 B | 397 B | 378 B | `64×64` `NEAREST` PNG-8 for *Brachyteles arachnoides* on `monkey.glb` |
-| `src/assets/skins/palette-onca-melanica.png` | — | — | 385 B | 408 B | 389 B | `64×64` `NEAREST` PNG-8 for melanistic *Panthera onca* on `tiger.glb` |
-| `src/assets/skins/palette-onca-pintada.png` | — | — | 338 B | 361 B | 342 B | `64×64` `NEAREST` PNG-8 for *Panthera onca* on `tiger.glb` |
+| `src/assets/skins/palette-onca-melanica.png` | — | — | 356 B | 374 B | 355 B | `64×64` `NEAREST` PNG-8 for melanistic *Panthera onca* on `tiger.glb` |
+| `src/assets/skins/palette-onca-pintada.png` | — | — | 356 B | 379 B | 360 B | `64×64` `NEAREST` PNG-8 for *Panthera onca* on `tiger.glb` |
 | `src/assets/skins/palette-pets.png` | — | — | 1,194 B | 1,217 B | 1,198 B | `64×64` `NEAREST` PNG-8 base colormap for Cube Pets |
 | `src/assets/skins/palette-preguica-de-coleira.png` | — | — | 331 B | 354 B | 335 B | `64×64` `NEAREST` PNG-8 for *Bradypus torquatus* on `koala.glb` |
-| `src/assets/skins/palette-tucano-de-bico-verde.png` | — | — | 575 B | 598 B | 579 B | `64×64` `NEAREST` PNG-8 for *Ramphastos dicolorus* on `parrot.glb` |
+| `src/assets/skins/palette-tucano-de-bico-verde.png` | — | — | 571 B | 594 B | 575 B | `64×64` `NEAREST` PNG-8 for *Ramphastos dicolorus* on `parrot.glb` |
 | `src/assets/skins/skin-a.webp` | — | — | 2,816 B | 2,839 B | 2,817 B | Default avatar skin (`256×256` `NEAREST` lossless WebP) |
 | `src/assets/skins/skin-b.webp` | — | — | 2,080 B | 2,101 B | 2,063 B | Optional skin B (`256×256` lossless WebP) |
 | `src/assets/skins/skin-c.webp` | — | — | 1,710 B | 1,726 B | 1,679 B | Optional skin C (`256×256` lossless WebP) |
@@ -58,5 +58,5 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 | `src/assets/skins/skin-p.webp` | — | — | 2,326 B | 2,349 B | 2,326 B | Optional skin P (`256×256` lossless WebP) |
 | `src/assets/skins/skin-q.webp` | — | — | 2,114 B | 2,137 B | 2,100 B | Optional skin Q (`256×256` lossless WebP) |
 | `src/assets/skins/skin-r.webp` | — | — | 1,842 B | 1,865 B | 1,846 B | Optional skin R (`256×256` lossless WebP) |
-| **Subtotal: Models + All 8 Palettes + `skin-a`** | **7,550** | **9,539** | **183,140 B** | **89,954 B** | **82,244 B** | Initial pack payload (without the 17 on-demand skins) |
-| **TOTAL (All 33 Files)** | **7,550** | **9,539** | **221,024 B** | **128,180 B** | **119,978 B** | Complete asset directory (`215.8 KiB` raw / `117.2 KiB` br) |
+| **Subtotal: Models + All 8 Palettes + `skin-a`** | **7,550** | **9,539** | **182,893 B** | **89,832 B** | **82,049 B** | Initial pack payload (without the 17 on-demand skins) |
+| **TOTAL (All 33 Files)** | **7,550** | **9,539** | **220,777 B** | **128,058 B** | **119,783 B** | Complete asset directory (`215.6 KiB` raw / `117.0 KiB` br) |
