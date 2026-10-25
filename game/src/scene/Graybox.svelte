@@ -93,7 +93,6 @@
 	const animator = new AvatarAnimator();
 	const animationInput = createAvatarInput();
 	let rig: RigBinding | undefined;
-	let avatar: Group | undefined;
 	let avatarInstance: AvatarInstance | undefined;
 	let appearanceGeneration = 0;
 	let currentProfile: AvatarProfile | undefined;
@@ -113,6 +112,12 @@
 	let notice = 'Siga em frente até as plataformas de madeira. Arraste à direita para olhar.';
 	let lastHud = 0;
 	let lastYaw = 0;
+	$effect(() => {
+		if (paused) input.releaseAll();
+		controller.resume();
+		budget.reset();
+		governor.reset();
+	});
 	const debug = new URLSearchParams(location.search).has('debug');
 	const motion = matchMedia('(prefers-reduced-motion: reduce)');
 	function fit() {
@@ -212,10 +217,12 @@
 		void Promise.all([
 			loadAvatar(abort.signal, avatarProfile).then((instance) => {
 				if (abort.signal.aborted) {
-					disposeModel(model);
+					instance.dispose();
 					return;
 				}
-				avatar = model;
+				avatarInstance = instance;
+				const model = instance.model;
+				currentProfile = avatarProfile;
 				rig = bindRig(model, AVATAR_LAYOUT, BLOCKY_RIG);
 				actor.add(model);
 				shadows.addCaster(actor, 'actor');

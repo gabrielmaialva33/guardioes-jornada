@@ -8,6 +8,9 @@
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
 	import { InputModel, type ButtonRole } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
+	import AvatarChooser from './scene/AvatarChooser.svelte';
+	import { AVATAR_PRESETS, DEFAULT_AVATAR, KENNEY_SKINS } from './avatar/catalog.ts';
+	import { createLocalSave, type AvatarProfile } from './data/local-save.ts';
 	import { forestLayout } from './scene/forest-layout.ts';
 	import HudIcon from './scene/HudIcon.svelte';
 	import { DURATION } from './style/motion.ts';
@@ -27,8 +30,15 @@
 	let portrait = $state(innerWidth < innerHeight);
 	let allowPortrait = $state(false);
 	let hasMoved = $state(false);
-	const rotate = $derived(portrait && !allowPortrait);
-	const showNotice = $derived(!hasMoved || !hud.notice.startsWith('Siga em frente'));
+	const gameSave = createLocalSave(DEFAULT_AVATAR);
+	let avatarProfile = $state.raw(gameSave.avatar());
+	let choosing = $state(false);
+	let saveMessage = $state('');
+	let sceneRef: { setAvatarProfile: (profile: AvatarProfile) => Promise<void> } | undefined = $state();
+	let chooserGeneration = 0;
+	let disposed = false;
+	const rotate = $derived(portrait && !allowPortrait && !choosing);
+	const showNotice = $derived(saveMessage || !hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
 	const level = createGraybox();
 	const forest = forestLayout();
@@ -36,7 +46,36 @@
 	const world = buildCollisionWorld(level);
 	const checkpoints = new CheckpointTracker(level.start, level.checkpoints, level.killY);
 	const controller = new PlayerController(world, level.start.spawn, { yaw: level.start.yaw, checkpoints });
-	onDestroy(() => world.dispose());
+	onDestroy(() => {
+		disposed = true;
+		chooserGeneration++;
+		world.dispose();
+	});
+	function openChooser() {
+		chooserGeneration++;
+		choosing = true;
+		input.releaseAll();
+		controller.resume();
+	}
+	function closeChooser() {
+		chooserGeneration++;
+		choosing = false;
+		input.releaseAll();
+		controller.resume();
+		void sceneRef?.setAvatarProfile(avatarProfile).catch(() => {});
+		wrapper?.focus({ preventScroll: true });
+	}
+	async function applyAvatar(value: AvatarProfile) {
+		if (!sceneRef) throw new Error('avatar-not-ready');
+		const generation = chooserGeneration;
+		await sceneRef.setAvatarProfile(value);
+		if (disposed || generation !== chooserGeneration) return;
+		avatarProfile = { ...value, colors: { ...value.colors } };
+		saveMessage = gameSave.setAvatar(avatarProfile)
+			? ''
+			: 'A aparência mudou só nesta partida. Não foi possível guardar neste celular.';
+		closeChooser();
+	}
 	onMount(() => {
 		const listeners = new AbortController();
 		const resize = () => {
@@ -54,6 +93,7 @@
 		wrapper?.focus({ preventScroll: true });
 	}
 	function drawControls() {
+		if (saveMessage && controller.frame.speed > 0.1) saveMessage = '';
 		if (!hasMoved && controller.frame.speed > 0.1) hasMoved = true;
 		const stick = input.stick;
 		stickBase.style.display = stick.active ? 'block' : 'none';
@@ -85,6 +125,7 @@
 <div
 	bind:this={wrapper}
 	class="secret-game"
+	class:choosing
 	style:background={`linear-gradient(${LIGHT.daylight.skyTop}, ${LIGHT.daylight.horizon} 65%)`}
 	data-game-root
 	tabindex="-1"
@@ -95,7 +136,9 @@
 		<Canvas dpr={1} shadows={false} toneMapping={NoToneMapping} colorSpace={SRGBColorSpace} {createRenderer}
 			>{#if wrapper}<Graybox
 					{wrapper}
-					paused={rotate}
+					bind:this={sceneRef}
+					paused={rotate || choosing}
+					{avatarProfile}
 					{controller}
 					{input}
 					{level}
@@ -106,7 +149,7 @@
 				/>{/if}</Canvas
 		>
 	</div>
-	<div class="hud" inert={rotate}>
+	<div class="hud" inert={rotate || choosing}>
 		<div class="top-bar">
 			<button
 				type="button"
@@ -126,8 +169,20 @@
 				onkeyup={keyboardButton}
 				onclick={backToBase}><HudIcon name="base" /></button
 			>
+			<button
+				type="button"
+				aria-label="Personalizar personagem"
+				title="Personalizar personagem"
+				disabled={!hud.ready}
+				onpointerdown={(event) => event.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={openChooser}><HudIcon name="avatar" /></button
+			>
 		</div>
-		{#if showNotice}<p class="notice" class:sr-only={!!hud.debug} aria-live="polite">{hud.notice}</p>{/if}
+		{#if showNotice}<p class="notice" class:sr-only={!!hud.debug} aria-live="polite">
+				{saveMessage || hud.notice}
+			</p>{/if}
 		<div
 			class="stick-zone"
 			class:moved={hasMoved}
@@ -181,6 +236,14 @@
 			onclick={(event) => activate(event, 'jump')}><HudIcon name="jump" /></button
 		>
 	</div>
+	{#if choosing}<AvatarChooser
+			profile={avatarProfile}
+			presets={AVATAR_PRESETS}
+			kenneyUrls={KENNEY_SKINS}
+			onapply={applyAvatar}
+			onclose={closeChooser}
+		/>{/if}
+
 	{#if rotate}
 		<div
 			class="rotate"
@@ -235,6 +298,9 @@
 		user-select: none;
 		-webkit-touch-callout: none;
 		outline-offset: -4px;
+	}
+	.secret-game.choosing {
+		touch-action: auto;
 	}
 	.world,
 	.hud {
