@@ -36,12 +36,12 @@
 	let origin = $state('');
 	const verificationUrl = $derived(
 		session && origin
-			? new URL(resolve('/verify') + '?code=' + encodeURIComponent(session.certificateCode), origin).href
+			? new URL(`${resolve('/verify')}?code=${encodeURIComponent(session.certificateCode)}`, origin).href
 			: ''
 	);
 	const qr = $derived(
 		verificationUrl
-			? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(renderSVG(verificationUrl))
+			? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderSVG(verificationUrl))}`
 			: ''
 	);
 
@@ -287,7 +287,11 @@
 		margin: 10mm;
 	}
 	@media print {
-		/* The page's dark background would print as a frame when "background graphics" is on. */
+		/* White paper: Chrome paints the page margins from the root's dark color scheme
+		   (a black frame around the certificate when "background graphics" is on). */
+		:global(:root) {
+			color-scheme: light;
+		}
 		:global(html),
 		:global(body) {
 			margin: 0;

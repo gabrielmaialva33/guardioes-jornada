@@ -508,8 +508,9 @@
 		display: grid;
 		place-items: center;
 		justify-self: center;
-		width: 6rem;
-		height: 6rem;
+		/* Never wider than the card (large text on a small phone). */
+		width: min(6rem, 100%);
+		aspect-ratio: 1;
 		border-radius: 50%;
 		background: radial-gradient(
 			circle at 35% 30%,
