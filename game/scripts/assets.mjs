@@ -656,27 +656,16 @@ function remapPetUvsForSpecies(petName, json, bin) {
 					}
 				} else if (petName === 'parrot') {
 					if (
-						(mesh.name === 'wing-left' ||
-							mesh.name === 'wing-right' ||
-							mesh.name === 'Group' ||
-							mesh.name === 'tail') &&
-						col === 1 &&
-						band === 1
+						mesh.name === 'wing-left' ||
+						mesh.name === 'wing-right' ||
+						mesh.name === 'Group' ||
+						mesh.name === 'tail'
 					) {
-						// Move wing tops, crest, and tail base from (1,1) to (1,3) (black plumage, v += 2/4 = +0.5)
+						// Map entire wing, crest, and tail meshes to cell (1,3) (glossy black plumage)
 						for (const vi of tris) {
-							const [u, v] = readUv(vi);
-							if (Math.floor(v * 4) === 1) writeUv(vi, u, v + 0.5);
-						}
-					} else if (mesh.name === 'body' && col === 1 && band === 1) {
-						// Keep front breast (cz >= 0.35, cy <= 0.90) and undertail (cy < 0.22) in (1,1);
-						// move upper head and back/sides to (1,3) (black plumage)
-						const isFrontBreastOrUndertail = (cz >= 0.35 && cy <= 0.9) || cy < 0.22;
-						if (!isFrontBreastOrUndertail) {
-							for (const vi of tris) {
-								const [u, v] = readUv(vi);
-								if (Math.floor(v * 4) === 1) writeUv(vi, u, v + 0.5);
-							}
+							const [, v] = readUv(vi);
+							const localR = (v * 64) % 16;
+							writeUv(vi, 1.5 / 8, (3 * 16 + localR) / 64);
 						}
 					}
 				}
