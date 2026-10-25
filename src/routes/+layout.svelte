@@ -1,7 +1,7 @@
 <script lang="ts">
-	import '@fontsource-variable/alegreya';
-	import '@fontsource-variable/alegreya/wght-italic.css';
-	import '@fontsource-variable/atkinson-hyperlegible-next';
+	import '#lib/fonts.css';
+	import storyFont from '@fontsource-variable/alegreya/files/alegreya-latin-wght-normal.woff2?url';
+	import uiFont from '@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2?url';
 	import '../app.css';
 	import { onMount, type Snippet } from 'svelte';
 	import { auth } from '#lib/state/auth.svelte.ts';
@@ -28,6 +28,11 @@
 		void Promise.all([sessions.load(), auth.init()]).then(() => sync.init());
 	});
 </script>
+
+<svelte:head>
+	<link rel="preload" href={uiFont} as="font" type="font/woff2" crossorigin="anonymous" />
+	<link rel="preload" href={storyFont} as="font" type="font/woff2" crossorigin="anonymous" />
+</svelte:head>
 
 {#if sessions.error}
 	<p class="storage-warning" role="alert">{sessions.error}</p>
