@@ -970,6 +970,280 @@ function generateSpeciesPalettes(outSkinsDir) {
 	}
 }
 
+/**
+ * Generate `avatar-regions.json`, `face-smile.png` (16x16), `face-neutral.png` (16x16),
+ * and return a 64x64 PNG buffer of Preset 1 (Roblox-classic flat-colour avatar) to embed in `avatar.glb`.
+ */
+function generateAvatarRegionsAndDefaultSkin(outSkinsDir) {
+	// 16x16 face decal ASCII art ('.' = transparent, 'E' = dark eye/mouth #26201e, 'W' = eye shine #e6ede9, 'B' = warm blush #d98274)
+	const SMILE_16 = [
+		'................',
+		'................',
+		'................',
+		'................',
+		'................',
+		'....EE....EE....',
+		'....EW....EW....',
+		'....EE....EE....',
+		'....EE....EE....',
+		'..BB........BB..',
+		'.....E....E.....',
+		'......EEEE......',
+		'................',
+		'................',
+		'................',
+		'................'
+	];
+
+	const NEUTRAL_16 = [
+		'................',
+		'................',
+		'................',
+		'................',
+		'................',
+		'....EE....EE....',
+		'....EW....EW....',
+		'....EE....EE....',
+		'....EE....EE....',
+		'................',
+		'......EEEE......',
+		'................',
+		'................',
+		'................',
+		'................',
+		'................'
+	];
+
+	// 8x8 pixel coordinates (relative to head.front [8, 8, 8, 8] in a 64x64 texture)
+	const SMILE_PIXELS_8 = [
+		{ x: 2, y: 3, color: '#26201e', role: 'eye' },
+		{ x: 5, y: 3, color: '#26201e', role: 'eye' },
+		{ x: 2, y: 4, color: '#26201e', role: 'eye' },
+		{ x: 5, y: 4, color: '#26201e', role: 'eye' },
+		{ x: 3, y: 6, color: '#26201e', role: 'mouth' },
+		{ x: 4, y: 6, color: '#26201e', role: 'mouth' }
+	];
+
+	const NEUTRAL_PIXELS_8 = [
+		{ x: 2, y: 3, color: '#26201e', role: 'eye' },
+		{ x: 5, y: 3, color: '#26201e', role: 'eye' },
+		{ x: 2, y: 4, color: '#26201e', role: 'eye' },
+		{ x: 5, y: 4, color: '#26201e', role: 'eye' },
+		{ x: 3, y: 5, color: '#26201e', role: 'mouth' },
+		{ x: 4, y: 5, color: '#26201e', role: 'mouth' }
+	];
+
+	const avatarRegions = {
+		canvasSize: 64,
+		description:
+			'64x64 UV region map for compositing a Roblox-classic flat-colour avatar skin on avatar.glb (origin top-left, flipY=false).',
+		regions: {
+			head: {
+				all: [0, 0, 32, 24],
+				top: [8, 0, 8, 8],
+				bottom: [8, 16, 8, 8],
+				right: [0, 8, 8, 8],
+				front: [8, 8, 8, 8],
+				left: [16, 8, 8, 8],
+				back: [24, 8, 8, 8],
+				hair: [
+					[8, 0, 8, 8],
+					[24, 8, 8, 6],
+					[0, 8, 8, 3],
+					[0, 11, 2, 3],
+					[16, 8, 8, 3],
+					[22, 11, 2, 3],
+					[8, 8, 8, 2]
+				]
+			},
+			torso: {
+				all: [0, 43, 28, 21],
+				top: [6, 43, 8, 6],
+				bottom: [6, 58, 8, 6],
+				right: [0, 49, 6, 9],
+				front: [6, 49, 8, 9],
+				left: [14, 49, 6, 9],
+				back: [20, 49, 8, 9]
+			},
+			armRight: {
+				top: [30, 33, 4, 4],
+				bottom: [34, 33, 4, 4],
+				right: [30, 37, 4, 11],
+				front: [34, 37, 4, 11],
+				left: [38, 37, 4, 11],
+				back: [42, 37, 4, 11],
+				sleeve: [30, 37, 16, 5],
+				forearm: [30, 42, 16, 6]
+			},
+			armLeft: {
+				top: [48, 33, 4, 4],
+				bottom: [52, 33, 4, 4],
+				right: [48, 37, 4, 11],
+				front: [52, 37, 4, 11],
+				left: [56, 37, 4, 11],
+				back: [60, 37, 4, 11],
+				sleeve: [48, 37, 16, 5],
+				forearm: [48, 42, 16, 6]
+			},
+			legRight: {
+				top: [30, 50, 4, 4],
+				bottom: [34, 50, 4, 4],
+				right: [30, 54, 4, 10],
+				front: [34, 54, 4, 10],
+				left: [38, 54, 4, 10],
+				back: [42, 54, 4, 10],
+				pants: [30, 54, 16, 8],
+				shoe: [30, 62, 16, 2]
+			},
+			legLeft: {
+				top: [48, 50, 4, 4],
+				bottom: [52, 50, 4, 4],
+				right: [48, 54, 4, 10],
+				front: [52, 54, 4, 10],
+				left: [56, 54, 4, 10],
+				back: [60, 54, 4, 10],
+				pants: [48, 54, 16, 8],
+				shoe: [48, 62, 16, 2]
+			}
+		},
+		faces: {
+			targetRect64: [8, 8, 8, 8],
+			targetRect128: [16, 16, 16, 16],
+			palette: {
+				E: '#26201e',
+				W: '#e4ece8',
+				B: '#d98274'
+			},
+			smile: {
+				file: 'face-smile.png',
+				pixels8x8: SMILE_PIXELS_8,
+				grid16x16: SMILE_16
+			},
+			neutral: {
+				file: 'face-neutral.png',
+				pixels8x8: NEUTRAL_PIXELS_8,
+				grid16x16: NEUTRAL_16
+			}
+		},
+		// 18 diverse Brazilian presets (skin tones from deep ebony/mahogany to warm bronze, indigenous terracotta, pardo & olive/light;
+		// clothes strictly from ART.md ramps + non-gold accents ipeAmarelo/ipeRosa)
+		presets: [
+			{ id: 'preset-01', name: 'Iara (Guardiã)', skin: '#b87b52', hair: '#2a201c', shirt: '#2d6a4f', pants: '#5e4330', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-02', name: 'Cauã', skin: '#8c583a', hair: '#241c18', shirt: '#4f9a6e', pants: '#5a4232', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-03', name: 'Dandara', skin: '#5c3b28', hair: '#241c18', shirt: '#f2c94c', pants: '#2d6a4f', shoes: '#5e4330', face: 'smile' },
+			{ id: 'preset-04', name: 'Bento', skin: '#d99e73', hair: '#5e4330', shirt: '#3e9ccf', pants: '#4f5c55', shoes: '#5a4232', face: 'smile' },
+			{ id: 'preset-05', name: 'Maitê', skin: '#e8b892', hair: '#8a6448', shirt: '#ff9fb7', pants: '#2f7fb0', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-06', name: 'Zuri', skin: '#6e4730', hair: '#241c18', shirt: '#74c69d', pants: '#4f5c55', shoes: '#5e4330', face: 'smile' },
+			{ id: 'preset-07', name: 'Raoni', skin: '#a66843', hair: '#241c18', shirt: '#5fa36a', pants: '#6b4f3a', shoes: '#5a4232', face: 'neutral' },
+			{ id: 'preset-08', name: 'Helena', skin: '#f0c8a8', hair: '#a8805c', shirt: '#2f7fb0', pants: '#6f7d74', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-09', name: 'Gael', skin: '#c98c63', hair: '#3b281e', shirt: '#3f7d4f', pants: '#8a6448', shoes: '#5e4330', face: 'smile' },
+			{ id: 'preset-10', name: 'Aiyra', skin: '#995f3d', hair: '#241c18', shirt: '#f2c94c', pants: '#5e4330', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-11', name: 'Lucas', skin: '#e2ae86', hair: '#5a4232', shirt: '#73cbf0', pants: '#2f5e3c', shoes: '#5a4232', face: 'neutral' },
+			{ id: 'preset-12', name: 'Tainá', skin: '#7d5035', hair: '#241c18', shirt: '#86bf7c', pants: '#5a4232', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-13', name: 'Ravi', skin: '#b0744d', hair: '#2a201c', shirt: '#a8805c', pants: '#2d6a4f', shoes: '#5e4330', face: 'smile' },
+			{ id: 'preset-14', name: 'Clara', skin: '#ecc2a0', hair: '#c9a27a', shirt: '#4f9a6e', pants: '#2f7fb0', shoes: '#4f5c55', face: 'smile' },
+			{ id: 'preset-15', name: 'Kauan', skin: '#63402b', hair: '#241c18', shirt: '#3e9ccf', pants: '#6b4f3a', shoes: '#4f5c55', face: 'neutral' },
+			{ id: 'preset-16', name: 'Lia', skin: '#d1946b', hair: '#5e4330', shirt: '#ff9fb7', pants: '#4f5c55', shoes: '#5a4232', face: 'smile' },
+			{ id: 'preset-17', name: 'Caio', skin: '#825439', hair: '#2a201c', shirt: '#5fa36a', pants: '#4f5c55', shoes: '#5e4330', face: 'smile' },
+			{ id: 'preset-18', name: 'Jaci', skin: '#be8158', hair: '#3b281e', shirt: '#2d6a4f', pants: '#8f6e52', shoes: '#5a4232', face: 'neutral' }
+		]
+	};
+
+	fs.writeFileSync(
+		path.join(outSkinsDir, 'avatar-regions.json'),
+		`${JSON.stringify(avatarRegions, null, '\t')}\n`,
+		'utf8'
+	);
+
+	// Write 16x16 PNGs for face-smile.png and face-neutral.png (using #1e4d36 background for unused pixels or skin-neutral preview)
+	for (const [name, grid] of [
+		['face-smile.png', SMILE_16],
+		['face-neutral.png', NEUTRAL_16]
+	]) {
+		const rgba = Buffer.alloc(16 * 16 * 4);
+		const bg = parseHex('#d99e73');
+		for (let y = 0; y < 16; y++) {
+			for (let x = 0; x < 16; x++) {
+				const ch = grid[y][x];
+				const rgb =
+					ch === 'E'
+						? parseHex('#26201e')
+						: ch === 'W'
+							? parseHex('#e4ece8')
+							: ch === 'B'
+								? parseHex('#d98274')
+								: bg;
+				const p = (y * 16 + x) * 4;
+				rgba[p] = rgb[0];
+				rgba[p + 1] = rgb[1];
+				rgba[p + 2] = rgb[2];
+				rgba[p + 3] = 255;
+			}
+		}
+		fs.writeFileSync(path.join(outSkinsDir, name), encodePng(16, 16, rgba));
+	}
+
+	// Composite Preset 1 into a 64x64 PNG buffer for avatar.glb's default embedded texture
+	return compositeAvatarPresetPng(avatarRegions, avatarRegions.presets[0]);
+}
+
+function fillRect64(rgba, [x0, y0, w, h], hex) {
+	const [r, g, b] = parseHex(hex);
+	for (let y = y0; y < Math.min(64, y0 + h); y++) {
+		for (let x = x0; x < Math.min(64, x0 + w); x++) {
+			const p = (y * 64 + x) * 4;
+			rgba[p] = r;
+			rgba[p + 1] = g;
+			rgba[p + 2] = b;
+			rgba[p + 3] = 255;
+		}
+	}
+}
+
+function compositeAvatarPresetPng(regionsSpec, preset) {
+	const rgba = Buffer.alloc(64 * 64 * 4);
+	// Fill background with dark leaf shadow #1e4d36
+	fillRect64(rgba, [0, 0, 64, 64], '#1e4d36');
+
+	const R = regionsSpec.regions;
+	// 1. Skin
+	fillRect64(rgba, R.head.all, preset.skin);
+	fillRect64(rgba, R.armRight.bottom, preset.skin);
+	fillRect64(rgba, R.armRight.forearm, preset.skin);
+	fillRect64(rgba, R.armLeft.bottom, preset.skin);
+	fillRect64(rgba, R.armLeft.forearm, preset.skin);
+
+	// 2. Hair
+	for (const rect of R.head.hair) {
+		fillRect64(rgba, rect, preset.hair);
+	}
+
+	// 3. Shirt
+	fillRect64(rgba, R.torso.all, preset.shirt);
+	fillRect64(rgba, R.armRight.top, preset.shirt);
+	fillRect64(rgba, R.armRight.sleeve, preset.shirt);
+	fillRect64(rgba, R.armLeft.top, preset.shirt);
+	fillRect64(rgba, R.armLeft.sleeve, preset.shirt);
+
+	// 4. Pants & Shoes
+	fillRect64(rgba, R.legRight.top, preset.pants);
+	fillRect64(rgba, R.legRight.pants, preset.pants);
+	fillRect64(rgba, R.legRight.bottom, preset.shoes);
+	fillRect64(rgba, R.legRight.shoe, preset.shoes);
+	fillRect64(rgba, R.legLeft.top, preset.pants);
+	fillRect64(rgba, R.legLeft.pants, preset.pants);
+	fillRect64(rgba, R.legLeft.bottom, preset.shoes);
+	fillRect64(rgba, R.legLeft.shoe, preset.shoes);
+
+	// 5. Face decal on head.front [8, 8, 8, 8]
+	const faceSpec = regionsSpec.faces[preset.face] || regionsSpec.faces.smile;
+	const [fx0, fy0] = regionsSpec.faces.targetRect64;
+	for (const px of faceSpec.pixels8x8) {
+		fillRect64(rgba, [fx0 + px.x, fy0 + px.y, 1, 1], px.color);
+	}
+	return encodePng(64, 64, rgba);
+}
+
 function main() {
 	verifyLicenses();
 	fs.mkdirSync(OUT_MODELS, { recursive: true });
@@ -994,13 +1268,10 @@ function main() {
 			64
 		);
 		generateSpeciesPalettes(OUT_SKINS);
+		const defaultAvatarSkinBytes = generateAvatarRegionsAndDefaultSkin(OUT_SKINS);
 		// Enforce ART.md lightness bounds [0.12, 0.90] on all species palettes and 128x128 skins
 		execFileSync('python3', [path.join(__dirname, 'blender', 'recolor.py')], { stdio: 'inherit' });
 		const boundedPetsPalBytes = fs.readFileSync(petsPalPath);
-		const skinAPlaceholderBytes = snapPalettePngToArtRamps(
-			resizeNearestPng(path.join(blockyTexDir, 'texture-a.png'), path.join(workDir, 'skin-a-4.png'), 4),
-			workDir
-		);
 
 		// 2. Avatar: character-a.glb -> strip animations, normalize head scale to [1,1,1], keep 6 named nodes
 		{
@@ -1008,7 +1279,11 @@ function main() {
 			const { json, bin } = readGlb(rawAvatar);
 			delete json.animations;
 			normalizeAvatarHeadScale(json, bin);
-			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [skinAPlaceholderBytes] }, bin);
+			const nextBin = cleanMaterialsAndAttributes(
+				json,
+				{ replaceImages: [defaultAvatarSkinBytes] },
+				bin
+			);
 			const step1 = path.join(workDir, 'avatar-step1.glb');
 			const step2 = path.join(workDir, 'avatar-step2.glb');
 			writeGlb(step1, json, nextBin);
