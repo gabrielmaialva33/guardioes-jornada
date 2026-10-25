@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
@@ -13,6 +14,11 @@ export default defineConfig({
 		{
 			name: 'independent-game-runtime',
 			generateBundle(_options, bundle) {
+				this.emitFile({
+					type: 'asset',
+					fileName: 'licenses/phosphor.txt',
+					source: readFileSync(new URL('./PHOSPHOR-LICENSE.txt', import.meta.url), 'utf8')
+				});
 				for (const file of Object.values(bundle)) {
 					if (file.type !== 'chunk') continue;
 					for (const dependency of [...file.imports, ...file.dynamicImports]) {
