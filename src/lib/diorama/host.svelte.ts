@@ -76,14 +76,19 @@ export function getEngine(): Promise<Engine> {
 	if (host.tier === 'svg') return Promise.reject(new Error('3D is off on this device'));
 	if (!engine) {
 		const quality = host.tier === 'full' ? 'full' : 'lite';
-		const created = import('./scene/createDiorama.ts').then(async (m) => {
+		const created = whenVisible().then(async () => {
+			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
+			const m = await import('./scene/createDiorama.ts');
 			await whenVisible();
+			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
 			return m.createEngine({ tier: quality, onFail: fail });
 		});
 		engine = created;
 		created.catch(() => {
-			if (engine === created) engine = null;
-			host.tier = 'svg';
+			if (engine === created) {
+				engine = null;
+				if (host.owners.length) host.tier = 'svg';
+			}
 		});
 	}
 	return engine;
