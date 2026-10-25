@@ -176,6 +176,19 @@
 		text-wrap: balance;
 	}
 
+	/* Large system text on a small phone: thinner nested padding so the mission text
+	   keeps whole words on each line. */
+	@media (max-width: 19.5em) {
+		.step {
+			padding-inline: 0.75rem;
+		}
+
+		.instructions,
+		.oath {
+			padding: 0.75rem;
+		}
+	}
+
 	@keyframes breathe {
 		50% {
 			transform: scale(1.06);

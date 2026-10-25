@@ -143,4 +143,12 @@
 	.sources a {
 		color: inherit;
 	}
+
+	/* Large system text on a small phone: inside the mission card, every rem of padding
+	   costs a word per line. */
+	@media (max-width: 19.5em) {
+		.tree {
+			padding: 0.75rem;
+		}
+	}
 </style>
