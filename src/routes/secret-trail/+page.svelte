@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { GAME_ABI, type GameDispose, type GameManifest, type GameModule } from '../../../game/abi.ts';
+	import { beginGamePresentation, type GamePresentation } from '#lib/data/game-presentation.ts';
 	import { GamePacks, getGamePackInfo, type DownloadProgress } from '#lib/data/game-pack.ts';
 	import { gameFileUrl } from '#lib/data/game-pack-cache.ts';
 	import { acquireGameGpu } from '#lib/diorama/host.svelte.ts';
@@ -16,6 +17,8 @@
 	let message = $state('');
 	let sizeKB = $state<number | null>(null);
 	let element: HTMLDivElement;
+	let launcherRoot: HTMLElement;
+	let presentation: GamePresentation | undefined;
 	let manager: GamePacks;
 	let controller: AbortController | undefined;
 	let dispose: GameDispose | undefined;
@@ -55,7 +58,9 @@
 		controller = undefined;
 		const oldDispose = dispose,
 			oldRelease = releaseGpu,
-			oldStyles = styles;
+			oldStyles = styles,
+			oldPresentation = presentation;
+		presentation = undefined;
 		dispose = undefined;
 		releaseGpu = undefined;
 		styles = [];
@@ -66,6 +71,7 @@
 				} finally {
 					for (const link of oldStyles) link.remove();
 					oldRelease?.();
+					await oldPresentation?.release();
 				}
 			})
 			.catch(() => {
@@ -91,6 +97,18 @@
 				? 'Não há espaço para guardar a nova versão. A anterior continua disponível.'
 				: 'Não foi possível preparar a aventura. Confira a conexão e tente de novo.';
 		status = 'error';
+	}
+	function enter() {
+		if (destroyed || busy || status === 'playing' || status === 'checking') return;
+		// Fullscreen must be requested in this handler, before the first await.
+		presentation = beginGamePresentation(launcherRoot);
+		if (pack) void start(pack);
+		else void download();
+	}
+	function downloadFromGesture() {
+		if (destroyed || busy || status === 'playing' || !pwa.online) return;
+		presentation = beginGamePresentation(launcherRoot);
+		void download();
 	}
 	async function download() {
 		await stopping;
@@ -186,7 +204,7 @@
 
 <svelte:head><title>Trilha secreta · Guardiões da Mata Atlântica</title></svelte:head>
 
-<main class="page launcher" data-pack-id={pack?.packId}>
+<main bind:this={launcherRoot} class="page launcher" data-game-launcher data-pack-id={pack?.packId}>
 	<header>
 		<a class="button quiet" href={resolve('/')}>Voltar para a jornada</a>
 		<h1>{status === 'unsupported' ? 'A Trilha Secreta precisa de gráficos 3D' : 'Trilha secreta'}</h1>
@@ -228,14 +246,14 @@
 			<div class="actions">
 				{#if busy}<button class="button quiet" type="button" onclick={exit}>Cancelar</button>
 				{:else if status !== 'checking'}
-					{#if pack}<button
-							class="button"
-							type="button"
-							onclick={() => {
-								if (pack) void start(pack);
-							}}>Entrar na trilha</button
-						>{/if}
-					<button class="button" class:quiet={!!pack} type="button" disabled={!pwa.online} onclick={download}>
+					{#if pack}<button class="button" type="button" onclick={enter}>Entrar na trilha</button>{/if}
+					<button
+						class="button"
+						class:quiet={!!pack}
+						type="button"
+						disabled={!pwa.online}
+						onclick={downloadFromGesture}
+					>
 						{status === 'error'
 							? 'Tentar o download de novo'
 							: pack
@@ -249,6 +267,14 @@
 </main>
 
 <style>
+	.launcher:fullscreen {
+		box-sizing: border-box;
+		width: 100%;
+		max-width: none;
+		height: 100dvh;
+		overflow: auto;
+		background: var(--canopy, #10271b);
+	}
 	.launcher {
 		padding-block: 1rem 2rem;
 	}
