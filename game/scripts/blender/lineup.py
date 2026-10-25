@@ -562,10 +562,10 @@ def main() -> None:
                     att_roots = import_single_glb(MODELS_DIR / attach_glb, tmp_dir)
                     for ar in att_roots:
                         convert_to_flat_lambert(ar)
-                        if "bico-tucano" in attach_glb and "body" in pet_nodes:
-                            ar.parent = pet_nodes["body"]
+                        if "bico-tucano" in attach_glb and "head" in pet_nodes:
+                            ar.parent = pet_nodes["head"]
                             ar.matrix_parent_inverse.identity()
-                            ar.location = group_loc
+                            ar.location = Vector((0.0, 0.0, 0.0))
                             ar.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
                             ar.scale = Vector((1.0, 1.0, 1.0))
                         elif "juba-mico" in attach_glb and "body" in pet_nodes:

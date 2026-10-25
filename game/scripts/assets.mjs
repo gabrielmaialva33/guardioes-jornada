@@ -744,6 +744,23 @@ function encodePng(width, height, rgba) {
 function splitPetHeadFromBody(petName, json, bin) {
 	const bodyNode = (json.nodes || []).find((n) => n.name === 'body' && n.mesh !== undefined);
 	if (!bodyNode) return bin;
+
+	// Remove the cockatoo crest ('Group') from parrot.glb so the toucan has no crest and its top is the head block (1.431)
+	if (petName === 'parrot') {
+		const groupIdx = (json.nodes || []).findIndex((n) => n.name === 'Group');
+		if (groupIdx !== -1) {
+			if (bodyNode.children) {
+				bodyNode.children = bodyNode.children.filter((c) => c !== groupIdx);
+			}
+			delete json.nodes[groupIdx].mesh;
+			for (const anim of json.animations || []) {
+				if (anim.channels) {
+					anim.channels = anim.channels.filter((ch) => ch.target?.node !== groupIdx);
+				}
+			}
+		}
+	}
+
 	const bodyMesh = json.meshes[bodyNode.mesh];
 	const prim = bodyMesh?.primitives?.[0];
 	if (!prim) return bin;

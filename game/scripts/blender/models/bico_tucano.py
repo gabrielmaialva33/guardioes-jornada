@@ -108,12 +108,13 @@ def build():
     outside = [tuple(round(c, 3) for c in v) for v in beak if not inside_bill(v, face_y)]
     assert not outside, f"parrot's own bill pokes out of the toucan bill at {outside[:5]}"
     print(f"[bico] parrot's own bill: {len(beak)} vertices, all inside the toucan bill")
-    group = pivots["Group"]
-    ob = C.build_object(bill(face_y), "bico-tucano", pivot=group)
-    ob.location = (0, 0, 0)  # Group-local geometry, identity node
+    # Head node pivot in root space: body (0, 0, 0.18125) + head (0, -0.3125, 0.625) in Blender Z-up
+    head_pivot = pivots["body"] + Vector((0.0, -0.3125, 0.625))
+    ob = C.build_object(bill(face_y), "bico-tucano", pivot=head_pivot)
+    ob.location = (0, 0, 0)  # head-local geometry, identity node
     return ob
 
 
 if __name__ == "__main__":
     C.run(build, name="bico-tucano", budget=470, target="attachment, ~0.9 u bill on the parrot head (raw units)",
-          preview=lambda g, p: C.preview_attachment(g, p, "parrot", {"node": "Group"}, closeup_az=-62, closeup_el=12))
+          preview=None)
