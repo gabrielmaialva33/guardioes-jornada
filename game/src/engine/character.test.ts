@@ -114,7 +114,7 @@ it('buffers a jump pressed just before landing', () => {
 		let jumped = -1;
 		run(character, land + 3, idle, (tick) => {
 			if (character.events.jumped && jumped < 0) jumped = tick;
-			if (tick === land - ticksBefore - 1) character.pressJump();
+			if (tick === land - ticksBefore) character.pressJump();
 		});
 		return jumped;
 	};
@@ -142,13 +142,17 @@ it('is blocked by the ramp above the slope limit', () => {
 
 it('steps up to the step height and is blocked just above it', () => {
 	const low = new Character(world, at(level.marks.stepLimit));
-	run(low, 60, forward, () => expect(low.grounded).toBe(true));
+	run(low, 30, forward, () => expect(low.grounded).toBe(true));
 	expect(low.position.y).toBeCloseTo(STEP_HEIGHT, 6);
 	expect(low.position.z).toBeGreaterThan(7);
+	// And back down the far side without leaving the ground.
+	run(low, 30, forward, () => expect(low.grounded).toBe(true));
+	expect(low.position.y).toBeCloseTo(0, 9);
 
 	const high = new Character(world, at(level.marks.stepHigh));
 	run(high, 60, forward, () => expect(high.position.y).toBeLessThan(1e-9));
-	expect(high.position.z).toBeCloseTo(6 - CAPSULE_RADIUS, 6);
+	// Held off by the box's top edge, 0.05 below the bottom sphere's centre.
+	expect(high.position.z).toBeCloseTo(6 - Math.sqrt(CAPSULE_RADIUS ** 2 - (CAPSULE_RADIUS - STEP_HIGH) ** 2), 6);
 	expect(STEP_HIGH).toBeGreaterThan(STEP_HEIGHT);
 });
 
@@ -231,7 +235,9 @@ it('stands on a ledge it lands on with its middle over the edge, and slides off 
 	run(far, 90, idle);
 	expect(far.grounded).toBe(true);
 	expect(far.position.y).toBeCloseTo(0, 9);
-	expect(far.position.z).toBeLessThanOrEqual(6 - CAPSULE_RADIUS + 1e-6);
+	// Its bottom sphere rests against the box's top edge, 0.1 below its centre.
+	const clearance = Math.sqrt(CAPSULE_RADIUS ** 2 - (CAPSULE_RADIUS - STEP_HEIGHT) ** 2);
+	expect(far.position.z).toBeCloseTo(6 - clearance, 6);
 });
 
 it('turns toward the movement, or to the yaw it is told to face', () => {

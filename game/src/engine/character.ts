@@ -113,8 +113,8 @@ export interface CharacterEvents {
 	leftGround: boolean;
 }
 
-/** Push-out passes per resolve; corners converge in two. */
-const MAX_ITERATIONS = 4;
+/** Contacts resolved per position, deepest first; an inner corner takes two. */
+const MAX_ITERATIONS = 6;
 /** Spatial substeps per move; each moves at most half a radius so thin walls cannot be skipped. */
 const MAX_SUBSTEPS = 8;
 /** Contact normals kept per move for velocity projection. */
@@ -130,12 +130,15 @@ const TIMER_EPSILON = 1e-6;
 class Contacts {
 	ground = false;
 	readonly groundNormal = new Vector3(0, 1, 0);
+	/** Highest walkable contact point: the top of a step even when standing on its rounded edge. */
+	groundHeight = Number.NEGATIVE_INFINITY;
 	readonly blockers = Array.from({ length: MAX_BLOCKERS }, () => new Vector3());
 	blockerCount = 0;
 
 	reset() {
 		this.ground = false;
 		this.groundNormal.set(0, 1, 0);
+		this.groundHeight = Number.NEGATIVE_INFINITY;
 		this.blockerCount = 0;
 	}
 }
@@ -144,6 +147,8 @@ const segment = new Line3();
 const bounds = new Box3();
 const trianglePoint = new Vector3();
 const capsulePoint = new Vector3();
+const deepTriangle = new Vector3();
+const deepCapsule = new Vector3();
 const faceNormal = new Vector3();
 const normal = new Vector3();
 const direction = new Vector3();
@@ -170,10 +175,11 @@ export class Character {
 	readonly #cosMaxSlope: number;
 	#coyote = 0;
 	#jumpBuffer = 0;
-	// Scratch state for the triangle visitor, which must not allocate.
-	#feet = new Vector3();
-	#contacts = new Contacts();
-	#pushed = false;
+	/** Distance from the capsule axis to the closest triangle found by the current query. */
+	#deepest = 0;
+	/** Direction of the current sweep, used to judge edge contacts. */
+	readonly #motion = new Vector3();
+	#moving = false;
 	readonly #moveContacts = new Contacts();
 	readonly #stepContacts = new Contacts();
 	readonly #snapContacts = new Contacts();
@@ -282,9 +288,12 @@ export class Character {
 				this.#sweep(stepped, dx, 0, dz, contacts);
 				contacts.reset();
 				this.#sweep(stepped, 0, -(height + STEP_PROBE), 0, contacts);
+				// The rise is measured between support points: standing on a step's rounded edge
+				// puts the feet lower than its top.
+				const support = start.y + this.options.radius * (1 - this.groundNormal.y);
 				if (
 					contacts.ground &&
-					stepped.y - start.y <= height + PROGRESS_EPSILON &&
+					contacts.groundHeight - support <= height + PROGRESS_EPSILON &&
 					progressAlong(start, stepped, dx, dz, wanted) > plainProgress + PROGRESS_EPSILON
 				)
 					result = stepped;
@@ -339,6 +348,7 @@ export class Character {
 		const limit = this.options.radius * 0.5;
 		let length = Math.hypot(dx, dy, dz);
 		if (!(length > 0)) {
+			this.#moving = false;
 			this.#resolve(feet, contacts);
 			return;
 		}
@@ -350,6 +360,8 @@ export class Character {
 			length = limit * MAX_SUBSTEPS;
 		}
 		const steps = Math.max(1, Math.ceil(length / limit - 1e-9));
+		this.#motion.set(dx, dy, dz).divideScalar(length);
+		this.#moving = true;
 		for (let i = 0; i < steps; i++) {
 			feet.x += dx / steps;
 			feet.y += dy / steps;
@@ -358,71 +370,91 @@ export class Character {
 		}
 	}
 
+	/**
+	 * Pushes the capsule out of the world one contact at a time, deepest first.
+	 * At the seam of two coplanar triangles the neighbour reports the shared edge
+	 * with a tilted normal, but the face under the capsule is always at least as
+	 * deep, and once it is resolved the edge is out of reach. (The original pushed
+	 * per triangle in visit order, so a ramp's diagonal could shove it sideways.)
+	 */
 	#resolve(feet: Vector3, contacts: Contacts) {
 		const { radius, height } = this.options;
-		this.#feet = feet;
-		this.#contacts = contacts;
 		for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
 			segment.start.set(feet.x, feet.y + radius, feet.z);
 			segment.end.set(feet.x, feet.y + height - radius, feet.z);
 			bounds.min.set(feet.x - radius, feet.y, feet.z - radius);
 			bounds.max.set(feet.x + radius, feet.y + height, feet.z + radius);
-			this.#pushed = false;
+			this.#deepest = radius;
 			this.#world.shapecast(bounds, this.#visit);
-			if (!this.#pushed) return;
+			if (this.#deepest >= radius || !this.#push(feet, contacts)) return;
 		}
 	}
 
+	/** Keeps the triangle closest to the capsule axis; the triangle object is reused by the BVH. */
+	readonly #visit = (triangle: ExtendedTriangle) => {
+		const distance = triangle.closestPointToSegment(segment, trianglePoint, capsulePoint);
+		if (distance >= this.#deepest) return;
+		this.#deepest = distance;
+		deepTriangle.copy(trianglePoint);
+		deepCapsule.copy(capsulePoint);
+		triangle.getNormal(faceNormal);
+	};
+
 	/**
-	 * Pushes the capsule out of one triangle. Walkable contacts lift it straight up,
+	 * Resolves the deepest contact. Walkable contacts lift the capsule straight up,
 	 * steep up-facing ones push it horizontally (a wall to walk into, a slide when
 	 * falling), walls and ceilings push along their normal. Faces use the plane
 	 * distance and edges or vertices the exact point distance, so a resolved pose
 	 * resolves to itself and standing never drifts.
 	 */
-	readonly #visit = (triangle: ExtendedTriangle) => {
+	#push(feet: Vector3, contacts: Contacts): boolean {
 		const radius = this.options.radius;
-		let distance = triangle.closestPointToSegment(segment, trianglePoint, capsulePoint);
-		if (distance >= radius) return;
-		triangle.getNormal(faceNormal);
+		let distance = this.#deepest;
 		let face = true;
+		const offset = deepCapsule.sub(deepTriangle);
 		if (distance > 1e-9) {
-			normal.subVectors(capsulePoint, trianglePoint).divideScalar(distance);
+			normal.copy(offset).divideScalar(distance);
 			face = Math.abs(normal.dot(faceNormal)) > FACE_DOT;
+			if (!face && this.#moving) {
+				// Judge an edge or vertex by the normal where the capsule first touched it on
+				// the way in, so the verdict does not depend on how deep this substep went.
+				const along = offset.dot(this.#motion);
+				const back = along + Math.sqrt(along * along - distance * distance + radius * radius);
+				normal.copy(offset).addScaledVector(this.#motion, -back).divideScalar(radius);
+			}
 		} else {
 			// The axis touches the triangle: leave through the face on the side of the capsule's middle.
 			normal.copy(faceNormal);
-			middle.addVectors(segment.start, segment.end).multiplyScalar(0.5).sub(trianglePoint);
-			if (middle.dot(normal) < 0 || (middle.dot(normal) === 0 && normal.y < 0)) normal.negate();
+			middle.addVectors(segment.start, segment.end).multiplyScalar(0.5).sub(deepTriangle);
+			const side = middle.dot(normal);
+			if (side < 0 || (side === 0 && normal.y < 0)) normal.negate();
 			distance = Math.min(
-				direction.subVectors(segment.start, trianglePoint).dot(normal),
-				direction.subVectors(segment.end, trianglePoint).dot(normal)
+				direction.subVectors(segment.start, deepTriangle).dot(normal),
+				direction.subVectors(segment.end, deepTriangle).dot(normal)
 			);
 		}
 
-		const contacts = this.#contacts;
 		if (normal.y >= this.#cosMaxSlope) {
 			direction.set(0, 1, 0);
 			if (!contacts.ground || normal.y > contacts.groundNormal.y) contacts.groundNormal.copy(normal);
 			contacts.ground = true;
+			contacts.groundHeight = Math.max(contacts.groundHeight, deepTriangle.y);
 		} else {
 			if (normal.y > 0) direction.set(normal.x, 0, normal.z).normalize();
 			else direction.copy(normal);
 			if (contacts.blockerCount < MAX_BLOCKERS) contacts.blockers[contacts.blockerCount++].copy(normal);
 		}
-		const along = normal.dot(direction);
 		let push: number;
-		if (face) push = (radius - distance) / along;
+		if (face) push = (radius - distance) / normal.dot(direction);
 		else {
-			const offset = distance * along;
-			push = -offset + Math.sqrt(Math.max(0, offset * offset - distance * distance + radius * radius));
+			// Exact: the move along `direction` that puts the touched point back at one radius.
+			const along = offset.dot(direction);
+			push = -along + Math.sqrt(Math.max(0, along * along - distance * distance + radius * radius));
 		}
-		if (!(push > 0) || !Number.isFinite(push)) return;
-		segment.start.addScaledVector(direction, push);
-		segment.end.addScaledVector(direction, push);
-		this.#feet.addScaledVector(direction, push);
-		this.#pushed = true;
-	};
+		if (!(push > 0) || !Number.isFinite(push)) return false;
+		feet.addScaledVector(direction, push);
+		return true;
+	}
 }
 
 /** Horizontal distance from `from` to `to` along the wanted move (dx, dz) of length `wanted`. */
