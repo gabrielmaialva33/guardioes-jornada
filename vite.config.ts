@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
+import { gamePacksDev } from './game/dev-pack.ts';
 import { shellFiles } from './src/lib/data/precache.ts';
 
 const base = process.env.BASE_PATH ?? '';
@@ -12,6 +13,7 @@ if (base !== '' && (!base.startsWith('/') || base.endsWith('/'))) {
 
 export default defineConfig({
 	plugins: [
+		gamePacksDev(base),
 		{
 			name: 'offline-shell-manifest',
 			resolveId(id) {
