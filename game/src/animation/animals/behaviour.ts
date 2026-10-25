@@ -20,6 +20,11 @@ import { SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
 /** Longest substep, seconds. */
 export const MAX_SUBSTEP = 1 / 30;
 
+/** Anything carrying a frame time in a number field (AnimationLod, a StepTime). */
+export interface TimeSource {
+	readonly dt: number;
+}
+
 export interface BehaviourOptions {
 	/** Seeds the decisions, for replays and tests. */
 	seed?: number;
@@ -60,12 +65,21 @@ export abstract class Behaviour<S extends string = string> {
 
 	/** Advances by `dt` seconds of world time. */
 	step(rawDt: number, world: AnimalWorld) {
-		const dt = safeDt(rawDt);
-		this.frameDt = dt;
+		this.frameDt = safeDt(rawDt);
+		this.#run(world);
+	}
+
+	/** The same, reading dt from an object field (no boxed argument on the per-frame path). */
+	stepFrom(time: TimeSource, world: AnimalWorld) {
+		this.frameDt = safeDt(time.dt);
+		this.#run(world);
+	}
+
+	#run(world: AnimalWorld) {
 		this.reducedMotion = world.reducedMotion;
 		this.motion.beginUpdate();
 		this.sense(world);
-		let left = Math.min(dt, MAX_DT);
+		let left = Math.min(this.frameDt, MAX_DT);
 		for (let guard = 0; left > 1e-9 && guard < 64; guard++) {
 			let h = left < MAX_SUBSTEP ? left : MAX_SUBSTEP;
 			if (this.timer > 1e-9 && this.timer < h) h = this.timer;

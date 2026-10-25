@@ -207,9 +207,18 @@ export class AnimalAnimator {
 
 	/** Advances by `dt` seconds (pass the frame or LOD time through) and returns the reused pose. */
 	update(rawDt: number, motion: AnimalMotion) {
-		const dt = safeDt(rawDt);
-		this.#dt = dt;
-		this.time += dt;
+		this.#dt = safeDt(rawDt);
+		return this.#update(motion);
+	}
+
+	/** The same, reading dt from an object field (no boxed argument on the per-frame path). */
+	updateFrom(time: { readonly dt: number }, motion: AnimalMotion) {
+		this.#dt = safeDt(time.dt);
+		return this.#update(motion);
+	}
+
+	#update(motion: AnimalMotion) {
+		this.time += this.#dt;
 		this.#crossfade(motion);
 		this.#advanceGait(motion);
 
