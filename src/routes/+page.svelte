@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
+	import Calling from '#lib/components/Calling.svelte';
 	import ForestScene from '#lib/components/ForestScene.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import SettingsSheet from '#lib/components/SettingsSheet.svelte';
 	import Sheet from '#lib/components/Sheet.svelte';
 	import StatusStrip from '#lib/components/StatusStrip.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
+	import { mataAtlantica } from '#lib/content/mata-atlantica.ts';
 	import {
 		currentStep,
 		formatDate,
@@ -38,6 +41,12 @@
 	let toDelete = $state<Session | null>(null);
 	let deleteOpen = $state(false);
 
+	const opening = mataAtlantica.steps.find((s) => s.kind === 'opening');
+	// First visit: the call to adventure comes before anything else.
+	const firstVisit = $derived(
+		sessions.loaded && sessions.list.length === 0 && sessions.quarantine.length === 0
+	);
+
 	/** The most recent unfinished journey: one tap to get back into it. */
 	const ongoing = $derived(sessions.list.find((s) => !isFinished(s, sessions.journeyOf(s))) ?? null);
 
@@ -57,7 +66,19 @@
 	}
 
 	function title(session: Session) {
-		return `${session.school || 'Turma sem nome'}${session.className ? `, ${session.className}` : ''}`;
+		if (session.participant) return session.participant;
+		// Journeys saved before participant names were asked.
+		return `${session.school || 'Jornada'}${session.className ? `, ${session.className}` : ''}`;
+	}
+
+	/** Where the session stands: the participant's group, then the date. */
+	function subtitle(session: Session) {
+		const group = session.groups.find((g) => g.id === session.myGroupId);
+		return group ? `Grupo ${group.name}, ${formatDate(session.date)}` : formatDate(session.date);
+	}
+
+	function groupOf(session: Session) {
+		return session.groups.find((g) => g.id === session.myGroupId) ?? null;
 	}
 
 	function askDelete(session: Session) {
@@ -78,118 +99,104 @@
 <header class="bar page">
 	<p class="brand"><Icon name="leaf" weight="duotone" size={24} /> Guardiões</p>
 	<ThemeToggle />
-	<a class="icon-button" href={resolve('/account')} aria-label="Conta do guia"><Icon name="user" /></a>
+	<a class="icon-button" href={resolve('/account')} aria-label="Sua conta"><Icon name="user" /></a>
 	<button class="icon-button" type="button" aria-label="Ajustes" onclick={() => (settingsOpen = true)}>
 		<Icon name="settings" />
 	</button>
 </header>
 
 <main class="page">
-	{#if ongoing}
-		{@const s = status(ongoing)}
-		<a class="card continue" href={resolve(`/journey?id=${ongoing.id}`)}>
-			<span class="pill">Jornada em andamento</span>
-			<strong>{title(ongoing)}</strong>
-			<span class="where">{s.where}</span>
-			<span class="track" aria-hidden="true"><span style:width="{Math.max(4, s.ratio * 100)}%"></span></span>
-			<span class="go">Continuar jornada <Icon name="back" size={18} /></span>
-		</a>
-	{/if}
-
-	<section class="hero">
-		<ForestScene missions={grown} oath={grown >= 5} label="Floresta da Mata Atlântica crescendo" />
-		<h1>Guardiões da Mata Atlântica</h1>
-		<p>Jornada guiada na PENAP para grupos de estudantes. O guia conduz pelo celular, mesmo sem internet.</p>
-		<a class="button wide" class:quiet={ongoing} href={resolve('/new')}>
-			<Icon name="plus" size={20} /> Nova jornada
-		</a>
-	</section>
-
-	{#if sessions.quarantine.length > 0}
-		<p class="card notice" role="status">
-			<Icon name="warning" weight="duotone" size={24} />
-			{sessions.quarantine.length === 1
-				? '1 jornada guardada não pôde ser aberta nesta versão do app.'
-				: `${sessions.quarantine.length} jornadas guardadas não puderam ser abertas nesta versão do app.`}
-			Elas continuam guardadas; atualize o app para abri-las.
-		</p>
-	{/if}
-
 	{#if !sessions.loaded}
 		<p class="muted">Abrindo jornadas guardadas…</p>
-	{:else if sessions.list.length > 0}
-		<section class="list">
-			<h2>Jornadas neste celular</h2>
-			<ul>
-				{#each sessions.list as session (session.id)}
-					{@const s = status(session)}
-					<li class="card">
-						<a href={resolve(`/journey?id=${session.id}`)}>
-							<Icon name={s.done === s.total ? 'trophy' : 'tree'} weight="duotone" size={30} />
-							<span class="text">
-								<strong>{title(session)}</strong>
-								<span>{formatDate(session.date)}</span>
-								<span class="done"
-									>{s.done === s.total ? 'Concluída' : `${s.done} de ${s.total} missões`}</span
-								>
-							</span>
-						</a>
-						<button
-							class="icon-button"
-							type="button"
-							aria-label="Apagar jornada de {title(session)}"
-							onclick={() => askDelete(session)}
-						>
-							<Icon name="trash" />
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</section>
+	{:else if firstVisit && opening}
+		<Calling {opening} onaccept={() => goto(resolve('/new?etapa=nome'))} />
 	{:else}
-		<section class="card how">
-			<h2>Como funciona</h2>
-			<ol>
-				<li>
-					<Icon name="wifi-off" weight="duotone" size={28} />
-					<span
-						><strong>Antes de sair</strong> Abra o app com internet. Ele fica guardado e funciona em modo avião.</span
-					>
-				</li>
-				<li>
-					<Icon name="footprints" weight="duotone" size={28} />
-					<span><strong>Na trilha</strong> Leia cada missão para a turma e dê pontos aos grupos.</span>
-				</li>
-				<li>
-					<Icon name="certificate" weight="duotone" size={28} />
-					<span><strong>No fim</strong> A turma faz o juramento e cada grupo ganha seu certificado.</span>
-				</li>
-			</ol>
-		</section>
-	{/if}
+		{#if ongoing}
+			{@const s = status(ongoing)}
+			<a class="card continue" href={resolve(`/journey?id=${ongoing.id}`)}>
+				<span class="pill">Jornada em andamento</span>
+				<strong>{title(ongoing)}</strong>
+				<span class="where">{s.where}</span>
+				<span class="track" aria-hidden="true"><span style:width="{Math.max(4, s.ratio * 100)}%"></span></span
+				>
+				<span class="go">Continuar jornada <Icon name="back" size={18} /></span>
+			</a>
+		{/if}
 
-	{#if pwa.iosNeedsInstall}
-		<section class="card ios-install">
-			<Icon name="install" weight="duotone" size={30} />
-			<p>
-				<strong>No iPhone, adicione à Tela de Início.</strong>
-				Toque em Compartilhar e depois em "Adicionar à Tela de Início". Assim o app abre sem internet e as jornadas
-				não são apagadas pelo Safari.
+		<section class="hero">
+			<ForestScene missions={grown} oath={grown >= 5} label="Floresta da Mata Atlântica crescendo" />
+			<h1>Guardiões da Mata Atlântica</h1>
+			<p>A floresta continua chamando. Volte à sua jornada ou comece uma nova.</p>
+			<a class="button wide" class:quiet={ongoing} href={resolve('/new')}>
+				<Icon name="plus" size={20} /> Nova jornada
+			</a>
+		</section>
+
+		{#if sessions.quarantine.length > 0}
+			<p class="card notice" role="status">
+				<Icon name="warning" weight="duotone" size={24} />
+				{sessions.quarantine.length === 1
+					? '1 jornada guardada não pôde ser aberta nesta versão do app.'
+					: `${sessions.quarantine.length} jornadas guardadas não puderam ser abertas nesta versão do app.`}
+				Elas continuam guardadas; atualize o app para abri-las.
 			</p>
-		</section>
-	{/if}
+		{/if}
 
-	{#if pwa.updateReady || pwa.canInstall}
-		<div class="app-actions">
-			{#if pwa.updateReady}
-				<button class="button quiet" type="button" onclick={() => pwa.applyUpdate()}>Atualizar o app</button>
-			{/if}
-			{#if pwa.canInstall}
-				<button class="button quiet" type="button" onclick={() => pwa.install()}>
-					<Icon name="install" size={20} /> Instalar no celular
-				</button>
-			{/if}
-		</div>
+		{#if sessions.list.length > 0}
+			<section class="list">
+				<h2>Jornadas neste celular</h2>
+				<ul>
+					{#each sessions.list as session (session.id)}
+						{@const s = status(session)}
+						<li class="card">
+							<a href={resolve(`/journey?id=${session.id}`)}>
+								<Icon name={s.done === s.total ? 'trophy' : 'tree'} weight="duotone" size={30} />
+								<span class="text">
+									<strong>{title(session)}</strong>
+									<span>{subtitle(session)}</span>
+									<span class="done"
+										>{s.done === s.total ? 'Concluída' : `${s.done} de ${s.total} missões`}</span
+									>
+								</span>
+							</a>
+							<button
+								class="icon-button"
+								type="button"
+								aria-label="Apagar jornada de {title(session)}"
+								onclick={() => askDelete(session)}
+							>
+								<Icon name="trash" />
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
+		{#if pwa.iosNeedsInstall}
+			<section class="card ios-install">
+				<Icon name="install" weight="duotone" size={30} />
+				<p>
+					<strong>No iPhone, adicione à Tela de Início.</strong>
+					Toque em Compartilhar e depois em "Adicionar à Tela de Início". Assim o app abre sem internet e as jornadas
+					não são apagadas pelo Safari.
+				</p>
+			</section>
+		{/if}
+
+		{#if pwa.updateReady || pwa.canInstall}
+			<div class="app-actions">
+				{#if pwa.updateReady}
+					<button class="button quiet" type="button" onclick={() => pwa.applyUpdate()}>Atualizar o app</button
+					>
+				{/if}
+				{#if pwa.canInstall}
+					<button class="button quiet" type="button" onclick={() => pwa.install()}>
+						<Icon name="install" size={20} /> Instalar no celular
+					</button>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 </main>
 
@@ -366,37 +373,6 @@
 	.text .done {
 		color: var(--accent-strong);
 		font-weight: 700;
-	}
-
-	.how {
-		display: grid;
-		gap: 1rem;
-		padding: 1.25rem;
-	}
-
-	.how ol {
-		display: grid;
-		gap: 1rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.how li {
-		display: flex;
-		gap: 0.875rem;
-		color: var(--accent-strong);
-		--icon-tone: var(--gold);
-		--icon-tone-opacity: 0.45;
-	}
-
-	.how li span {
-		color: var(--text-soft);
-	}
-
-	.how li strong {
-		display: block;
-		color: var(--text);
 	}
 
 	.app-actions {

@@ -89,7 +89,7 @@
 </script>
 
 <svelte:head>
-	<title>{session?.school || 'Jornada'} | Guardiões da Mata Atlântica</title>
+	<title>{session?.participant || session?.school || 'Jornada'} | Guardiões da Mata Atlântica</title>
 </svelte:head>
 
 {#if !sessions.loaded}
@@ -194,7 +194,7 @@
 			<ForestScene
 				missions={progress.missions}
 				oath={progress.oath}
-				label="Floresta da turma com {progress.missions} missões concluídas"
+				label="Floresta com {progress.missions} missões concluídas"
 			/>
 			<ForestMap {journey} {progress} />
 			<AchievementGrid {journey} {progress} />
