@@ -21,7 +21,7 @@ const canelaPreta: TreeInfo = {
 	cues: [
 		'Casca escura, com marcas côncavas onde se soltou em placas.',
 		'Folhas duras e pontudas; embaixo, tufinhos de pelos junto às nervuras.',
-		'Fruto ovalado, metade dentro de uma "tacinha" preta.'
+		'Fruto ovalado, metade dentro de uma “tacinha” preta.'
 	],
 	sources: [
 		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1139722/1/Especies-Arboreas-Brasileiras-vol-1-Canela-Preta.pdf',
