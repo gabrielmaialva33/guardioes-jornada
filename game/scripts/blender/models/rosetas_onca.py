@@ -12,9 +12,10 @@ keeping their local transforms (or add the whole root to the tiger root in rest 
 "esq"/"dir" are the animal's own left (+X) and right (-X).
 
 Budget: ART.md caps an animal at 1,000 tris and tiger.glb is 951, so the set must stay
-<= 49 tris: four flank rosettes of 10 tris and four solid spots of 2 = 48 (onça total
-999). More patches (back, legs, tail rings) would need that budget raised; the per-patch
-nodes make it easy to add or drop them.
+<= 49 tris: four flank rosettes of 12 tris = 48 (onça total 999). More patches (solid
+spots on the head, nape and legs, tail rings) would need that budget raised; the
+per-patch nodes make it easy to add or drop them. Three-blotch rings and extra solid
+spots were tried and read as scattered dashes, not rosettes.
 
 Shape and colour decisions and sources:
 - "Na cabeça, na nuca e na cauda as pintas são sólidas (cheias), enquanto nos flancos elas
@@ -24,9 +25,8 @@ Shape and colour decisions and sources:
 - "rosetas pretas ocas nos flancos, interior marrom e com manchas pretas": Guia de
   identificação de felinos (CENAP/ICMBio partners),
   https://panthera.org/sites/default/files/cwc/FieldGuides_GuiadeIdentificacion_Brasil.pdf
-- So: on the flanks, broken rings of three dark blotches set round a brown centre (real
-  rosettes are broken rings), and one dark dot inside; solid spots on the
-  nape and in the flank strip between the ridges. The tiger's flanks carry
+- So, on the flanks: broken rings of four dark bars with open corners, each slightly
+  turned, round a brown centre with one dark dot inside. The tiger's flanks carry
   raised stripe ridges above z 0.85, so every patch is checked flat by ray casts.
 - Colours: top rows of the onça palette cells (5,3) ring and dot, (3,2) the brown centre
   (both reserved for rosettes in assets-report.md); each face also has a TEXCOORD_0 into
@@ -50,14 +50,10 @@ UV = {RING: C.pet_uv(5, 3), CENTRE: C.pet_uv(3, 2)}
 # the forehead between the ears is not flat). For flanks `along` is Blender Y
 # and `up` is Z; for the head `along` is X and `up` is Y.
 PATCHES = [
-    ("roseta-flanco-esq-1", "rosette", "esq", -0.165, 0.665, 0.29, 7),
-    ("roseta-flanco-esq-2", "rosette", "esq", 0.17, 0.655, 0.27, -9),
-    ("roseta-flanco-dir-1", "rosette", "dir", -0.15, 0.67, 0.28, -6),
-    ("roseta-flanco-dir-2", "rosette", "dir", 0.18, 0.66, 0.27, 11),
-    ("pinta-flanco-esq", "spot", "esq", 0.0, 1.0, 0.1, 15),
-    ("pinta-flanco-dir", "spot", "dir", 0.0, 0.98, 0.1, -10),
-    ("pinta-nuca-1", "spot", "topo", -0.13, 0.0, 0.09, 20),
-    ("pinta-nuca-2", "spot", "topo", 0.12, -0.01, 0.08, -12),
+    ("roseta-flanco-esq-1", "rosette", "esq", -0.16, 0.675, 0.3, 7),
+    ("roseta-flanco-esq-2", "rosette", "esq", 0.175, 0.66, 0.27, -9),
+    ("roseta-flanco-dir-1", "rosette", "dir", -0.15, 0.67, 0.29, -6),
+    ("roseta-flanco-dir-2", "rosette", "dir", 0.18, 0.665, 0.26, 10),
 ]
 FACES = {
     # ray origin from (along, up), ray direction, normal, u axis, v axis (u x v = normal)
@@ -86,17 +82,17 @@ def patch(name: str, kind: str, n: Vector, u: Vector, v: Vector, size: float, an
     if kind == "spot":  # solid spot (head, nape)
         quad(-h, -h, h, h, 0.01, RING)
         return m
-    # Broken ring: three dark blotches set tangentially around a brown centre, 120 degrees
-    # apart with uneven lengths, so it reads as a rosette and not as a letter or a target.
-    b = 0.068  # blotch thickness
-    ring_r = h - b / 2
-    quad(-(h - b) * 0.92, -(h - b) * 0.92, (h - b) * 0.92, (h - b) * 0.92, 0.008, CENTRE, 45)  # brown centre
-    for k, (length, jitter) in enumerate(((0.2, 6), (0.17, -10), (0.185, 4))):
-        phi = math.radians(90 + 120 * k + jitter)
-        cu, cv = math.cos(phi) * ring_r, math.sin(phi) * ring_r
-        quad(cu - length / 2, cv - b / 2, cu + length / 2, cv + b / 2, 0.009, RING, math.degrees(phi) - 90)
-    d = 0.04
-    quad(0.012 - d, -0.012 - d, 0.012 + d, -0.012 + d, 0.014, RING, 20)  # the dot inside
+    # Broken ring: four dark bars with open corners (real rosettes are broken rings), each
+    # turned a little so the ring is irregular, round a brown centre with a dark dot.
+    b = 0.062  # ring thickness
+    g = 0.05  # open corners
+    quad(-h + b, -h + b, h - b, h - b, 0.008, CENTRE)  # brown centre
+    quad(-h + g, h - b, h - g, h, 0.008, RING, 3)  # top bar
+    quad(-h + g * 1.4, -h, h - g, -h + b, 0.008, RING, -4)  # bottom bar
+    quad(-h, -h + g, -h + b, h - g * 1.3, 0.008, RING, 4)  # back bar
+    quad(h - b, -h + g, h, h - g, 0.008, RING, -3)  # front bar
+    d = 0.042
+    quad(0.018 - d, -0.016 - d, 0.018 + d, -0.016 + d, 0.014, RING, 18)  # the dot inside
     return m
 
 
@@ -119,5 +115,5 @@ def build():
 
 
 if __name__ == "__main__":
-    C.run(build, name="rosetas-onca", budget=49, target="attachment, 4 flank rosettes ~0.28 u + 4 solid spots (raw units)",
+    C.run(build, name="rosetas-onca", budget=49, target="attachment, 4 flank rosettes ~0.28 u (raw units)",
           preview=lambda g, p: C.preview_attachment(g, p, "tiger", {"groups": "rosetas-"}, closeup_az=-64, closeup_el=16))
