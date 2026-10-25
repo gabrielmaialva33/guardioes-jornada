@@ -191,7 +191,8 @@ const FEED_HANG = (model: ModelId): PostureDef<QuadrupedSlot> => {
 		key: {
 			root: { r: [115, 0, 0] },
 			tail: { r: [-30, 0, 0] },
-			...legs({ r: [-80, 0, 12] }, { r: [0, 0, 4] })
+			// Hind feet grip where they stood: no spread.
+			...legs({ r: [-80, 0, 12] }, {})
 		},
 		pivot: hindFeet,
 		anchor: hindFeet
@@ -214,9 +215,10 @@ function hangUnder(species: SpeciesId, curl: boolean): PostureDef<QuadrupedSlot>
 	return {
 		key: curl
 			? {
+					// Resting curled: the body tucks up toward the branch; the claws stay hooked.
 					root: { r: [level, 0, 180] },
 					body: { r: [8, 0, 0], p: [0, -0.06, 0] },
-					...legs({ r: [18, 0, 4] }, { r: [-18, 0, 4] })
+					...legs({ r: [0, 0, 3] }, { r: [0, 0, 3] })
 				}
 			: { root: { r: [level, 0, 180] }, ...legs({ r: [0, 0, 3] }, { r: [0, 0, 3] }) },
 		pivot,

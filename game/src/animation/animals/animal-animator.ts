@@ -379,7 +379,14 @@ export class AnimalAnimator {
 		}
 	}
 
-	/** Hanging sloth: each leg points at its own anchor on the branch; a moving limb unhooks. */
+	/**
+	 * Hanging sloth: each foot hooks the branch at its own hold. The hang posture
+	 * pitches the root to level the long forelimbs with the hindlimbs, so in the
+	 * root frame the branch runs along (0, −sin p, cos p) and "toward the branch"
+	 * is (0, −cos p, −sin p). Each leg aims at hip + L·toward + reach·along and
+	 * slides along its own axis by the length difference, so the foot lands on
+	 * the hold exactly; a moving limb unhooks toward the body.
+	 */
 	#limbLayer(motion: AnimalMotion, out: Float64Array) {
 		const weight = this.weights[HANG_UNDER] + this.weights[HANG_CURL];
 		if (!(weight > 0)) return;
@@ -387,18 +394,26 @@ export class AnimalAnimator {
 		const height = model.height;
 		const lifts = motion.limbLift;
 		const reaches = motion.limbReach;
+		const pitch = out[R] / weight;
+		const cp = Math.cos(pitch);
+		const sp = Math.sin(pitch);
 		for (let leg = 0; leg < 4; leg++) {
 			const length = model.legLength * (leg < 2 ? this.species.limbScale.front : this.species.limbScale.hind);
-			const ratio = clamp(reaches[leg] / length, -0.9, 0.9);
-			const angle = -Math.asin(ratio);
+			const reach = clamp(Number.isFinite(reaches[leg]) ? reaches[leg] : 0, -1.5 * length, 1.5 * length);
 			const lift = clamp01(lifts[leg]);
 			const at = (LIMB_FL + leg) * JOINT_STRIDE;
+			// The rest leg points along −y; the pitched branch-ward direction is p away from it.
+			const vy = -length * cp - reach * sp;
+			const vz = -length * sp + reach * cp;
+			const span = Math.hypot(vy, vz);
+			const angle = Math.atan2(-vz, -vy);
+			const slide = 1 - length / span;
 			const side = leg % 2 === 0 ? 1 : -1;
 			out[at] += angle * weight;
 			out[at + 2] += side * lift * ANIMAL_LAYERS.limbLiftRoll * weight;
-			// Keep the foot on the branch as the leg tilts, then unhook it toward the body.
-			const drop = length * (1 - Math.cos(angle));
-			out[at + 4] += ((-drop + lift * ANIMAL_LAYERS.limbLift) / height) * weight;
+			const unhook = lift * ANIMAL_LAYERS.limbLift;
+			out[at + 4] += ((vy * slide + unhook * cp) / height) * weight;
+			out[at + 5] += ((vz * slide + unhook * sp) / height) * weight;
 		}
 	}
 
@@ -452,9 +467,14 @@ export class AnimalAnimator {
 		const pitch = this.lookPitch.step(pitchTarget, this.#dt);
 		const at = this.hasHead ? H : B;
 		const gain = this.hasHead ? 1 : species.bodyLook;
-		out[at + 1] += yaw * gain;
-		out[at] -= pitch * gain;
-		out[at + 2] -= yaw * gain * species.headTilt;
+		// Hanging by the tail (a child of the body), turning the body would pull the
+		// tail tip off the branch: turn the whole animal about its pivot instead.
+		const anchored = this.hasHead ? 0 : this.#tailAnchored();
+		const free = 1 - anchored;
+		out[at + 1] += yaw * gain * free;
+		out[at] -= pitch * gain * free;
+		out[at + 2] -= yaw * gain * species.headTilt * free;
+		out[R + 1] += yaw * gain * anchored;
 	}
 
 	#tailLayer(motion: AnimalMotion, out: Float64Array) {
@@ -469,8 +489,15 @@ export class AnimalAnimator {
 			yawTarget = clamp(-(motion.turnRate || 0) * species.tailTurn, -0.5, 0.5) + sway;
 			pitchTarget = clamp(-(motion.accel || 0) * species.tailAccel, -0.4, 0.4);
 		}
-		out[T + 1] += this.tailYaw.step(yawTarget, this.#dt);
-		out[T] += this.tailPitch.step(pitchTarget, this.#dt);
+		// A tail holding the branch does not sway.
+		const free = 1 - this.#tailAnchored();
+		out[T + 1] += this.tailYaw.step(yawTarget * free, this.#dt) * free;
+		out[T] += this.tailPitch.step(pitchTarget * free, this.#dt) * free;
+	}
+
+	/** Share of the pose hanging from the tail (muriqui tail hang, bugio feeding hang). */
+	#tailAnchored(): number {
+		return Math.min(1, this.weights[HANG_TAIL] + this.weights[FEED_HANG]);
 	}
 
 	#leanLayer(motion: AnimalMotion, out: Float64Array) {
