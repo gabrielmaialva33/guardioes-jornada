@@ -369,6 +369,16 @@ try {
 	);
 	result.grayboxAtSummit = await page.evaluate(() => globalThis.__gameDebug?.());
 	assert.ok(await page.evaluate(() => Number(localStorage.getItem('guardioes-secret-badge')) > 0));
+	await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
+	assert.equal(await page.locator('.presets .preset').count(), 18);
+	assert.equal(await page.locator('.chooser canvas').count(), 0);
+	await page.getByRole('tab', { name: 'Skins da Kenney', exact: true }).click();
+	await page.getByRole('button', { name: 'Skin da Kenney r', exact: true }).click();
+	await page.getByRole('button', { name: 'Usar este personagem', exact: true }).click();
+	await page.getByRole('dialog').waitFor({ state: 'hidden' });
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarStyle), 'kenney');
+	result.avatarChooser = { presets: 18, previewCanvases: 0, savedSkin: 'r' };
+
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 	await page.waitForTimeout(200);
@@ -448,6 +458,9 @@ try {
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
 	assert.equal(requests.length, networkBefore);
 	assert.ok(sessions.size > 0);
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarStyle), 'kenney');
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarSkin), 'r');
+	result.offlineAvatarPreference = true;
 	result.offlineAtCUsesA = true;
 	console.info('A still opens offline at C');
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
