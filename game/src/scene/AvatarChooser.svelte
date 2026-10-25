@@ -6,7 +6,7 @@
 		type AvatarPart,
 		type AvatarProfile
 	} from '../data/local-save.ts';
-	import { ACCENT, RAMPS } from '../style/palette.ts';
+	import { ACCENT } from '../style/palette.ts';
 	import HudIcon from './HudIcon.svelte';
 	import type { AvatarPreset } from '../avatar/atlas.ts';
 
@@ -44,16 +44,6 @@
 		pants: 'Calça',
 		shoes: 'Sapatos'
 	};
-	const clothing = [
-		...RAMPS.leaf,
-		...RAMPS.grass,
-		...RAMPS.wood,
-		...RAMPS.soil,
-		...RAMPS.rock,
-		...RAMPS.water,
-		ACCENT.ipeAmarelo,
-		ACCENT.ipeRosa
-	];
 	function changeColor(part: AvatarPart, value: string) {
 		if ((part === 'shirt' || part === 'pants' || part === 'shoes') && value.toLowerCase() === ACCENT.gold) {
 			message = 'O dourado fica reservado aos objetivos da trilha.';
@@ -132,74 +122,77 @@
 				onclick={onclose}><HudIcon name="back" /></button
 			>
 		</header>
-		<div class="tabs" role="tablist" aria-label="Estilos do personagem">
-			<button
-				type="button"
-				role="tab"
-				id="classic-tab"
-				aria-selected={draft.style === 'classic'}
-				aria-controls="classic-panel"
-				onclick={() => (draft = { ...draft, style: 'classic' })}>Cores clássicas</button
-			>
-			<button
-				type="button"
-				role="tab"
-				id="kenney-tab"
-				aria-selected={draft.style === 'kenney'}
-				aria-controls="kenney-panel"
-				onclick={() => (draft = { ...draft, style: 'kenney' })}>Skins da Kenney</button
-			>
-		</div>
-		{#if draft.style === 'classic'}
-			<div id="classic-panel" role="tabpanel" aria-labelledby="classic-tab" class="classic">
-				<div class="presets" aria-label="Combinações de cores">
-					{#each presets as preset (preset.id)}<button
-							class="preset"
-							type="button"
-							aria-label={preset.name}
-							title={preset.name}
-							aria-pressed={draft.face === preset.face &&
-								AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
-							onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors, preset.face)}</button
-						>{/each}
-				</div>
-				<div class="custom">
-					<div class="preview">{@render mannequin(draft.colors, draft.face)}</div>
-					{#each AVATAR_PARTS as part}<label
-							>{labels[part]}<input
-								type="color"
-								value={draft.colors[part]}
-								oninput={(event) => changeColor(part, event.currentTarget.value)}
-							/></label
-						>{/each}
-					<p class="hint">Cores que combinam com a floresta</p>
-					<div class="swatches" aria-label="Cores para a camiseta">
-						{#each clothing as color}<button
+		<fieldset class="choices" disabled={busy}>
+			<div class="tabs" role="tablist" aria-label="Estilos do personagem">
+				<button
+					type="button"
+					role="tab"
+					id="classic-tab"
+					aria-selected={draft.style === 'classic'}
+					aria-controls="classic-panel"
+					onclick={() => (draft = { ...draft, style: 'classic' })}>Cores clássicas</button
+				>
+				<button
+					type="button"
+					role="tab"
+					id="kenney-tab"
+					aria-selected={draft.style === 'kenney'}
+					aria-controls="kenney-panel"
+					onclick={() => (draft = { ...draft, style: 'kenney' })}>Skins da Kenney</button
+				>
+			</div>
+			{#if draft.style === 'classic'}
+				<div id="classic-panel" role="tabpanel" aria-labelledby="classic-tab" class="classic">
+					<div class="presets" aria-label="Combinações de cores">
+						{#each presets as preset (preset.id)}<button
+								class="preset"
 								type="button"
-								style:background={color}
-								aria-label={`Camiseta ${color}`}
-								title="Usar na camiseta"
-								onclick={() => changeColor('shirt', color)}
-							></button>{/each}
+								aria-label={preset.name}
+								title={preset.name}
+								aria-pressed={draft.face === preset.face &&
+									AVATAR_PARTS.every((part) => draft.colors[part] === preset.colors[part])}
+								onclick={() => selectPreset(preset)}>{@render mannequin(preset.colors, preset.face)}</button
+							>{/each}
+					</div>
+					<div class="custom">
+						<div class="preview">{@render mannequin(draft.colors, draft.face)}</div>
+						{#each AVATAR_PARTS as part}<label
+								>{labels[part]}<input
+									type="color"
+									value={draft.colors[part]}
+									oninput={(event) => changeColor(part, event.currentTarget.value)}
+								/></label
+							>{/each}
+						<div class="faces" role="group" aria-label="Expressão do rosto">
+							<span>Rosto</span><button
+								type="button"
+								aria-pressed={draft.face === 'smile'}
+								onclick={() => (draft = { ...draft, face: 'smile' })}>Sorriso</button
+							><button
+								type="button"
+								aria-pressed={draft.face === 'neutral'}
+								onclick={() => (draft = { ...draft, face: 'neutral' })}>Neutra</button
+							>
+						</div>
 					</div>
 				</div>
-			</div>
-		{:else}
-			<div id="kenney-panel" role="tabpanel" aria-labelledby="kenney-tab" class="kenney">
-				<p class="hint">Texturas originais da Kenney. A prévia mostra o desenho da skin.</p>
-				<div class="skins">
-					{#each Object.entries(kenneyUrls) as [id, url]}<button
-							class="skin"
-							type="button"
-							aria-label={`Skin da Kenney ${id}`}
-							title={`Skin da Kenney ${id}`}
-							aria-pressed={draft.kenneySkin === id}
-							onclick={() => (draft = { ...draft, kenneySkin: id })}
-							><img src={url} alt="" loading="lazy" decoding="async" width="64" height="64" /></button
-						>{/each}
+			{:else}
+				<div id="kenney-panel" role="tabpanel" aria-labelledby="kenney-tab" class="kenney">
+					<p class="hint">Texturas originais da Kenney. A prévia mostra o desenho da skin.</p>
+					<div class="skins">
+						{#each Object.entries(kenneyUrls) as [id, url]}<button
+								class="skin"
+								type="button"
+								aria-label={`Skin da Kenney ${id}`}
+								title={`Skin da Kenney ${id}`}
+								aria-pressed={draft.kenneySkin === id}
+								onclick={() => (draft = { ...draft, kenneySkin: id })}
+								><img src={url} alt="" loading="lazy" decoding="async" width="64" height="64" /></button
+							>{/each}
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</fieldset>
 		{#if message}<p role="status" class="message">{message}</p>{/if}
 		<footer>
 			<button type="button" onclick={onclose}>Cancelar</button><button
@@ -239,15 +232,24 @@
 	}
 	header,
 	footer {
-		position: sticky;
-		bottom: -16px;
-		background: #173a2b;
-		padding: 12px 0;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
 	}
+	.choices {
+		border: 0;
+		padding: 0;
+		margin: 0;
+		min-width: 0;
+	}
+	.faces {
+		grid-column: 1/-1;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
 	h2 {
 		margin: 0;
 		font: 1.6rem var(--font-story, system-ui);
@@ -344,17 +346,6 @@
 		color: #d4e8d6;
 		margin: 8px 0;
 		grid-column: 1/-1;
-	}
-	.swatches {
-		grid-column: 1/-1;
-		display: grid;
-		grid-template-columns: repeat(6, 1fr);
-		gap: 6px;
-	}
-	.swatches button {
-		min-width: 0;
-		min-height: 44px;
-		padding: 0;
 	}
 	.kenney .skins {
 		grid-template-columns: repeat(9, minmax(44px, 1fr));
