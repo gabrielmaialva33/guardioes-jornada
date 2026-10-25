@@ -430,7 +430,7 @@ function runGltfTransform(args) {
 function runGltfpack(inFile, outFile, extraFlags = []) {
 	execFileSync(
 		'pnpm',
-		['dlx', 'gltfpack@1.3.0', '-i', inFile, '-o', outFile, '-cc', '-kn', ...extraFlags],
+		['dlx', 'gltfpack@1.3.0', '-i', inFile, '-o', outFile, '-cc', '-kn', '-vtf', ...extraFlags],
 		{ stdio: 'pipe' }
 	);
 }
@@ -462,6 +462,281 @@ function resizeNearestWebp(inFile, outFile, size) {
 	);
 }
 
+/** Parse '#rrggbb' into [r, g, b]. */
+function parseHex(hex) {
+	const v = parseInt(hex.slice(1), 16);
+	return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+/** Linearly interpolate two '#rrggbb' colors at t in [0, 1]. */
+function lerpHex(hexA, hexB, t) {
+	const a = parseHex(hexA);
+	const b = parseHex(hexB);
+	return [
+		Math.round(a[0] + (b[0] - a[0]) * t),
+		Math.round(a[1] + (b[1] - a[1]) * t),
+		Math.round(a[2] + (b[2] - a[2]) * t)
+	];
+}
+
+/** Deterministic CRC32 for PNG chunks. */
+const CRC_TABLE = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+	let c = n;
+	for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+	CRC_TABLE[n] = c >>> 0;
+}
+function crc32(buf) {
+	let c = 0xffffffff;
+	for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+	return (c ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+	const len = Buffer.alloc(4);
+	len.writeUInt32BE(data.length, 0);
+	const typeAndData = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+	const crc = Buffer.alloc(4);
+	crc.writeUInt32BE(crc32(typeAndData), 0);
+	return Buffer.concat([len, typeAndData, crc]);
+}
+
+/** Encode an RGBA buffer (width * height * 4) as a compact indexed PNG-8 (or RGB PNG). */
+function encodePng(width, height, rgba) {
+	// Collect unique RGB colors for indexed PNG-8 (PLTE) if <= 256 colors
+	const palette = [];
+	const colorIndex = new Map();
+	for (let i = 0; i < width * height; i++) {
+		const r = rgba[i * 4];
+		const g = rgba[i * 4 + 1];
+		const b = rgba[i * 4 + 2];
+		const key = (r << 16) | (g << 8) | b;
+		if (!colorIndex.has(key)) {
+			colorIndex.set(key, palette.length);
+			palette.push([r, g, b]);
+		}
+	}
+
+	const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+	if (palette.length <= 256) {
+		const ihdr = Buffer.alloc(13);
+		ihdr.writeUInt32BE(width, 0);
+		ihdr.writeUInt32BE(height, 4);
+		ihdr[8] = 8; // 8-bit index
+		ihdr[9] = 3; // color type 3 = indexed-color (PLTE)
+		ihdr[10] = 0;
+		ihdr[11] = 0;
+		ihdr[12] = 0;
+
+		const plte = Buffer.alloc(palette.length * 3);
+		for (let i = 0; i < palette.length; i++) {
+			plte[i * 3] = palette[i][0];
+			plte[i * 3 + 1] = palette[i][1];
+			plte[i * 3 + 2] = palette[i][2];
+		}
+
+		const rawScanlines = Buffer.alloc(height * (1 + width));
+		for (let y = 0; y < height; y++) {
+			const rowStart = y * (1 + width);
+			rawScanlines[rowStart] = 0; // filter None
+			for (let x = 0; x < width; x++) {
+				const p = (y * width + x) * 4;
+				const key = (rgba[p] << 16) | (rgba[p + 1] << 8) | rgba[p + 2];
+				rawScanlines[rowStart + 1 + x] = colorIndex.get(key);
+			}
+		}
+		const idat = deflateSync(rawScanlines, { level: 9 });
+		return Buffer.concat([
+			sig,
+			pngChunk('IHDR', ihdr),
+			pngChunk('PLTE', plte),
+			pngChunk('IDAT', idat),
+			pngChunk('IEND', Buffer.alloc(0))
+		]);
+	}
+
+	const ihdr = Buffer.alloc(13);
+	ihdr.writeUInt32BE(width, 0);
+	ihdr.writeUInt32BE(height, 4);
+	ihdr[8] = 8;
+	ihdr[9] = 2; // RGB
+	const rawScanlines = Buffer.alloc(height * (1 + width * 3));
+	for (let y = 0; y < height; y++) {
+		const rowStart = y * (1 + width * 3);
+		rawScanlines[rowStart] = 0;
+		for (let x = 0; x < width; x++) {
+			const p = (y * width + x) * 4;
+			const d = rowStart + 1 + x * 3;
+			rawScanlines[d] = rgba[p];
+			rawScanlines[d + 1] = rgba[p + 1];
+			rawScanlines[d + 2] = rgba[p + 2];
+		}
+	}
+	const idat = deflateSync(rawScanlines, { level: 9 });
+	return Buffer.concat([
+		sig,
+		pngChunk('IHDR', ihdr),
+		pngChunk('IDAT', idat),
+		pngChunk('IEND', Buffer.alloc(0))
+	]);
+}
+
+/**
+ * Paint an 8x16 swatch cell (col = 0..7, band = 0..3) in a 64x64 RGBA buffer.
+ * Supports either [topHex, bottomHex] or a custom rowStops function(row 0..15) => [r, g, b].
+ */
+function paintSwatch(rgba, col, band, spec) {
+	const x0 = col * 8;
+	const y0 = band * 16;
+	for (let r = 0; r < 16; r++) {
+		let rgb;
+		if (typeof spec === 'function') {
+			rgb = spec(r);
+		} else {
+			const [topHex, botHex] = spec;
+			rgb = lerpHex(topHex, botHex, Math.floor(r / 2) / 7);
+		}
+		for (let dx = 0; dx < 8; dx++) {
+			const idx = ((y0 + r) * 64 + (x0 + dx)) * 4;
+			rgba[idx] = rgb[0];
+			rgba[idx + 1] = rgb[1];
+			rgba[idx + 2] = rgb[2];
+			rgba[idx + 3] = 255;
+		}
+	}
+}
+
+/**
+ * Generate the 7 Atlantic Forest species palettes (64x64 NEAREST PNG-8) from the base Cube Pets
+ * colormap. Each species overrides specific 8x16 (col, band) swatches used by its base model
+ * and reserves auxiliary swatches for procedural attachments (mane, rosettes, toucan bill).
+ */
+function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
+	const baseRgba = Buffer.from(
+		execFileSync('magick', [basePetPngPath, '-depth', '8', 'rgba:-'])
+	);
+
+	const SPECIES_PALETTES = {
+		// 1. Mico-leão-dourado (Leontopithecus rosalia) — base: monkey.glb
+		// Golden-orange silky pelage, deeper fiery-gold mane swatch, bare dark purplish-grey face/muzzle.
+		'mico-leao-dourado': [
+			{ col: 2, band: 2, spec: ['#ffa828', '#d97214'] }, // Main pelage (body, legs, tail): luminous golden-orange
+			{ col: 2, band: 3, spec: ['#6e565e', '#4d3b42'] }, // Bare face & inner ears: dark greyish-violet skin
+			{ col: 0, band: 3, spec: ['#59434a', '#3f2e34'] }, // Muzzle tip / nose / lips: dark slate-plum
+			{ col: 1, band: 2, spec: ['#fffdf5', '#d9d0c1'] }, // Eye sclera / highlight
+			{ col: 7, band: 3, spec: ['#261c1a', '#140e0d'] }, // Pupils / nostrils / dark accents
+			{ col: 3, band: 2, spec: ['#ff8818', '#b84a08'] }  // Reserved cell for golden lion mane geometry
+		],
+
+		// 2. Bugio-ruivo (Alouatta guariba clamitans, adult male) — base: monkey.glb
+		// Adult male sexual dichromatism: deep rufous-chestnut coat with copper-gold highlights and dark bare face.
+		'bugio-ruivo': [
+			{ col: 2, band: 2, spec: ['#c84b24', '#852910'] }, // Main pelage: rich reddish-chestnut / rufous
+			{ col: 2, band: 3, spec: ['#4a3733', '#332421'] }, // Bare facial skin & ears: dark charcoal-brown
+			{ col: 0, band: 3, spec: ['#3d2b28', '#261a18'] }, // Muzzle / nose / lips: deep brownish-black
+			{ col: 1, band: 2, spec: ['#f7efe6', '#cbbba8'] }, // Eye sclera / highlight
+			{ col: 7, band: 3, spec: ['#1f1716', '#120d0c'] }, // Pupils / dark facial contours
+			{ col: 3, band: 2, spec: ['#7a220c', '#4d1305'] }  // Reserved cell for prominent hyoid beard geometry
+		],
+
+		// 3. Muriqui-do-sul (Brachyteles arachnoides) — base: monkey.glb
+		// Woolly pale yellowish-beige / cream-grey coat and characteristic bare matte-black face & muzzle.
+		muriqui: [
+			{ col: 2, band: 2, spec: ['#dfd3ba', '#b3a388'] }, // Main pelage: woolly beige-cream / pale buff-grey
+			{ col: 2, band: 3, spec: ['#38363a', '#242226'] }, // Bare face & ears: matte charcoal-black
+			{ col: 0, band: 3, spec: ['#2b292d', '#1b191c'] }, // Muzzle / nose: deep black (with subtle pink in B. hypoxanthus)
+			{ col: 1, band: 2, spec: ['#fcfaf5', '#d4cfc4'] }, // Eye sclera / highlight
+			{ col: 7, band: 3, spec: ['#18171a', '#0d0c0e'] }, // Pupils / nostrils
+			{ col: 3, band: 2, spec: ['#c4b59b', '#96876f'] }  // Reserved cell for prehensile tail underside / hands
+		],
+
+		// 4. Onça-pintada (Panthera onca) — base: tiger.glb
+		// Warm golden-ochre coat, cream-white belly/throat/muzzle, jet-black spots/rosettes + rusty-brown rosette center cell.
+		'onca-pintada': [
+			{ col: 3, band: 3, spec: ['#f2a93b', '#cc7a1d'] }, // Main dorsal coat (body, tail, upper legs): golden-ochre
+			{ col: 7, band: 3, spec: ['#292321', '#141110'] }, // Built-in dark markings, ears, nose & outer rosette rings: jet black
+			{ col: 2, band: 3, spec: ['#f7d399', '#dfb06b'] }, // Paws & inner ear tufts: warm buff-gold
+			{ col: 1, band: 2, spec: ['#fffaf0', '#dfd5c5'] }, // Belly, chest, muzzle cheeks & tail underside: cream-white
+			{ col: 3, band: 2, spec: ['#b85d19', '#8a3f0b'] }  // Reserved cell for inner rosette centers (rusty-ochre)
+		],
+
+		// 5. Onça-preta / Melânica (Panthera onca melanistic variant) — base: tiger.glb
+		// Deep charcoal-espresso coat with velvet-black ghost markings/rosettes, golden-amber eyes, and dark slate belly/paws.
+		'onca-melanica': [
+			{ col: 3, band: 3, spec: ['#322e36', '#211e24'] }, // Main dorsal coat: dark charcoal-espresso
+			{ col: 7, band: 3, spec: ['#141217', '#09080b'] }, // Ghost markings / outer rosette rings: deep velvet-black
+			{ col: 2, band: 3, spec: ['#3d3842', '#2b272f'] }, // Paws & inner ears: muted dark slate
+			{
+				col: 1,
+				band: 2,
+				spec: (r) => {
+					// Rows 0..3: glowing golden-amber jaguar eyes; Rows 4..15: dark slate muzzle & underbelly
+					if (r <= 3) return lerpHex('#ffcf40', '#e09f1f', r / 3);
+					return lerpHex('#48434f', '#2f2b36', (r - 4) / 11);
+				}
+			},
+			{ col: 3, band: 2, spec: ['#241f26', '#171419'] }  // Reserved cell for inner ghost-rosette centers
+		],
+
+		// 6. Preguiça-de-coleira (Bradypus torquatus) — base: koala.glb
+		// Endemic Atlantic Forest maned sloth: sandy-tan head/coat (rows 0..10) and black neck/shoulder mane (rows 11..15 in col=6,band=3 + cell col=5,band=3), ivory claws.
+		'preguica-de-coleira': [
+			{
+				col: 6,
+				band: 3,
+				spec: (r) => {
+					// Rows 0..10 (py=48..58): head, ears & face (sandy-tan); Rows 11..15 (py=59..63, z=-0.58..+0.27): black neck/shoulder mane (coleira preta)
+					if (r <= 10) return lerpHex('#c9a97e', '#9c7c56', Math.floor(r / 2) / 5);
+					return lerpHex('#292320', '#171311', (r - 11) / 4);
+				}
+			},
+			{ col: 0, band: 2, spec: ['#ede0c8', '#c7b293'] }, // Long curved sloth claws (feet tips) & pale chest/ear ruff
+			{ col: 7, band: 3, spec: ['#382f2b', '#211b18'] }, // Dark brownish-black facial mask, nose & eyes
+			{ col: 1, band: 2, spec: ['#faf5eb', '#d4c9b8'] }, // Eye sclera / highlight
+			{ col: 5, band: 3, spec: ['#241f1c', '#120f0e'] }  // Dedicated cell for extra black mane / collar geometry
+		],
+
+		// 7. Tucano-de-bico-verde (Ramphastos dicolorus) — base: parrot.glb
+		// Glossy black plumage, golden-yellow throat/upper breast, crimson-red belly & undertail, pale yellow-green bill, sky-blue lower eye ring.
+		'tucano-de-bico-verde': [
+			{
+				col: 1,
+				band: 1,
+				spec: (r) => {
+					// Rows 0..4: head & upper back (jet black); Rows 5..8: upper breast (golden-yellow); Rows 9..15: belly & undertail (crimson-red)
+					if (r <= 4) return lerpHex('#282b34', '#1c1e26', r / 4);
+					if (r <= 8) return lerpHex('#ffe033', '#f2bd18', (r - 5) / 3);
+					return lerpHex('#e6392e', '#b8221a', (r - 9) / 6);
+				}
+			},
+			{ col: 1, band: 3, spec: ['#262932', '#171920'] }, // Wings & tail feathers: glossy jet-black
+			{ col: 7, band: 3, spec: ['#b5e645', '#84bd24'] }, // Upper beak: signature yellow-green bill
+			{ col: 6, band: 3, spec: ['#99cf30', '#6da118'] }, // Lower beak: yellow-green bill
+			{ col: 7, band: 2, spec: ['#5a6878', '#3e4956'] }, // Legs/feet (blue-grey tarsus of Ramphastos) & wing edge
+			{
+				col: 1,
+				band: 2,
+				spec: (r) => {
+					// Rows 0..4: white eye sclera; Rows 5..15: vibrant sky-blue orbital skin ring around the eye
+					if (r <= 4) return lerpHex('#ffffff', '#e8f4ff', r / 4);
+					return lerpHex('#38a8f2', '#1f7ec4', (r - 5) / 10);
+				}
+			},
+			{ col: 6, band: 2, spec: ['#bce84c', '#7cb820'] }, // Dedicated cell for enlarged green toucan bill geometry
+			{ col: 4, band: 3, spec: ['#e6392e', '#b32018'] }  // Dedicated cell for red breast band / undertail / bill base
+		]
+	};
+
+	for (const [species, overrides] of Object.entries(SPECIES_PALETTES)) {
+		const rgba = Buffer.alloc(64 * 64 * 4);
+		for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+		for (const { col, band, spec } of overrides) {
+			paintSwatch(rgba, col, band, spec);
+		}
+		const outPath = path.join(outSkinsDir, `palette-${species}.png`);
+		fs.writeFileSync(outPath, encodePng(64, 64, rgba));
+	}
+}
+
 function main() {
 	verifyLicenses();
 	fs.mkdirSync(OUT_MODELS, { recursive: true });
@@ -478,13 +753,14 @@ function main() {
 			resizeNearestWebp(srcPng, dstWebp, 256);
 		}
 
-		// Base 64x64 NEAREST palettes for Cube Pets, Platformer, Food, Holiday
+		// Base 64x64 NEAREST palettes for Cube Pets + 7 Atlantic Forest species recolor palettes
 		const petsPalPath = path.join(OUT_SKINS, 'palette-pets.png');
 		const petsPalBytes = resizeNearestPng(
 			path.join(RAW_ROOT, 'cube-pets', 'Models', 'GLB format', 'Textures', 'colormap.png'),
 			petsPalPath,
 			64
 		);
+		generateSpeciesPalettes(petsPalPath, OUT_SKINS);
 		const skinAPlaceholderBytes = resizeNearestPng(
 			path.join(blockyTexDir, 'texture-a.png'),
 			path.join(workDir, 'skin-a-4.png'),
