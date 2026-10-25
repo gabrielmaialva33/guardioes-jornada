@@ -55,12 +55,10 @@ export class GuideAuth {
 				if (this.user) void this.#restore();
 			});
 		}
-		try {
-			if (this.user && (typeof navigator === 'undefined' || navigator.onLine !== false))
-				await this.#restore();
-		} finally {
-			this.ready = true;
-		}
+		// Local identity is enough to unlock offline records. A stalled chunk or
+		// refresh must not block initialization of the durable sync queue.
+		if (this.user && (typeof navigator === 'undefined' || navigator.onLine !== false)) void this.#restore();
+		this.ready = true;
 	}
 	#connect(): Promise<SupabaseClient<Database> | null> {
 		if (!this.#connection) {

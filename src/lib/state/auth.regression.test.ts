@@ -95,6 +95,7 @@ it('retains the cached owner for transient refresh failures but accepts an inval
 	fake.getSession.mockResolvedValue({ data: { session: null }, error: { name: 'AuthRetryableFetchError' } });
 	const temporary = new GuideAuth();
 	await temporary.init();
+	await vi.waitFor(() => expect(fake.getSession).toHaveBeenCalledOnce());
 	expect(temporary.user?.id).toBe(fake.cachedUser?.id);
 	fake.getSession.mockResolvedValue({
 		data: { session: null },
@@ -102,7 +103,16 @@ it('retains the cached owner for transient refresh failures but accepts an inval
 	});
 	const revoked = new GuideAuth();
 	await revoked.init();
-	expect(revoked.user).toBeNull();
+	await vi.waitFor(() => expect(revoked.user).toBeNull());
+});
+
+it('does not block local readiness when the optional SDK download stalls', async () => {
+	fake.load.mockImplementation(() => new Promise(() => {}));
+	const { GuideAuth } = await import('./auth.svelte.ts');
+	const auth = new GuideAuth();
+	await auth.init();
+	expect(auth.ready).toBe(true);
+	expect(auth.user?.id).toBe(fake.cachedUser?.id);
 });
 it('preserves local owner access when an online SDK chunk fails to load', async () => {
 	fake.load.mockRejectedValue(new Error('Chunk unavailable'));
