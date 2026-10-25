@@ -4,8 +4,8 @@ vi.mock('./tier.ts', () => ({ pickTier: () => 'full', remember: vi.fn(), demote:
 vi.mock('./scene/createDiorama.ts', () => ({ createEngine: fake.create }));
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); fake.create.mockReset(); });
 
-it('cancels a hidden pending diorama before handing over the GPU', async () => {
-	vi.stubGlobal('document', Object.assign(new EventTarget(), { hidden: true }));
+it.each([true, false])('cancels a pending diorama before handing over the GPU (hidden=%s)', async (hidden) => {
+	vi.stubGlobal('document', Object.assign(new EventTarget(), { hidden }));
 	const host = await import('./host.svelte.ts');
 	host.join();
 	const pending = host.getEngine();
