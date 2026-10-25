@@ -2,13 +2,13 @@ import { expect, it } from 'vitest';
 import { IDLE_VARIANTS, RUN, WALK } from './avatar-poses.ts';
 import { AVATAR_LAYOUT } from './joints.ts';
 import { compileKey, defineLayout, JOINT_STRIDE, mirrorKey } from './skeleton.ts';
-import { Track } from './track.ts';
+import { Playhead, Track } from './track.ts';
 
 const DEG = Math.PI / 180;
 const width = AVATAR_LAYOUT.joints.length * JOINT_STRIDE;
 const sample = (track: Track, time: number, weight = 1) => {
 	const out = new Float64Array(width);
-	track.sampleInto(out, time, weight);
+	track.sampleInto(out, new Playhead(time, weight));
 	return out;
 };
 /** Element-wise toBeCloseTo. */
@@ -50,8 +50,8 @@ it('holds a one-shot track at its ends and still between equal keys', () => {
 
 it('adds weighted samples so blends are plain sums', () => {
 	const blended = new Float64Array(width);
-	WALK.sampleInto(blended, 0.3, 0.25);
-	RUN.sampleInto(blended, 0.3, 0.75);
+	WALK.sampleInto(blended, new Playhead(0.3, 0.25));
+	RUN.sampleInto(blended, new Playhead(0.3, 0.75));
 	const walk = sample(WALK, 0.3);
 	const run = sample(RUN, 0.3);
 	expectClose(
@@ -60,7 +60,7 @@ it('adds weighted samples so blends are plain sums', () => {
 		12
 	);
 	const untouched = new Float64Array(width);
-	WALK.sampleInto(untouched, 0.3, 0);
+	WALK.sampleInto(untouched, new Playhead(0.3, 0));
 	expect(untouched.every((value) => value === 0)).toBe(true);
 });
 
@@ -91,7 +91,7 @@ it('works for any layout, not just the avatar', () => {
 		{ loop: true, interpolation: 'cubic', period: 0.4 }
 	);
 	const out = new Float64Array(dog.joints.length * JOINT_STRIDE);
-	wag.sampleInto(out, 0.25, 1);
+	wag.sampleInto(out, new Playhead(0.25));
 	expect(out[dog.index.tail * JOINT_STRIDE + 1]).toBeCloseTo(0, 12);
 });
 

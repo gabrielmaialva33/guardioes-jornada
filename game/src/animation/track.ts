@@ -12,6 +12,23 @@
  */
 import { JOINT_STRIDE, type Layout } from './skeleton.ts';
 
+/**
+ * Where and how strongly to sample a track; reuse one per caller. Time and weight
+ * travel in an object because V8 boxes every fractional number passed as an
+ * argument to a function it does not inline (16 bytes each, per call), while an
+ * object's number fields are updated in place.
+ */
+export class Playhead {
+	/** Cycle fraction (any real, wrapped) for loops, seconds (clamped) for one-shot tracks. */
+	time: number;
+	weight: number;
+
+	constructor(time = 0, weight = 1) {
+		this.time = time;
+		this.weight = weight;
+	}
+}
+
 export type Interpolation = 'cubic' | 'smooth';
 
 export interface TrackOptions {
@@ -59,11 +76,10 @@ export class Track {
 		this.#times = Float64Array.from(times);
 	}
 
-	/**
-	 * Adds `weight` × the pose at `time` into `out`: a cycle fraction (any real,
-	 * wrapped) for loops, seconds (clamped) for one-shot tracks.
-	 */
-	sampleInto(out: Float64Array, time: number, weight: number) {
+	/** Adds the playhead's weight × the pose at its time into `out`. */
+	sampleInto(out: Float64Array, head: Playhead) {
+		const weight = head.weight;
+		const time = head.time;
 		if (!(weight > 0)) return;
 		const keys = this.#keys;
 		const times = this.#times;

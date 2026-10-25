@@ -5,6 +5,7 @@ import { JUMP, WALK } from './avatar-poses.ts';
 import { AVATAR_LAYOUT, BLOCKY_RIG } from './joints.ts';
 import { applyToRig, bindRig, restoreRig } from './rig.ts';
 import { JOINT_STRIDE, Pose } from './skeleton.ts';
+import { Playhead } from './track.ts';
 
 /** The Kenney Blocky Characters 2.0 hierarchy and pivots, read from character-a.glb. */
 function blocky(names: Partial<Record<string, string>> = {}) {
@@ -29,7 +30,7 @@ function blocky(names: Partial<Record<string, string>> = {}) {
 
 const posed = (track: typeof WALK, time: number) => {
 	const pose = new Pose(AVATAR_LAYOUT.joints.length);
-	track.sampleInto(pose.data, time, 1);
+	track.sampleInto(pose.data, new Playhead(time));
 	return pose;
 };
 

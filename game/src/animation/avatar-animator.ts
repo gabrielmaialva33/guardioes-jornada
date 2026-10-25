@@ -47,6 +47,7 @@ import {
 import { AVATAR_LAYOUT } from './joints.ts';
 import { JOINT_STRIDE, Pose } from './skeleton.ts';
 import { Spring } from './spring.ts';
+import { Playhead } from './track.ts';
 
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -209,6 +210,10 @@ export class AvatarAnimator {
 	readonly #stud: number;
 	readonly #eyeHeight: number;
 	readonly #seed: number;
+	readonly #head = new Playhead();
+	/** This update's clamped dt and speed, read by the private steps (see update). */
+	#dt = 0;
+	#speed = 0;
 	#random = 0;
 	#idleVariant = 0;
 	#idleTime = 0;
@@ -263,14 +268,18 @@ export class AvatarAnimator {
 
 	/** Advances by `dt` seconds (the frame time) and returns the reused pose. */
 	update(rawDt: number, input: AvatarInput): Pose {
-		const dt = rawDt > 0 ? Math.min(rawDt, MAX_DT) : 0;
+		// rawDt goes on as received: a fractional number computed here and passed to a
+		// function V8 does not inline would be boxed (see Playhead); fields are not.
 		const states = this.states;
-		states.update(dt, input);
+		states.update(rawDt, input);
+		const dt = rawDt > 0 ? Math.min(rawDt, MAX_DT) : 0;
 		const weights = states.weights;
 		const speed = Math.max(0, finite(input.speed));
 		const verticalSpeed = finite(input.verticalSpeed);
 		const onFoot = input.grounded && !input.climbing && !input.swimming && !input.sitting;
 		const stud = this.#stud;
+		this.#dt = dt;
+		this.#speed = speed;
 
 		// Distance-driven cycles.
 		this.footstep = null;
@@ -295,36 +304,53 @@ export class AvatarAnimator {
 		// Blend every slot that has weight.
 		const pose = this.pose.reset();
 		const out = pose.data;
-		if (weights[IDLE] > 0) this.#sampleIdle(out, weights[IDLE], dt);
-		const walking = weights[WALKING];
-		WALK.sampleInto(out, this.phase, walking * states.walkWeight);
-		RUN.sampleInto(out, this.phase, walking * states.runWeight);
-		JUMP.sampleInto(out, 0, weights[JUMPING]);
+		const head = this.#head;
+		if (weights[IDLE] > 0) this.#sampleIdle(out);
+		head.time = this.phase;
+		head.weight = weights[WALKING] * states.walkWeight;
+		WALK.sampleInto(out, head);
+		head.weight = weights[WALKING] * states.runWeight;
+		RUN.sampleInto(out, head);
+		head.time = 0;
+		head.weight = weights[JUMPING];
+		JUMP.sampleInto(out, head);
+		head.weight = weights[SITTING];
+		SIT.sampleInto(out, head);
 		if (weights[FALLING] > 0) {
 			this.#fallTime = (this.#fallTime + dt) % FALL.period;
-			FALL.sampleInto(out, this.#fallTime / FALL.period, weights[FALLING]);
+			head.time = this.#fallTime / FALL.period;
+			head.weight = weights[FALLING];
+			FALL.sampleInto(out, head);
 		}
-		CLIMB.sampleInto(out, this.climbPhase, weights[CLIMBING]);
+		head.time = this.climbPhase;
+		head.weight = weights[CLIMBING];
+		CLIMB.sampleInto(out, head);
 		if (weights[SWIMMING] > 0) {
 			this.#treadTime = (this.#treadTime + dt) % SWIM_IDLE.period;
-			SWIM.sampleInto(out, this.swimPhase, weights[SWIMMING] * states.swimMoveWeight);
-			SWIM_IDLE.sampleInto(
-				out,
-				this.#treadTime / SWIM_IDLE.period,
-				weights[SWIMMING] * (1 - states.swimMoveWeight)
-			);
+			head.time = this.swimPhase;
+			head.weight = weights[SWIMMING] * states.swimMoveWeight;
+			SWIM.sampleInto(out, head);
+			head.time = this.#treadTime / SWIM_IDLE.period;
+			head.weight = weights[SWIMMING] * (1 - states.swimMoveWeight);
+			SWIM_IDLE.sampleInto(out, head);
 		}
-		SIT.sampleInto(out, 0, weights[SITTING]);
-		if (states.emote !== null) EMOTES[states.emote].sampleInto(out, states.emoteTime, weights[EMOTING]);
+		if (states.emote !== null) {
+			head.time = states.emoteTime;
+			head.weight = weights[EMOTING];
+			EMOTES[states.emote].sampleInto(out, head);
+		}
 
-		this.#applyLayers(pose, input, dt, speed, onFoot);
+		this.#applyLayers(input, onFoot);
 		return pose;
 	}
 
-	#applyLayers(pose: Pose, input: AvatarInput, dt: number, speed: number, onFoot: boolean) {
+	#applyLayers(input: AvatarInput, onFoot: boolean) {
+		const pose = this.pose;
 		const out = pose.data;
 		const states = this.states;
 		const weights = states.weights;
+		const dt = this.#dt;
+		const speed = this.#speed;
 		const reduced = input.reducedMotion;
 		const yaw = finite(input.yaw);
 
@@ -396,7 +422,10 @@ export class AvatarAnimator {
 	}
 
 	/** Idle loops one variant and re-rolls at each loop end, crossfading over ANIMATE.loopFade. */
-	#sampleIdle(out: Float64Array, weight: number, dt: number) {
+	#sampleIdle(out: Float64Array) {
+		const dt = this.#dt;
+		const weight = this.states.weights[IDLE];
+		const head = this.#head;
 		let period = IDLE_VARIANTS[this.#idleVariant].period;
 		this.#idleTime += dt;
 		this.#previousIdleTime += dt;
@@ -413,10 +442,14 @@ export class AvatarAnimator {
 			}
 		}
 		const fresh = this.#idleFadeLeft > 0 ? 1 - this.#idleFadeLeft / ANIMATE.loopFade : 1;
-		IDLE_VARIANTS[this.#idleVariant].sampleInto(out, this.#idleTime / period, weight * fresh);
+		head.time = this.#idleTime / period;
+		head.weight = weight * fresh;
+		IDLE_VARIANTS[this.#idleVariant].sampleInto(out, head);
 		if (fresh < 1) {
 			const previous = IDLE_VARIANTS[this.#previousIdle];
-			previous.sampleInto(out, this.#previousIdleTime / previous.period, weight * (1 - fresh));
+			head.time = this.#previousIdleTime / previous.period;
+			head.weight = weight * (1 - fresh);
+			previous.sampleInto(out, head);
 		}
 	}
 
