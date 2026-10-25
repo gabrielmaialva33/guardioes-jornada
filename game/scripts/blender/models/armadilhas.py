@@ -6,6 +6,8 @@ not gory: no animal is ever in or near them.
 Run: /usr/sbin/blender -b --factory-startup -P game/scripts/blender/models/armadilhas.py
 
 Shape decisions and sources:
+- Budget: the brief asks for about 60-120 tris; the arapuca needs 126 (12 sticks of 10
+  tris plus the prop) to read as a pyramid and not a pallet, the laço ~106.
 - Arapuca: "De forma piramidal ... As varetas ... decrescem em tamanho ... disposta
   inclinadamente ... graças a uma estaca. A esta liga-se uma linha que, tocada pelo pássaro,
   faz com que caia": INEPAC-RJ, http://www.inepac.rj.gov.br/application/assets/img/site/Aves_23out05.pdf
@@ -51,9 +53,10 @@ def arapuca() -> C.Mesh:
                 m.box((0, s * off, z), (length, t, t), col, skip=("bottom",))
             else:
                 m.box((s * off, 0, z), (t, length, t), col, skip=("bottom",))
-    # Lid: one stick across the narrow top opening.
+    # Lid: two sticks side by side across the narrow top opening.
     top_len = 1.0 - inset * (layers - 1)
-    m.box((0, 0, t / 2 + layers * step), (top_len, top_len * 0.7, t * 0.8), STICK, skip=("bottom",))
+    for s in (-1, 1):
+        m.box((0, s * t * 0.55, t / 2 + layers * step), (top_len, t * 1.1, t * 0.85), STICK_ALT, skip=("bottom",))
     # Armed: hinge on the -X bottom edge, the +X side lifted by the prop stick.
     tilt = math.radians(13)
     hinge = Vector((-0.5, 0, 0))
@@ -87,7 +90,7 @@ def laco() -> C.Mesh:
 
 if __name__ == "__main__":
     small = {"elevation_deg": 20.0, "closeup": True, "res": (900, 900)}
-    C.run(lambda: C.build_object(arapuca(), "arapuca"), name="arapuca", budget=120,
+    C.run(lambda: C.build_object(arapuca(), "arapuca"), name="arapuca", budget=130,
           target="~1.0 u wide (props x1.5)", preview_kw=small)
     C.run(lambda: C.build_object(laco(), "laco"), name="laco", budget=120,
           target="~1.5 u tall pole, noose ~0.5 u (props x1.5)", preview_kw=small)
