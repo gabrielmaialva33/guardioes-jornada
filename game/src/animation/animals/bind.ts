@@ -3,7 +3,9 @@
  * writing an Animal's pose and placement onto it. Builds on ../rig.ts.
  */
 import type { Object3D } from 'three';
+import type { RigConfig } from '../joints.ts';
 import { applyToRig, bindRig, type RigBinding } from '../rig.ts';
+import type { Layout } from '../skeleton.ts';
 import type { Animal } from './animal.ts';
 import { HEAD, LIMB_BL, LIMB_BR, LIMB_FL, LIMB_FR, layoutOf, MODEL_RIGS } from './rigs.ts';
 import { SPECIES, type SpeciesId } from './species.ts';
@@ -24,7 +26,10 @@ export interface AnimalRig {
  */
 export function bindAnimal(model: Object3D, species: SpeciesId): AnimalRig {
 	const params = SPECIES[species];
-	const binding = bindRig(model, layoutOf(params.model), MODEL_RIGS[params.model]);
+	// Both layouts share slots 0–3 and differ only in limb names; bind them as plain strings.
+	const layout: Layout<string> = layoutOf(params.model);
+	const config: RigConfig<string> = MODEL_RIGS[params.model];
+	const binding = bindRig(model, layout, config);
 	if (params.model !== 'parrot') {
 		const stretch = (slot: number, factor: number) => {
 			const node = binding.nodes[slot];
