@@ -2,16 +2,19 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { GAME_ABI, type GameDispose, type GameManifest, type GameModule } from '../../../game/abi.ts';
-	import { GamePacks, type DownloadProgress } from '#lib/data/game-pack.ts';
+	import { GamePacks, getGamePackInfo, type DownloadProgress } from '#lib/data/game-pack.ts';
 	import { gameFileUrl } from '#lib/data/game-pack-cache.ts';
 	import { acquireGameGpu } from '#lib/diorama/host.svelte.ts';
 	import { pwa } from '#lib/state/pwa.svelte.ts';
 	import { secretBadge } from '#lib/state/secret-badge.svelte.ts';
 
-	let status = $state<'checking' | 'ready' | 'downloading' | 'mounting' | 'playing' | 'error'>('checking');
+	let status = $state<
+		'checking' | 'ready' | 'downloading' | 'mounting' | 'playing' | 'error' | 'unsupported'
+	>('checking');
 	let pack = $state.raw<GameManifest | null>(null);
 	let progress = $state<DownloadProgress>({ loaded: 0, total: 0 });
 	let message = $state('');
+	let sizeKB = $state<number | null>(null);
 	let element: HTMLDivElement;
 	let manager: GamePacks;
 	let controller: AbortController | undefined;
@@ -28,10 +31,18 @@
 
 	onMount(() => {
 		manager = new GamePacks({ root: new URL(resolve('/'), location.href) });
+		if (typeof WebGL2RenderingContext === 'undefined') {
+			status = 'unsupported';
+			return;
+		}
 		void manager.current().then((saved) => {
 			if (destroyed) return;
 			pack = saved;
 			status = 'ready';
+			if (!saved)
+				void getGamePackInfo(manager.root).then((info) => {
+					if (!destroyed) sizeKB = info.sizeKB;
+				});
 		});
 		return () => {
 			destroyed = true;
@@ -70,6 +81,10 @@
 		if (token !== generation || destroyed) return;
 		await stop();
 		if (destroyed) return;
+		if (error instanceof Error && error.message === 'game-webgl-unavailable') {
+			status = 'unsupported';
+			return;
+		}
 		message = !pwa.online
 			? 'Sem internet. O download precisa de conexão; a versão já guardada continua disponível.'
 			: error instanceof DOMException && error.name === 'QuotaExceededError'
@@ -173,15 +188,25 @@
 
 <main class="page launcher" data-pack-id={pack?.packId}>
 	<header>
-		<a class="button quiet" href={resolve('/')}>Voltar para as jornadas</a>
-		<h1>Trilha secreta</h1>
+		<a class="button quiet" href={resolve('/')}>Voltar para a jornada</a>
+		<h1>{status === 'unsupported' ? 'A Trilha Secreta precisa de gráficos 3D' : 'Trilha secreta'}</h1>
 	</header>
 	<div bind:this={element} class="game" hidden={status !== 'playing' && status !== 'mounting'}></div>
-	{#if status === 'playing'}
+	{#if status === 'unsupported'}
+		<section class="card">
+			<p>
+				Este celular está no modo leve para economizar memória e bateria, por isso o minijogo 3D não abre
+				aqui. Sua jornada principal pelos Guardiões da Mata Atlântica continua funcionando normalmente!
+			</p>
+		</section>
+	{:else if status === 'playing'}
 		<button class="button quiet" type="button" onclick={exit}>Sair da aventura</button>
 	{:else}
 		<section class="card" aria-busy={busy}>
-			<p>Uma aventura pela floresta, guardada neste aparelho para jogar sem internet.</p>
+			<p>
+				Entre as árvores da Mata Atlântica há um mundo 3D escondido onde você pode caminhar pela reserva,
+				saltar pelas pedras do rio e ajudar a guarda-parque Iara.
+			</p>
 			<div role="status" aria-live="polite">
 				{#if status === 'checking'}<p>Procurando a aventura neste aparelho…</p>
 				{:else if status === 'downloading'}
@@ -193,8 +218,11 @@
 						</p>{/if}
 				{:else if status === 'mounting'}<p>Abrindo a clareira…</p>
 				{:else if status === 'error'}<p>{message}</p>
-				{:else if pack}<p>Esta aventura está guardada e pode abrir sem internet.</p>
+				{:else if pack}<p>Pronto para jogar neste celular, mesmo sem internet.</p>
 				{:else if !pwa.online}<p>Sem internet. Conecte-se uma vez para baixar a aventura.</p>
+				{:else if sizeKB !== null}<p>
+						Primeiro acesso: baixa cerca de {sizeKB} KB (depois fica guardado neste celular).
+					</p>
 				{:else}<p>O jogo só será baixado quando você entrar.</p>{/if}
 			</div>
 			<div class="actions">
@@ -212,7 +240,7 @@
 							? 'Tentar o download de novo'
 							: pack
 								? 'Baixar versão mais recente'
-								: 'Baixar e entrar'}
+								: 'Entrar na trilha'}
 					</button>
 				{/if}
 			</div>
