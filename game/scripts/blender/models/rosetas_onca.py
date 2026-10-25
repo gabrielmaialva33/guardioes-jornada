@@ -24,7 +24,7 @@ Shape and colour decisions and sources:
 - "rosetas pretas ocas nos flancos, interior marrom e com manchas pretas; outras manchas ...
   pernas, barriga e cauda são totalmente pretas": Guia de identificação de felinos
   (CENAP/ICMBio partners), https://panthera.org/sites/default/files/cwc/FieldGuides_GuiadeIdentificacion_Brasil.pdf
-- So: 11 rosettes on the flanks, shoulders, back and haunches, each a broken ring of four
+- So: 12 rosettes on the flanks, shoulders, back and haunches, each a broken ring of four
   dark bars (open corners, each bar slightly turned) round a brown centre with one or two
   dark dots; solid spots on the head and on the legs. Sizes vary (0.2-0.3) like real coats.
 - The Cube Pets tiger keeps raised stripe ridges on its back and upper flanks, so every
@@ -67,6 +67,7 @@ PATCHES = [
     # flanks, upper half over the ridges, towards the shoulders
     ("roseta-ombro-esq", "body", "esq", (None, -0.26, 1.03), "rosette", 0.23, -5, 1),
     ("roseta-ombro-dir", "body", "dir", (None, -0.24, 1.05), "rosette", 0.22, 8, 1),
+    ("roseta-flanco-esq-3", "body", "esq", (None, 0.24, 1.04), "rosette", 0.21, -12, 2),
     # back
     ("roseta-dorso-1", "body", "dorso", (-0.17, 0.04, None), "rosette", 0.27, 12, 2),
     ("roseta-dorso-2", "body", "dorso", (0.18, -0.07, None), "rosette", 0.25, -8, 1),
@@ -149,6 +150,6 @@ def build():
 
 if __name__ == "__main__":
     C.run(build, name="rosetas-onca", budget=BUDGET,
-          target="attachment, 11 rosettes 0.2-0.3 + 9 solid spots (raw units)",
+          target="attachment, 12 rosettes 0.2-0.3 + 9 solid spots (raw units)",
           preview=lambda g, p: C.preview_attachment(g, p, "tiger", {"groups": "rosetas-"},
                                                     views=[(-48, 30), (135, 34)]))

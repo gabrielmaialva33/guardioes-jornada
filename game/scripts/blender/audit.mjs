@@ -200,7 +200,10 @@ function readAccessorElement(json, bin, accIdx, index) {
 
 function budgetForModel(fileName, nodeName) {
 	if (fileName === 'avatar.glb') return { kind: 'Avatar', limit: 72 };
-	if (['monkey.glb', 'tiger.glb', 'parrot.glb', 'koala.glb'].includes(fileName)) {
+	if (fileName === 'tiger.glb' || fileName.includes('onca') || nodeName.includes('onca')) {
+		return { kind: 'Animal (Onça)', limit: 1200 };
+	}
+	if (['monkey.glb', 'parrot.glb', 'koala.glb'].includes(fileName)) {
 		return { kind: 'Animal', limit: 1000 };
 	}
 	if (
@@ -219,7 +222,7 @@ function budgetForModel(fileName, nodeName) {
 		return { kind: 'Tree', limit: 400 };
 	}
 	if (
-		['mico', 'onca', 'tucano', 'bugio', 'muriqui', 'preguica'].some(
+		['mico', 'tucano', 'bugio', 'muriqui', 'preguica'].some(
 			(t) => fileName.includes(t) || nodeName.includes(t)
 		)
 	) {
