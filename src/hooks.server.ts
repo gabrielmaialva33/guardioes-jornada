@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle } from '@sveltejs/kit/hooks';
 import { immutable } from '$app/manifest';
 import { resolve } from '$app/paths';
 
