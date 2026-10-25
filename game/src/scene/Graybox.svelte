@@ -17,12 +17,14 @@
 	import { applyToRig, bindRig, type RigBinding } from '../animation/rig.ts';
 	import { applyCameraPose } from '../engine/camera.ts';
 	import { placeObject } from '../engine/character.ts';
-	import { CAMERA_FOV, CAMERA_NEAR } from '../engine/constants.ts';
+	import { CAMERA_FOV, CAMERA_MAX_DISTANCE, CAMERA_NEAR } from '../engine/constants.ts';
 	import type { PlayerController } from '../engine/controller.ts';
 	import { proxyGeometry, type Graybox } from '../engine/graybox.ts';
 	import { attachInput, type InputModel } from '../engine/input.ts';
 	import { disposeModel, loadAvatar } from './avatar.ts';
 	import { FrameStats } from './frame-stats.ts';
+	import { ensureVertexColors, paletteMaterial, proxyColor } from './materials.ts';
+	import { LIGHT, RAMPS } from '../style/palette.ts';
 	import type { GameDebug, HudState } from './types.ts';
 
 	let {
@@ -46,22 +48,22 @@
 	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, 160);
 	const visual = new Group();
 	const actor = new Group();
-	const palette = { ground: 0x47765a, box: 0xb9aa76, ramp: 0xdd985c, log: 0x855c41 };
-	const materials = new Map<number, MeshLambertMaterial>();
+	const materials = new Map<string, MeshLambertMaterial>();
 	for (const proxy of untrack(() => level.proxies)) {
-		const color =
-			proxy.name === 'ground' ? palette.ground : proxy.name.includes('pad') ? 0xe3c75c : palette[proxy.kind];
+		const color = proxyColor(proxy.name, proxy.kind);
 		let material = materials.get(color);
 		if (!material) {
-			material = new MeshLambertMaterial({ color, flatShading: true });
+			material = paletteMaterial(color);
 			materials.set(color, material);
 		}
-		visual.add(new Mesh(proxyGeometry(proxy), material));
+		const geometry = proxyGeometry(proxy);
+		ensureVertexColors(geometry);
+		visual.add(new Mesh(geometry, material));
 	}
 	visual.add(actor);
 	const blob = new Mesh(
 		new CircleGeometry(0.68, 16),
-		new MeshBasicMaterial({ color: 0x10271b, transparent: true, opacity: 0.3, depthWrite: false })
+		new MeshBasicMaterial({ color: RAMPS.leaf[0], transparent: true, opacity: 0.3, depthWrite: false })
 	);
 	blob.rotation.x = -Math.PI / 2;
 	visual.add(blob);
@@ -93,6 +95,7 @@
 			triangles: lastTriangles,
 			dpr: renderer.getPixelRatio(),
 			quality: 'low',
+			ready,
 			geometries: renderer.info.memory.geometries,
 			textures: renderer.info.memory.textures,
 			programs: renderer.info.programs?.length ?? 0,
@@ -212,7 +215,10 @@
 	onDestroy(() => {
 		if (avatar) disposeModel(avatar);
 		for (const child of visual.children) if (child instanceof Mesh) child.geometry.dispose();
-		for (const material of materials.values()) material.dispose();
+		for (const material of materials.values()) {
+			material.map?.dispose();
+			material.dispose();
+		}
 		blob.material.dispose();
 		renderer.info.autoReset = oldReset;
 		visual.clear();
@@ -220,8 +226,16 @@
 </script>
 
 <T is={camera} makeDefault />
-<T.Color attach="background" args={['#adc6b5']} />
-<T.Fog attach="fog" args={['#adc6b5', 65, 130]} />
-<T.HemisphereLight intensity={2.2} color="#ecf5e8" groundColor="#536849" />
-<T.DirectionalLight intensity={1.6} position={[-20, 35, -10]} />
+
+<T.Fog attach="fog" args={[LIGHT.daylight.horizon, CAMERA_MAX_DISTANCE * 0.3, CAMERA_MAX_DISTANCE]} />
+<T.HemisphereLight
+	intensity={1}
+	color={LIGHT.daylight.hemisphereSky}
+	groundColor={LIGHT.daylight.hemisphereGround}
+/>
+<T.DirectionalLight
+	intensity={1.6}
+	color={LIGHT.daylight.sun}
+	position={[0, Math.tan((LIGHT.daylight.sunElevationDeg * Math.PI) / 180) * 30, -30]}
+/>
 <T is={visual} dispose={false} />

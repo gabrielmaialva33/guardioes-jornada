@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { Canvas } from '@threlte/core';
 	import { onDestroy } from 'svelte';
-	import type { WebGLRenderer } from 'three';
+	import { NoToneMapping, SRGBColorSpace, type WebGLRenderer } from 'three';
 	import type { GameBridge } from '../abi.ts';
 	import { CheckpointTracker } from './engine/checkpoints.ts';
 	import { PlayerController } from './engine/controller.ts';
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
 	import { InputModel, type ButtonRole } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
+	import { LIGHT } from './style/palette.ts';
 	import type { HudState } from './scene/types.ts';
 
 	let {
@@ -18,6 +19,7 @@
 	let stickBase: HTMLDivElement;
 	let stickThumb: HTMLDivElement;
 	let jump: HTMLButtonElement;
+	let sideButtons: HTMLDivElement;
 	let hud: HudState = $state({ notice: 'Abrindo a clareira…', shiftLock: false, ready: false, debug: null });
 	const input = new InputModel();
 	const level = createGraybox();
@@ -32,6 +34,7 @@
 		stickThumb.style.transform = `translate(${stick.x}px, ${stick.y}px)`;
 		stickThumb.style.display = stick.active ? 'block' : 'none';
 		const rect = input.layout.jumpButton;
+		sideButtons.style.bottom = `${wrapper ? wrapper.clientHeight - rect.y + 16 : 106}px`;
 		jump.style.left = `${rect.x}px`;
 		jump.style.top = `${rect.y}px`;
 		jump.style.width = `${rect.width}px`;
@@ -55,13 +58,19 @@
 <div
 	bind:this={wrapper}
 	class="secret-game"
+	style:background={`linear-gradient(${LIGHT.daylight.skyTop}, ${LIGHT.daylight.horizon} 65%)`}
 	data-game-root
 	tabindex="-1"
 	role="application"
 	aria-label="Trilha secreta. Use W A S D para andar, espaço para pular e arraste para olhar."
 >
 	<div class="world">
-		<Canvas dpr={[0.75, 1]} shadows={false} {createRenderer}
+		<Canvas
+			dpr={[0.75, 1]}
+			shadows={false}
+			toneMapping={NoToneMapping}
+			colorSpace={SRGBColorSpace}
+			{createRenderer}
 			>{#if wrapper}<Graybox
 					{wrapper}
 					{controller}
@@ -94,7 +103,7 @@
 	<div bind:this={stickBase} class="stick-base" aria-hidden="true"></div>
 	<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
 	{#if hud.shiftLock}<div class="crosshair" aria-hidden="true">+</div>{/if}
-	<div class="side-buttons">
+	<div bind:this={sideButtons} class="side-buttons">
 		<button
 			type="button"
 			data-game-button="shiftLock"

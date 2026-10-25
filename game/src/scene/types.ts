@@ -5,6 +5,7 @@ export interface GameDebug {
 	triangles: number;
 	dpr: number;
 	quality: string;
+	ready: boolean;
 	geometries: number;
 	textures: number;
 	programs: number;
