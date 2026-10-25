@@ -179,11 +179,21 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		motion.flapRate = TUCANO.flapRate;
 		motion.flap = state === 'fly' && !launching ? 1 : 0;
 		motion.wingsClosed = state === 'glide' && this.clock.inState < TUCANO.drop ? 1 : 0;
-		motion.lookYaw = flying ? 0 : this.#lookYaw;
-		motion.lookPitch = flying ? 0 : this.#lookPitch;
-		motion.pitch = flying ? -Math.atan2(this.#vy, Math.max(0.1, this.#vh)) : 0;
-		motion.bank = flying ? clamp(motion.turnRate * TUCANO.flightSpeed * TUCANO.bankGain, -0.5, 0.5) : 0;
-		motion.speed = flying ? TUCANO.flightSpeed : 0;
+		// Separate stores, not a ternary: merging a constant with another number made V8 box it every frame (measured).
+		if (flying) {
+			motion.lookYaw = 0;
+			motion.lookPitch = 0;
+			motion.pitch = -Math.atan2(this.#vy, Math.max(0.1, this.#vh));
+			const bank = motion.turnRate * TUCANO.flightSpeed * TUCANO.bankGain;
+			motion.bank = Math.min(0.5, Math.max(-0.5, bank));
+			motion.speed = TUCANO.flightSpeed;
+		} else {
+			motion.lookYaw = this.#lookYaw;
+			motion.lookPitch = this.#lookPitch;
+			motion.pitch = 0;
+			motion.bank = 0;
+			motion.speed = 0;
+		}
 	}
 
 	#startHop() {
@@ -268,7 +278,9 @@ export class TucanoBehaviour extends Behaviour<TucanoState> {
 		const before = this.progress;
 		this.progress = Math.min(1, before + (TUCANO.flightSpeed * h) / this.#length);
 		const dropping = this.state === 'glide' && this.clock.inState < TUCANO.drop;
-		this.#bobRate = this.state === 'fly' ? TUCANO.climbRate : dropping ? -TUCANO.dropRate : -TUCANO.sinkRate;
+		if (this.state === 'fly') this.#bobRate = TUCANO.climbRate;
+		else if (dropping) this.#bobRate = -TUCANO.dropRate;
+		else this.#bobRate = -TUCANO.sinkRate;
 		this.#bob = clamp(this.#bob + this.#bobRate * h, -0.6, 0.6);
 		const u = this.progress;
 		const envelope = smoothstep(u / 0.15) * smoothstep((1 - u) / 0.2);

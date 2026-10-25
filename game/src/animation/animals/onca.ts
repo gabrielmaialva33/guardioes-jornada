@@ -107,7 +107,8 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 			if (distance > ONCA.avoidRadius * 1.5) this.leaving = false;
 		}
 
-		let cruise = this.state === 'move' ? (this.leaving ? ONCA.leaveSpeed : ONCA.walkSpeed) : 0;
+		let cruise = 0;
+		if (this.state === 'move') cruise = this.leaving ? ONCA.leaveSpeed : ONCA.walkSpeed;
 		// Cornered at the end of an open trail: stop and watch rather than turn back past the player.
 		if (this.leaving && !this.route.closed) {
 			const left = this.cursor.direction > 0 ? this.route.length - this.cursor.s : this.cursor.s;

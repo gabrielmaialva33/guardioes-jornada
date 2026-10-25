@@ -45,6 +45,9 @@ export const BUGIO = {
 	glanceYaw: 45 * DEG
 } as const;
 
+/** Head up while howling (the posture adds the rest). */
+const HOWL_LOOK_UP = 15 * DEG;
+
 export interface BugioOptions extends BehaviourOptions {
 	/** The branch top it walks along (open: back and forth). */
 	branch: Route;
@@ -82,7 +85,9 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 	protected advance(_world: AnimalWorld) {
 		const h = this.clock.h;
 		const motion = this.motion;
-		this.drive.cruise = this.state === 'move' ? BUGIO.walkSpeed : 0;
+		// Separate stores, not a ternary: merging a constant with another number made V8 box it every frame (measured).
+		if (this.state === 'move') this.drive.cruise = BUGIO.walkSpeed;
+		else this.drive.cruise = 0;
 		this.drive.rampRate = BUGIO.accel;
 		this.ramp();
 		this.#speed = this.drive.speed;
@@ -136,13 +141,15 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 		const state = this.state;
 		motion.posture =
 			state === 'rest' ? 'lie' : state === 'howl' ? 'howl' : state === 'feed-hang' ? 'feed-hang' : 'stand';
-		motion.fade = state === 'feed-hang' || motion.posture === 'stand' ? BUGIO.feedFade : 0.4;
+		if (state === 'feed-hang' || motion.posture === 'stand') motion.fade = BUGIO.feedFade;
+		else motion.fade = 0.4;
 		motion.feeding = state === 'feed-hang';
 		motion.eat = motion.feeding ? 1 : 0;
 		motion.howl = this.#howl;
 		motion.speed = this.#speed;
 		motion.lookYaw = this.#lookYaw;
-		motion.lookPitch = state === 'howl' ? 15 * DEG : 0;
+		if (state === 'howl') motion.lookPitch = HOWL_LOOK_UP;
+		else motion.lookPitch = 0;
 	}
 
 	#place() {

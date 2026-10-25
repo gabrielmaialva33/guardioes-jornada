@@ -216,7 +216,7 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 		size: MURIQUI_SIZE,
 		scale: scaleFor('monkey', MURIQUI_SIZE),
 		// Long forelimbs for arm-swinging [E63]; the Cube Pets leg is a short block.
-		limbScale: { front: 2.2, hind: 1.4 },
+		limbScale: { front: 2.6, hind: 1.4 },
 		tempo: tempoFor(MURIQUI_SIZE),
 		lookPreset: SPRING.body,
 		walk: null,

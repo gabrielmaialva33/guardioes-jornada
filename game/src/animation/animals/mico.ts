@@ -67,6 +67,9 @@ export const MICO = {
 	playerEyes: 2.6
 } as const;
 
+/** Head lowered while sitting. */
+const REST_LOOK_DOWN = -10 * DEG;
+
 export interface MicoOptions extends BehaviourOptions {
 	/** A branch or trail to wander on when not following. */
 	route?: Route | null;
@@ -351,7 +354,9 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		if (moving || this.state === 'rest') {
 			this.#lookAtPlayer = false;
 			this.#lookYaw = 0;
-			this.#lookPitch = this.state === 'rest' ? -10 * DEG : 0;
+			// Separate stores, not a ternary: merging a constant with another number made V8 box it every frame (measured).
+			if (this.state === 'rest') this.#lookPitch = REST_LOOK_DOWN;
+			else this.#lookPitch = 0;
 			return;
 		}
 		this.#glance -= this.clock.h;
