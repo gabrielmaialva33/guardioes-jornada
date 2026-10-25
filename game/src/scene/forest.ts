@@ -1,11 +1,10 @@
-import { Box3 } from 'three';
+import { Box3, Group } from 'three';
 import araucaria from '../assets/models/custom-araucaria.glb?url';
 import embauba from '../assets/models/custom-embauba.glb?url';
 import ipeAmarelo from '../assets/models/custom-ipe-amarelo.glb?url';
 import ipeRosa from '../assets/models/custom-ipe-rosa.glb?url';
 import jequitiba from '../assets/models/custom-jequitiba-rosa.glb?url';
 import jucara from '../assets/models/custom-palmeira-jucara.glb?url';
-import kitUrl from '../assets/models/kit-flora.glb?url';
 import {
 	addPlacements,
 	type BlockGrid,
@@ -23,8 +22,8 @@ export async function loadForest(
 	placements: PlacementArrays<ForestKind>,
 	signal: AbortSignal
 ) {
-	const source = await loadModel(kitUrl, signal);
-	// Assets are produced concurrently: prefer the merged kit, with the same native GLBs as fallback.
+	const source = new Group();
+	// Custom Atlantic Forest models are the main trees; the Kenney kit is reserved for props.
 	const customFiles: Record<ForestKind, string> = {
 		embauba,
 		'jequitiba-rosa': jequitiba,
@@ -37,7 +36,6 @@ export async function loadForest(
 	try {
 		const loads = await Promise.allSettled(
 			FOREST_KINDS.map(async (name) => {
-				if (source.getObjectByName(name)) return;
 				const model = await loadModel(customFiles[name], signal);
 				model.name = name;
 				source.add(model);
