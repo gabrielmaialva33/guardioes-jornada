@@ -18,7 +18,12 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 	let app: ReturnType<typeof mount> | undefined;
 	let disposed: Promise<void> | undefined;
 	const createRenderer = (canvas: HTMLCanvasElement) => {
-		const value = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'low-power' });
+		let value: WebGLRenderer;
+		try {
+			value = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'low-power' });
+		} catch (cause) {
+			throw new Error('game-webgl-unavailable', { cause });
+		}
 		renderer = value;
 		const setLoop = value.setAnimationLoop.bind(value);
 		let loop: Parameters<typeof setLoop>[0] = null;
