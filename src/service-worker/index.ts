@@ -1,5 +1,6 @@
 import { shell } from 'virtual:offline-shell';
 import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
+import { matchGamePack } from '#lib/data/game-pack-cache.ts';
 import { version } from '$app/env';
 import { assets, immutable, prerendered } from '$app/manifest';
 import { asset, resolve } from '$app/paths';
@@ -58,6 +59,11 @@ self.addEventListener('fetch', (event) => {
 
 	event.respondWith(
 		(async () => {
+			// Pack builds run after Kit: no pack belongs to the install graph. Complete
+			// packs are pinned independently and remain readable across app deployments.
+			if (url.pathname.startsWith(new URL('game-packs/', root).pathname)) {
+				return (await matchGamePack(caches, root, url)) ?? fetch(request);
+			}
 			const cache = await caches.open(CACHE);
 
 			// App files never change within a version: serve them from the cache.
