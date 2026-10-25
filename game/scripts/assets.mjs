@@ -1043,10 +1043,12 @@ function main() {
 			const items = FLORA_MODELS.map((name) => {
 				const rawPath = path.join(RAW_ROOT, 'nature-kit', 'Models', 'GLTF format', `${name}.glb`);
 				if (name === 'tree_detailed') {
+					const copyPath = path.join(workDir, 'tree_detailed-copy.glb');
 					const simpPath = path.join(workDir, 'tree_detailed-simp.glb');
+					runGltfTransform(['copy', rawPath, copyPath]);
 					execFileSync(
 						'pnpm',
-						['dlx', 'gltfpack@1.3.0', '-i', rawPath, '-o', simpPath, '-noq', '-kn', '-si', '0.95'],
+						['dlx', 'gltfpack@1.3.0', '-i', copyPath, '-o', simpPath, '-noq', '-kn', '-si', '0.94', '-sp'],
 						{ stdio: 'pipe' }
 					);
 					return { name, path: simpPath };
@@ -1108,7 +1110,8 @@ function main() {
 							'-noq',
 							'-kn',
 							'-si',
-							String(entry.simplifyRatio)
+							String(entry.simplifyRatio),
+							'-sp'
 						],
 						{ stdio: 'pipe' }
 					);
