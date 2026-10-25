@@ -114,9 +114,10 @@
 {/if}
 
 <style>
+	/* Side by side on phones; stacked when large text leaves no room for two. */
 	.pair {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
 		gap: 1rem;
 	}
 
