@@ -1,12 +1,31 @@
-<!-- A team's color with its initial on top, so color is never the only cue. -->
+<!-- A team's color with its initials on top, so color is never the only cue. -->
 <script lang="ts">
 	import { GROUP_INK } from '#lib/content/groups.ts';
 
 	let { name, color, size = 2.25 }: { name: string; color: string; size?: number } = $props();
+
+	// One letter per part of the name (Canela-preta is CP, Cedro-rosa is CR), so
+	// trees that start with the same letter still look different without color.
+	const initials = $derived(
+		name
+			.trim()
+			.split(/[\s-]+/)
+			.slice(0, 2)
+			.map((part) => part.charAt(0))
+			.join('')
+			.toLocaleUpperCase('pt-BR')
+	);
 </script>
 
-<span class="mark" style:--group={color} style:--ink={GROUP_INK} style:--size="{size}rem" aria-hidden="true">
-	{name.trim().charAt(0).toLocaleUpperCase('pt-BR')}
+<span
+	class="mark"
+	class:pair={initials.length > 1}
+	style:--group={color}
+	style:--ink={GROUP_INK}
+	style:--size="{size}rem"
+	aria-hidden="true"
+>
+	{initials}
 </span>
 
 <style>
@@ -24,6 +43,11 @@
 		font-size: calc(var(--size) * 0.5);
 		font-weight: 800;
 		line-height: 1;
+	}
+
+	.mark.pair {
+		font-size: calc(var(--size) * 0.4);
+		letter-spacing: -0.02em;
 	}
 
 	:global([data-theme='sol']) .mark {
