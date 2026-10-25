@@ -123,7 +123,7 @@ const PRIMATE_LIE: PostureDef<QuadrupedSlot> = {
 const CAT_SIT: PostureDef<QuadrupedSlot> = {
 	key: {
 		body: { r: [-20, 0, 0], p: [0, -0.05, 0] },
-		tail: { r: [-92, 0, 0] },
+		tail: { r: [-85, 0, 0] },
 		...legs({ r: [4, 0, 0] }, { r: [-75, 0, 0], p: [0, -0.1, 0.05] })
 	}
 };
