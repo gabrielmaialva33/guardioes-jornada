@@ -27,6 +27,7 @@
 		overflow: hidden;
 		padding: 0;
 		aspect-ratio: 2 / 1;
+		max-height: max(9rem, 40dvh);
 	}
 
 	.scene :global(svg) {
