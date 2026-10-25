@@ -76,8 +76,8 @@ RAMPS, ACCENT = _load_palette()
 # section 3.2), so the vertex-colour and palette routes agree.
 SPECIES = {
     # Euterpe edulis: ripe fruit black-violet (Embrapa; Flora e Funga do Brasil).
-    "jucaraFruto": "#4a2a55",
-    "jucaraFrutoLuz": "#6a3d78",
+    "jucaraFruto": "#45274f",
+    "jucaraFrutoLuz": "#643a72",
     # Cecropia: whitish-silver abaxial (under) leaf face (Flora e Funga do Brasil).
     "embaubaPrata": "#c5d3c9",
     # Red centre of a flowering tank bromeliad (Neoregelia / Nidularium; Flora e Funga).
