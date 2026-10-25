@@ -1,10 +1,11 @@
 export const GAME_SAVE_KEY = 'guardioes-secret-trail-save';
-export const AVATAR_PARTS = ['skin', 'hair', 'shirt', 'pants'] as const;
+export const AVATAR_PARTS = ['skin', 'hair', 'shirt', 'pants', 'shoes'] as const;
 export type AvatarPart = (typeof AVATAR_PARTS)[number];
 export type AvatarColors = Record<AvatarPart, string>;
 export interface AvatarProfile {
 	style: 'classic' | 'kenney';
 	colors: AvatarColors;
+	face: 'smile' | 'neutral';
 	kenneySkin: string;
 }
 export interface SaveStorage {
@@ -26,11 +27,17 @@ export function decodeAvatarProfile(value: unknown): AvatarProfile | null {
 		return null;
 	const colors = {} as AvatarColors;
 	for (const part of AVATAR_PARTS) {
-		const color = value.colors[part];
+		const color = value.colors[part] ?? (part === 'shoes' ? '#4f5c55' : undefined);
 		if (typeof color !== 'string' || !hex.test(color)) return null;
 		colors[part] = color.toLowerCase();
 	}
-	return { style: value.style, kenneySkin: value.kenneySkin, colors };
+	if (value.face !== undefined && value.face !== 'smile' && value.face !== 'neutral') return null;
+	return {
+		style: value.style,
+		kenneySkin: value.kenneySkin,
+		colors,
+		face: value.face === 'neutral' ? 'neutral' : 'smile'
+	};
 }
 function nativeStorage(): SaveStorage | undefined {
 	try {

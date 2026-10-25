@@ -3,8 +3,9 @@ import { type AvatarProfile, createLocalSave, decodeAvatarProfile, GAME_SAVE_KEY
 
 const profile: AvatarProfile = {
 	style: 'classic',
+	face: 'smile',
 	kenneySkin: 'a',
-	colors: { skin: '#b87850', hair: '#35291f', shirt: '#2d6a4f', pants: '#4f5c55' }
+	colors: { skin: '#b87850', hair: '#35291f', shirt: '#2d6a4f', pants: '#4f5c55', shoes: '#4f5c55' }
 };
 function storage() {
 	const values = new Map<string, string>();
