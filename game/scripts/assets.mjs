@@ -24,7 +24,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
+import { brotliCompressSync, constants as zlibConstants, deflateSync, gzipSync } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_ROOT = path.resolve(__dirname, '..');
