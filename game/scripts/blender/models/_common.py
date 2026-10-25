@@ -78,12 +78,13 @@ SPECIES = {
     # Euterpe edulis: ripe fruit black-violet (Embrapa; Flora e Funga do Brasil).
     "jucaraFruto": "#45274f",
     "jucaraFrutoLuz": "#643a72",
-    # Cecropia: whitish-silver abaxial (under) leaf face (Flora e Funga do Brasil).
-    "embaubaPrata": "#c5d3c9",
     # Red centre of a flowering tank bromeliad (Neoregelia / Nidularium; Flora e Funga).
     "bromeliaVermelho": "#c4453b",
-    # Ramphastos dicolorus bill, tucano palette cell (6,2) top row (WikiAves).
+    # Ramphastos dicolorus bill: green with a black basal line and a red cutting edge
+    # (WikiAves; Perrella & Guida 2019). Top rows of tucano palette cells (6,2), (1,3), (4,3).
     "tucanoBico": "#bce84c",
+    "tucanoBicoBase": "#242730",
+    "tucanoTomio": "#e6392e",
     # Jaguar rosette ring and its darker-than-coat centre, onca palette cells (5,3), (3,2).
     "oncaRoseta": "#26201e",
     "oncaRosetaMiolo": "#b85d19",
@@ -992,3 +993,120 @@ def run(build, *, name: str, budget: int, target: str, preview=None, preview_kw:
 
 # Trees are seen by a 3 u avatar from the trail: a low camera that looks up into the crown.
 TREE_VIEW = {"elevation_deg": 3.0, "res": (1000, 1300), "lens": 45.0}
+
+
+# --------------------------------------------------------------------------- Cube Pets attachments
+
+# Kenney Cube Pets (CC0) as shipped in kenney-raw, with the species palettes that the game
+# already uses (game/src/assets/skins, read only). Game size from the ART.md scale table.
+PETS = {
+    "parrot": {"glb": "animal-parrot.glb", "skin": "palette-tucano-de-bico-verde.png", "size": ("height", 0.9)},
+    "monkey": {"glb": "animal-monkey.glb", "skin": "palette-mico-leao-dourado.png", "size": ("height", 0.9)},
+    "tiger": {"glb": "animal-tiger.glb", "skin": "palette-onca-pintada.png", "size": ("length", 3.0)},
+}
+
+
+def pet_uv(col: int, band: int, row: int = 0) -> tuple[float, float]:
+    """UV (Blender convention, v up) of a texel row in the 8x4 grid of the 64x64 pets
+    palette (assets-report.md section 3.1): column `col`, band `band`, row 0 = top."""
+    u = (col * 8 + 4) / 64
+    v_gltf = (band * 16 + row + 0.5) / 64
+    return (u, 1.0 - v_gltf)
+
+
+def import_pet(pet: str, palette: bool = True):
+    objs = import_glb(CUBE_PETS / PETS[pet]["glb"])
+    if palette:
+        img = bpy.data.images.load(str(SKINS / PETS[pet]["skin"]), check_existing=True)
+        mat = diffuse_material(f"skin-{pet}", image=img)
+        for o in objs:
+            if o.type == "MESH":
+                for slot in o.material_slots:
+                    slot.material = mat
+    return objs
+
+
+def pet_surface(pet: str, nodes=("body",)):
+    """BVH of the pet's rest pose (Blender world space), for placing attachments flush."""
+    import bmesh
+    from mathutils.bvhtree import BVHTree
+
+    objs = import_pet(pet, palette=False)
+    bpy.context.view_layer.update()
+    bm = bmesh.new()
+    pivots = {}
+    for o in objs:
+        pivots[o.name] = o.matrix_world.translation.copy()
+        if o.type == "MESH" and o.name in nodes:
+            tmp = o.data.copy()
+            tmp.transform(o.matrix_world)
+            bm.from_mesh(tmp)
+            bpy.data.meshes.remove(tmp)
+    bvh = BVHTree.FromBMesh(bm)
+    for o in objs:
+        bpy.data.objects.remove(o, do_unlink=True)
+    return bvh, pivots
+
+
+def surface_hit(bvh, origin, direction):
+    loc, normal, _i, _d = bvh.ray_cast(Vector(origin), Vector(direction).normalized(), 50.0)
+    assert loc is not None, f"no surface hit from {tuple(origin)} towards {tuple(direction)}"
+    return loc, normal
+
+
+def attach_by_contract(pet_objs, att_objs, contract: dict) -> None:
+    """Emulate the game's attach code. contract = {"node": "<pet node>"} (the GLB root goes
+    under that node with an identity transform) or {"groups": "<prefix>"} (each child
+    group '<prefix><node>' hands its children to pet node '<node>', keeping their local
+    transforms)."""
+    pet = {o.name.split(".")[0]: o for o in pet_objs}
+    roots = [o for o in att_objs if o.parent is None]
+    if "node" in contract:
+        for r in roots:
+            r.parent = pet[contract["node"]]
+            r.matrix_parent_inverse.identity()
+    else:
+        prefix = contract["groups"]
+        for r in roots:
+            for g in list(r.children):
+                target = pet[g.name[len(prefix):]]
+                for child in list(g.children):
+                    loc = child.location.copy()
+                    child.parent = target
+                    child.matrix_parent_inverse.identity()
+                    child.location = loc
+    bpy.context.view_layer.update()
+
+
+def preview_attachment(glb: Path, png: Path, pet: str, contract: dict, *, closeup_az=-35.0, closeup_el=18.0,
+                       samples=96) -> Path:
+    """Left: the pet with the attachment at game size next to the 3.0 u avatar block and the
+    1 u rod. Right: a close-up of the same, in the ART light."""
+    reset_scene()
+    setup_cycles(samples)
+    art_light()
+    pet_objs = import_pet(pet)
+    att = import_glb(glb)
+    lambertise(att)
+    attach_by_contract(pet_objs, att, contract)
+    top = [o for o in pet_objs if o.parent is None][0]
+    lo, hi = world_bbox([o for o in pet_objs if o.type == "MESH" and o.name.split(".")[0] != "tail"])
+    kind, size = PETS[pet]["size"]
+    s = size / ((hi.z - lo.z) if kind == "height" else (hi.y - lo.y))
+    top.scale = (s, s, s)
+    bpy.context.view_layer.update()
+    everything = pet_objs + att
+    lo, hi = world_bbox(everything)
+    props = measuring_props(lo.x - 1.4, 0.0, rod_height=3.0)
+    ground()
+    frame_camera(everything + props, -28.0, 14.0, 50.0, (900, 900))
+    left = render(png.with_name(png.stem + "-lineup.png"), samples)
+    for o in props:
+        o.hide_render = True
+    bpy.data.objects.remove(bpy.context.scene.camera, do_unlink=True)
+    frame_camera(everything, closeup_az, closeup_el, 50.0, (900, 900), margin=0.12)
+    right = render(png.with_name(png.stem + "-closeup.png"), samples)
+    out = compose_side_by_side(left, right, png)
+    left.unlink()
+    right.unlink()
+    return out
