@@ -37,7 +37,7 @@
 				/>
 				<ellipse cx="50" cy="155" rx="20" ry="3" fill="#000" opacity="0.25" />
 			</svg>
-			<figcaption><strong>Canela-preta</strong> tronco escuro, copa densa</figcaption>
+			<figcaption><strong>Canela-preta</strong> casca escura que se solta em placas</figcaption>
 		</figure>
 		<figure>
 			<svg viewBox="0 0 100 160" role="img" aria-label="Cedro-rosa">
@@ -50,11 +50,6 @@
 				<path d="M50 8 L24 52 L76 52 Z" fill="url(#cedro-layer)" />
 				<path d="M50 32 L18 78 L82 78 Z" fill="url(#cedro-layer)" opacity="0.92" />
 				<path d="M50 58 L14 108 L86 108 Z" fill="url(#cedro-layer)" opacity="0.85" />
-				<circle cx="38" cy="48" r="2.5" fill="#e89cb6" opacity="0.85" />
-				<circle cx="62" cy="68" r="2.5" fill="#e89cb6" opacity="0.85" />
-				<circle cx="30" cy="92" r="2.8" fill="#e89cb6" opacity="0.8" />
-				<circle cx="68" cy="98" r="2.5" fill="#e89cb6" opacity="0.8" />
-				<circle cx="50" cy="80" r="2" fill="#f4b6c9" opacity="0.7" />
 				<path d="M50 110 Q47 128 46 150 L54 150 Q53 128 50 110 Z" fill="#5a3a25" />
 				<path
 					d="M50 118 Q42 128 36 145"
@@ -65,7 +60,7 @@
 				/>
 				<ellipse cx="50" cy="155" rx="22" ry="3" fill="#000" opacity="0.25" />
 			</svg>
-			<figcaption><strong>Cedro-rosa</strong> copa em camadas, flores rosadas</figcaption>
+			<figcaption><strong>Cedro-rosa</strong> casca com rachaduras fundas</figcaption>
 		</figure>
 	</div>
 {/if}

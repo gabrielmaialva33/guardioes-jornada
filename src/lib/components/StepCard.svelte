@@ -7,6 +7,7 @@
 	import Illustration from './Illustration.svelte';
 	import ScorePanel from './ScorePanel.svelte';
 	import Timer from './Timer.svelte';
+	import TreeCards from './TreeCards.svelte';
 
 	interface Props {
 		session: Session;
@@ -53,6 +54,7 @@
 		<p class="callout">{step.callout}</p>
 		{#if step.instructions}<p class="instructions">{step.instructions}</p>{/if}
 		{#if step.illustration}<Illustration name={step.illustration} />{/if}
+		{#if step.trees}<TreeCards trees={step.trees} />{/if}
 		{#if step.timer}<Timer seconds={step.timer.seconds} label={step.timer.label} />{/if}
 		{#if step.checklist}
 			<Checklist {session} {step} />

@@ -112,9 +112,9 @@
 						<path d="M0 -38 L-8 -25 L8 -25Z" class="canopy-light" />
 						<path d="M0 -31 L-10 -17 L10 -17Z" class="canopy-light" />
 						<path d="M0 -23 L-12 -8 L12 -8Z" class="canopy-light" />
-						<circle cx="-4" cy="-20" r="1.3" class="blossom" />
-						<circle cx="5" cy="-14" r="1.3" class="blossom" />
-						<circle cx="-6" cy="-11" r="1.2" class="blossom" />
+						<circle cx="-4" cy="-20" r="1.3" class="fruit" />
+						<circle cx="5" cy="-14" r="1.3" class="fruit" />
+						<circle cx="-6" cy="-11" r="1.2" class="fruit" />
 					{/if}
 				</g>
 			</g>
@@ -189,6 +189,11 @@
 	.canopy-light {
 		fill: var(--canopy-light);
 	}
+	/* Cedro-rosa's woody fruits, which stay on the branches. */
+	.fruit {
+		fill: var(--bark);
+	}
+
 	.blossom {
 		fill: var(--blossom);
 	}
