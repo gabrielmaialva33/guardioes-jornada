@@ -1,58 +1,55 @@
 /**
  * Distance fog and block-level LOD, so the far view cannot blow the budget.
  *
- * Fog colour is the horizon of the light variant (style/palette.ts LIGHT) and
- * its distances are multiples of CAMERA_MAX_DISTANCE (24 u): the fog starts
- * exactly where the camera can no longer back away, so the avatar is never
- * fogged at any zoom, and it is opaque one to two camera lengths further,
- * depending on the tier. `camera.far` is set to the fog end: everything past it
- * would be fully fogged anyway, so the far plane culls it for free (the clear
- * colour or sky must be the same horizon colour, see applyFog).
+ * Fog colour is the horizon of the light variant and its distances are the
+ * tier's view distance, both from style/palette.ts (LIGHT, VIEW): on low the
+ * fog starts at 30 u and is opaque at 70 u. VIEW is how far the player sees,
+ * not how far the camera sits from the avatar (CAMERA_MAX_DISTANCE, 24 u).
+ * `camera.far` is the fog end: everything past it would be fully fogged
+ * anyway, so the far plane culls it for free (the clear colour or sky must be
+ * the same horizon colour, see applyFog), and blocks past it fail the
+ * frustum test in blocks.ts.
  *
  * LOD works per block (blocks.ts): each pool has a profile mapping a block's
  * distance from the camera to the share of its instances that stay drawn
- * (1, 1/2, 1/4…). The share is nested and stable: an instance kept at 1/4 is
- * also kept at 1/2, so trees thin out instead of swapping.
+ * (1, 1/2, 1/4…). The bands are cut from the same VIEW distances. The share is
+ * nested and stable: an instance kept at 1/4 is also kept at 1/2, so trees thin
+ * out instead of swapping.
  */
 import { Color, Fog, type PerspectiveCamera, type Scene } from 'three';
-import { CAMERA_MAX_DISTANCE } from '../engine/constants.ts';
-import { LIGHT } from '../style/palette.ts';
+import { LIGHT, VIEW } from '../style/palette.ts';
 import type { Quality } from './quality.ts';
 
 export type LightVariant = keyof typeof LIGHT;
 
-/** Fog start and end per tier, in multiples of CAMERA_MAX_DISTANCE. */
-export const FOG_RANGE: Readonly<Record<Quality, { readonly start: number; readonly end: number }>> = {
-	low: { start: 1, end: 2 },
-	medium: { start: 1, end: 2.5 },
-	high: { start: 1, end: 3 }
-};
-
-/** Night pulls the far fog in (sobrevivencia-procedural.md §4.1); the start stays at the camera's reach. */
+/** Night pulls the fog end in (sobrevivencia-procedural.md §4.1); the start keeps 10 u before it. */
 export const NIGHT_FOG_END = 0.8;
 
 export interface FogSettings {
 	/** Horizon colour of the light variant, as a CSS hex string. */
 	readonly color: string;
+	/** Fog start (VIEW fogNear). */
 	readonly near: number;
+	/** Fog end, opaque (VIEW far). */
 	readonly far: number;
 	/** Camera far plane: the fog end. */
 	readonly cameraFar: number;
 }
 
 export function fogSettings(quality: Quality, variant: LightVariant = 'daylight'): FogSettings {
-	const range = FOG_RANGE[quality];
-	const near = CAMERA_MAX_DISTANCE * range.start;
-	const end = CAMERA_MAX_DISTANCE * range.end * (variant === 'night' ? NIGHT_FOG_END : 1);
-	const far = Math.max(near + 1, end);
+	const view = VIEW[quality];
+	const far = variant === 'night' ? view.far * NIGHT_FOG_END : view.far;
+	const near = Math.min(view.fogNear, far - 10);
 	return { color: LIGHT[variant].horizon, near, far, cameraFar: far };
 }
 
 /**
  * Applies fog settings to the scene and camera. Reuses the scene's Fog when
  * there is one (changing colour or distances never recompiles; adding or
- * removing fog does). Also sets `background` to the fog colour when the scene
- * has no background yet, so the far plane cut is invisible.
+ * removing fog does). Sets a Color `background` to the fog colour (or creates
+ * one when the scene has none), so the far plane cut is invisible; a scene
+ * with a texture or sky dome background keeps it, and the sky's horizon must
+ * then match the fog colour and fit inside `cameraFar`.
  */
 export function applyFog(scene: Scene, camera: PerspectiveCamera | null, settings: FogSettings): Fog {
 	let fog = scene.fog instanceof Fog ? scene.fog : null;
@@ -92,11 +89,12 @@ export function keepFraction(profile: LodProfile, distance: number): number {
 }
 
 /**
- * - tree: all trees inside the camera's reach, half to the middle of the fog, a quarter to its end.
+ * Bands from the tier's VIEW (through its FogSettings), camera to block distance:
+ * - tree: all trees up to where the fog starts, half to the middle of the fog, a quarter to its end.
  * - rock: all, then half in the fog.
- * - cover: grass, flowers, bushes and ferns stop where the fog starts; they are
- *   most of the instances (up to ~2,400 on the survival map) and read as
- *   texture, not landmarks, in the fog.
+ * - cover: grass, flowers, bushes and ferns: all to half the fog start, half to
+ *   the fog start, none beyond. They are most of the instances (up to ~2,400 on
+ *   the survival map) and read as texture, not landmarks, in the fog.
  * - gameplay: pickups, threats, signs, checkpoints, obby parts: never thinned.
  */
 export type LodCategory = 'tree' | 'rock' | 'cover' | 'gameplay';
@@ -133,4 +131,12 @@ export function lodRank(slot: number): number {
 	v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2);
 	v = ((v & 0xaa) >> 1) | ((v & 0x55) << 1);
 	return v;
+}
+
+/** LOD profiles for a tier and light variant: `lodProfiles(fogSettings(quality, variant))`. */
+export function lodProfilesFor(
+	quality: Quality,
+	variant: LightVariant = 'daylight'
+): Readonly<Record<LodCategory, LodProfile>> {
+	return lodProfiles(fogSettings(quality, variant));
 }

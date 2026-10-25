@@ -19,8 +19,9 @@ import {
 	type ColorRepresentation,
 	DataTexture,
 	DirectionalLight,
+	DynamicDrawUsage,
+	Group,
 	HemisphereLight,
-	InstancedBufferAttribute,
 	InstancedMesh,
 	LinearFilter,
 	LinearMipmapLinearFilter,
@@ -177,7 +178,7 @@ export class BlobShadows {
 		this.mesh.matrixAutoUpdate = false;
 		// Fixed bounds: sorting never recomputes them per frame.
 		this.mesh.boundingSphere = new Sphere(new Vector3(), Number.MAX_VALUE);
-		(this.mesh.instanceMatrix as InstancedBufferAttribute).setUsage(35048); // DynamicDrawUsage
+		this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
 		this.#kind = new Uint8Array(capacity);
 		this.#shown = new Uint8Array(capacity);
 		this.#data = new Float32Array(capacity * 4);
@@ -319,7 +320,8 @@ export interface ShadowRigOptions {
 export class ShadowRig {
 	readonly sun: DirectionalLight;
 	readonly blobs: BlobShadows;
-	readonly object: Object3D;
+	/** Add to the scene: holds the sun, its target and the blob mesh. */
+	readonly object: Group;
 	/** Shadow map renders requested so far (for tests and the debug overlay). */
 	renders = 0;
 	readonly #renderer: ShadowRenderer;
@@ -346,10 +348,9 @@ export class ShadowRig {
 		this.sun = options.sun ?? new DirectionalLight();
 		this.sun.name = this.sun.name || 'sun';
 		this.blobs = new BlobShadows(options.blobs ?? 48, this.#variant);
-		const group = this.sun.parent ?? null;
-		this.object = group ?? this.sun;
-		if (!group) this.sun.add(this.blobs.mesh);
-		this.object = this.#makeRoot();
+		this.object = new Group();
+		this.object.name = 'shadow-rig';
+		this.object.add(this.sun, this.sun.target, this.blobs.mesh);
 		this.setVariant(this.#variant);
 		this.setTier('low');
 	}
@@ -504,17 +505,6 @@ export class ShadowRig {
 		this.#receivers.clear();
 	}
 
-	#makeRoot(): Object3D {
-		const root = this.sun.parent && this.sun.parent !== this.object ? this.sun.parent : null;
-		if (root) {
-			root.add(this.sun.target, this.blobs.mesh);
-			return root;
-		}
-		const group = new DirectionalLightRoot();
-		group.add(this.sun, this.sun.target, this.blobs.mesh);
-		return group;
-	}
-
 	#setDirection(elevationDeg: number, azimuthDeg: number): void {
 		const d = sunDirection(elevationDeg, azimuthDeg, this.#direction);
 		// Light-space basis for texel snapping: right ⟂ up ⟂ direction.
@@ -540,11 +530,4 @@ export class ShadowRig {
 			if ((child as Object3D & { isMesh?: boolean }).isMesh) child.receiveShadow = receive;
 		});
 	}
-}
-
-/** The rig's scene node: holds the sun, its target and the blob mesh. */
-class DirectionalLightRoot extends HemisphereLightFreeGroup() {}
-
-function HemisphereLightFreeGroup() {
-	return class extends (Object.getPrototypeOf(DirectionalLight) as typeof Object3D) {};
 }
