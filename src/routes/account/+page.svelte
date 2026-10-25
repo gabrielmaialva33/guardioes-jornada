@@ -169,6 +169,11 @@
 				/>
 			</div>
 			<p class="hint">Enviamos um código de 6 dígitos. Não precisa de senha.</p>
+			<!-- Cloud backup is meant for adults (LGPD art. 14; Lei 15.211/2025 art. 7). -->
+			<p class="hint">
+				O backup é para um adulto: guia, professor ou responsável. Se você tem menos de 18 anos, peça a um
+				adulto para entrar.
+			</p>
 			{#if error}<p class="error" role="alert">{error}</p>{/if}
 			<button class="button wide" type="submit" disabled={busy || !pwa.online}>
 				{busy ? 'Enviando…' : 'Receber código'}
