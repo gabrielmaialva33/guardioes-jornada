@@ -147,7 +147,7 @@ export function readCharacter(input: AvatarInput, character: CharacterLike, dt: 
 	input.speed = character.planarSpeed;
 	input.grounded = character.grounded;
 	input.verticalSpeed = character.velocity.y;
-	input.airTime = character.grounded ? 0 : input.airTime + (dt > 0 ? dt : 0);
+	input.airTime = character.grounded ? 0 : input.airTime + Math.max(0, finite(dt));
 	input.jumped = character.events.jumped;
 	input.yaw = character.yaw;
 	input.x = character.position.x;
@@ -198,6 +198,8 @@ export class AvatarAnimator {
 	footstep: Foot | null = null;
 	climbPhase = 0;
 	swimPhase = 0;
+	/** Torso pitch the breathing layer added in the last update, radians. */
+	breathing = 0;
 	readonly lean = new Spring(LAYERS.leanOmega);
 	readonly bank = new Spring(LAYERS.bankOmega);
 	/** Squash (< 0) or stretch (> 0) of the root's height. */
@@ -245,7 +247,7 @@ export class AvatarAnimator {
 	reset() {
 		this.states.reset();
 		this.pose.reset();
-		this.phase = this.cadence = this.playbackRate = this.climbPhase = this.swimPhase = 0;
+		this.phase = this.cadence = this.playbackRate = this.climbPhase = this.swimPhase = this.breathing = 0;
 		this.footstep = null;
 		this.lean.reset();
 		this.bank.reset();
@@ -363,7 +365,8 @@ export class AvatarAnimator {
 		// Breathing, while idle or seated.
 		this.#breath = (this.#breath + dt / LAYERS.breathPeriod) % 1;
 		const breathe = reduced ? 0 : (weights[IDLE] + weights[SITTING]) * Math.sin(this.#breath * TAU);
-		out[TORSO] -= breathe * LAYERS.breathPitch;
+		this.breathing = -breathe * LAYERS.breathPitch;
+		out[TORSO] += this.breathing;
 		out[TORSO + 4] += breathe * LAYERS.breathLift;
 		out[ARM_L + 2] += breathe * LAYERS.breathArms;
 		out[ARM_R + 2] -= breathe * LAYERS.breathArms;
@@ -379,7 +382,7 @@ export class AvatarAnimator {
 			const toTarget = wrapAngle(Math.atan2(dx, dz) - yaw);
 			const yawLimit = reduced ? LAYERS.lookYaw / 2 : LAYERS.lookYaw;
 			const pitchLimit = reduced ? LAYERS.lookPitch / 2 : LAYERS.lookPitch;
-			if (Number.isFinite(toTarget) && Math.abs(toTarget) <= yawLimit + LAYERS.lookBehind) {
+			if (Number.isFinite(toTarget) && Math.abs(toTarget) <= LAYERS.lookYaw + LAYERS.lookBehind) {
 				yawGoal = clamp(toTarget, -yawLimit, yawLimit);
 				pitchGoal = clamp(finite(Math.atan2(dy, Math.hypot(dx, dz))), -pitchLimit, pitchLimit);
 			}
