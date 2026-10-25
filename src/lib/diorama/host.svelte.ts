@@ -34,6 +34,8 @@ export const host = new DioramaHost();
 let decided = false;
 let nextId = 1;
 let engine: Promise<Engine> | null = null;
+let gameFinished: Promise<void> = Promise.resolve();
+let releaseGame: (() => void) | undefined;
 let disposeTimer: ReturnType<typeof setTimeout> | undefined;
 /** Recent context losses; two within a few minutes means memory pressure. */
 let losses: number[] = [];
@@ -77,9 +79,11 @@ export function getEngine(): Promise<Engine> {
 	if (!engine) {
 		const quality = host.tier === 'full' ? 'full' : 'lite';
 		const created = whenVisible().then(async () => {
+			await gameFinished;
 			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
 			const m = await import('./scene/createDiorama.ts');
 			await whenVisible();
+			await gameFinished;
 			if (engine !== created || host.owners.length === 0) throw new Error('The scene is no longer visible');
 			return m.createEngine({ tier: quality, onFail: fail });
 		});
@@ -92,6 +96,28 @@ export function getEngine(): Promise<Engine> {
 		});
 	}
 	return engine;
+}
+
+/** Hand the GPU to an independent renderer, including any in-flight diorama build. */
+export async function acquireGameGpu(): Promise<() => void> {
+	if (releaseGame) throw new Error('game-gpu-in-use');
+	gameFinished = new Promise((resolve) => {
+		releaseGame = resolve;
+	});
+	clearTimeout(disposeTimer);
+	const previous = engine;
+	engine = null;
+	await previous?.then(
+		(value) => value.dispose(),
+		() => {}
+	);
+	let released = false;
+	return () => {
+		if (released) return;
+		released = true;
+		releaseGame?.();
+		releaseGame = undefined;
+	};
 }
 
 function drop() {
