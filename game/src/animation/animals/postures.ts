@@ -104,7 +104,8 @@ const QUAD_STAND = (tail: number): PostureDef<QuadrupedSlot> => ({ key: { tail: 
 const PRIMATE_SIT: PostureDef<QuadrupedSlot> = {
 	key: {
 		body: { r: [-30, 0, 0], p: [0, 0.02, -0.06] },
-		tail: { r: [-125, 0, 0] },
+		// Trails back along the support (a hanging tail would cross the ground).
+		tail: { r: [-75, 0, 0] },
 		...legs({ r: [-40, 0, 0], p: [0, 0.22, 0.12] }, { r: [-80, 0, 0], p: [0, -0.08, 0.08] })
 	}
 };
@@ -122,7 +123,7 @@ const PRIMATE_LIE: PostureDef<QuadrupedSlot> = {
 const CAT_SIT: PostureDef<QuadrupedSlot> = {
 	key: {
 		body: { r: [-20, 0, 0], p: [0, -0.05, 0] },
-		tail: { r: [-120, 0, 0] },
+		tail: { r: [-92, 0, 0] },
 		...legs({ r: [4, 0, 0] }, { r: [-75, 0, 0], p: [0, -0.1, 0.05] })
 	}
 };
@@ -142,7 +143,7 @@ const CAT_LIE: PostureDef<QuadrupedSlot> = {
  */
 const HOWL: PostureDef<QuadrupedSlot> = {
 	key: {
-		body: { r: [-32, 0, 0], p: [0, 0.04, -0.06] },
+		body: { r: [-24, 0, 0], p: [0, 0.03, -0.05] },
 		tail: { r: [-150, 0, 0] },
 		...legs({ r: [-20, 0, 0], p: [0, 0.12, 0.06] }, { r: [-30, 0, 0], p: [0, -0.04, 0.04] })
 	}
@@ -151,9 +152,10 @@ const HOWL: PostureDef<QuadrupedSlot> = {
 /** Hanging from the hand (muriqui). The animator rewrites root, arms and pivot every update. */
 const HANG_ARM: PostureDef<QuadrupedSlot> = {
 	key: {
-		root: { r: [-90, 0, 0] },
-		tail: { r: [-60, 0, 0] },
-		...legs({ r: [-90, 0, 0] }, { r: [80, 0, 6] })
+		root: { r: [-36, 0, 0] },
+		tail: { r: [-130, 0, 0] },
+		// Hind legs get their dangle from the animator; here only a slight spread.
+		...legs({ r: [-90, 0, 0] }, { r: [0, 0, 6] })
 	}
 };
 

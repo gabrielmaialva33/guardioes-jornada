@@ -38,6 +38,8 @@ import {
 	HEAD,
 	isBird,
 	JOINT_COUNT,
+	LIMB_BL,
+	LIMB_BR,
 	LIMB_FL,
 	LIMB_FR,
 	MODELS,
@@ -87,8 +89,16 @@ export const ANIMAL_LAYERS = {
 	crouchPitch: 6 * DEG,
 	/** The released hand of a brachiator returns to rest over this long, seconds. */
 	releaseTime: 0.3,
-	/** Relaxed angle of a free brachiating arm, radians (down along the body, a little forward). */
-	freeArmRest: 60 * DEG,
+	/**
+	 * How upright a brachiator hangs: 1 would be vertical, but the Cube Pets head is
+	 * part of the body block, so a vertical trunk would point the face at the sky.
+	 * At 0.4 the trunk is pitched 36° and the face looks ahead to the next hold.
+	 */
+	hangUpright: 0.4,
+	/** A free arm at rest, radians from straight down (a little forward). */
+	freeArmRest: -15 * DEG,
+	/** Share of the swing the dangling legs lag behind. */
+	legTrail: 0.4,
 	/** Limb unhook while a sloth limb moves: offset toward the body (model units) and sideways roll. */
 	limbLift: 0.08,
 	limbLiftRoll: 15 * DEG
@@ -530,11 +540,13 @@ export class AnimalAnimator {
 
 	/**
 	 * The brachiation key, rebuilt from the pendulum each update (muriqui). In the
-	 * swing plane (model y-z): the shoulder hangs `arm` from the gripping hand at
-	 * angle θ; the trunk is pitched upright and tilted by φ; the gripping arm
-	 * points from the shoulder back to the hand: β = −π/2 + φ − θ; the free arm
-	 * reaches for the next handhold. The pivot is the gripping hand's tip, so the
-	 * root offset puts that hand exactly on the anchor.
+	 * swing plane (model y-z): the shoulder hangs `arm` below the gripping hand at
+	 * angle θ; the trunk is pitched up by α = −hangUpright·π/2 − φ (φ: how far it
+	 * follows the swing); the gripping arm points from the shoulder back to the
+	 * hand, β = π − α − θ; the free arm and the legs dangle toward the ground
+	 * (β = −α), and the free arm reaches for the next handhold near the apex. The
+	 * pivot is the gripping hand's tip, so the root offset puts that hand exactly
+	 * on the anchor.
 	 */
 	#brachiate(motion: AnimalMotion, base: Float64Array) {
 		const key = this.#dynamic;
@@ -545,8 +557,8 @@ export class AnimalAnimator {
 		const theta = Number.isFinite(motion.swing) ? motion.swing : 0;
 		const tilt = Number.isFinite(motion.tilt) ? motion.tilt : 0;
 		const side = motion.grip < 0 ? -1 : 1;
-		const alpha = -Math.PI / 2 - tilt;
-		const gripAngle = -Math.PI / 2 + tilt - theta;
+		const alpha = (-ANIMAL_LAYERS.hangUpright * Math.PI) / 2 - tilt;
+		const gripAngle = wrapAngle(Math.PI - alpha - theta);
 		if (side !== this.#gripSide) {
 			// Hand switch: the old gripping arm lets go and eases back to rest.
 			this.#releaseFrom = this.#gripAngle;
@@ -566,7 +578,7 @@ export class AnimalAnimator {
 		const my = dUp * ca + dForward * sa;
 		const mz = -dUp * sa + dForward * ca;
 		const reachAngle = Math.atan2(-mz, -my);
-		const rest = ANIMAL_LAYERS.freeArmRest;
+		const rest = ANIMAL_LAYERS.freeArmRest - alpha;
 		let free = rest + wrapAngle(reachAngle - rest) * clamp01(motion.reach);
 		if (this.#releaseElapsed < ANIMAL_LAYERS.releaseTime) {
 			const s = smoothstep(this.#releaseElapsed / ANIMAL_LAYERS.releaseTime);
@@ -578,6 +590,10 @@ export class AnimalAnimator {
 		key[R] = alpha;
 		key[gripSlot * JOINT_STRIDE] = gripAngle;
 		key[freeSlot * JOINT_STRIDE] = free;
+		// Legs dangle toward the ground, trailing the swing a little.
+		const dangle = -alpha + ANIMAL_LAYERS.legTrail * (tilt - theta);
+		key[LIMB_BL * JOINT_STRIDE] += dangle;
+		key[LIMB_BR * JOINT_STRIDE] += dangle;
 
 		const pivot = this.#dynamicPivot;
 		pivot[0] = (side * model.hipX) / height;
