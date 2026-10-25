@@ -28,7 +28,9 @@ const client = {
 };
 beforeEach(() => {
 	fake.cachedUser = { id: '11111111-1111-4111-8111-111111111111' };
-	fake.clear.mockReset().mockImplementation(() => { fake.cachedUser = null; });
+	fake.clear.mockReset().mockImplementation(() => {
+		fake.cachedUser = null;
+	});
 	fake.load.mockReset().mockResolvedValue(client);
 	fake.getSession
 		.mockReset()
@@ -84,14 +86,23 @@ it('keeps the cached owner visible offline without needing the SDK chunk', async
 	expect(auth.ready).toBe(true);
 	expect(fake.load).not.toHaveBeenCalled();
 	await auth.signOut();
-	expect(auth.user).toBeNull(); expect(fake.cachedUser).toBeNull(); expect(fake.load).not.toHaveBeenCalled();
+	expect(auth.user).toBeNull();
+	expect(fake.cachedUser).toBeNull();
+	expect(fake.load).not.toHaveBeenCalled();
 });
 it('retains the cached owner for transient refresh failures but accepts an invalidated session', async () => {
 	const { GuideAuth } = await import('./auth.svelte.ts');
 	fake.getSession.mockResolvedValue({ data: { session: null }, error: { name: 'AuthRetryableFetchError' } });
-	const temporary = new GuideAuth(); await temporary.init(); expect(temporary.user?.id).toBe(fake.cachedUser?.id);
-	fake.getSession.mockResolvedValue({ data: { session: null }, error: { name: 'AuthApiError', status: 401 } });
-	const revoked = new GuideAuth(); await revoked.init(); expect(revoked.user).toBeNull();
+	const temporary = new GuideAuth();
+	await temporary.init();
+	expect(temporary.user?.id).toBe(fake.cachedUser?.id);
+	fake.getSession.mockResolvedValue({
+		data: { session: null },
+		error: { name: 'AuthApiError', status: 401 }
+	});
+	const revoked = new GuideAuth();
+	await revoked.init();
+	expect(revoked.user).toBeNull();
 });
 it('preserves local owner access when an online SDK chunk fails to load', async () => {
 	fake.load.mockRejectedValue(new Error('Chunk unavailable'));

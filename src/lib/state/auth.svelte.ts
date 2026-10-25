@@ -1,5 +1,11 @@
 import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js';
-import { AUTH_STORAGE_KEY, clearStoredAuth, cloudAvailable, getSupabase, readStoredUser } from '#lib/supabase/client.ts';
+import {
+	AUTH_STORAGE_KEY,
+	clearStoredAuth,
+	cloudAvailable,
+	getSupabase,
+	readStoredUser
+} from '#lib/supabase/client.ts';
 import type { Database } from '#lib/supabase/database.types.ts';
 import { sessions } from './sessions.svelte.ts';
 

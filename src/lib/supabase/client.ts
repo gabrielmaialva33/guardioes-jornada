@@ -63,5 +63,7 @@ export function clearStoredAuth(): void {
 		if (typeof window === 'undefined') return;
 		for (const key of [AUTH_STORAGE_KEY, `${AUTH_STORAGE_KEY}-code-verifier`, `${AUTH_STORAGE_KEY}-user`])
 			window.localStorage.removeItem(key);
-	} catch { /* Restricted storage must not crash the local app. */ }
+	} catch {
+		/* Restricted storage must not crash the local app. */
+	}
 }
