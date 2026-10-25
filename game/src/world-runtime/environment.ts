@@ -67,6 +67,11 @@ export function createMapEnvironment(
 	const mirante = level?.mirante ?? world.pois.find((p) => p.kind === 'lookout') ?? start.spawn;
 	const debugPoses: Record<string, typeof checkpoint> = {
 		spawn: start,
+		edge: {
+			...start,
+			spawn: { x: 2, y: world.heights[Math.floor(world.size / 2) * world.grid + 2], z: world.size / 2 },
+			yaw: -Math.PI / 2
+		},
 		stones: { ...start, spawn: point, yaw: Math.atan2(next.x - point.x, next.z - point.z) },
 		mirante: { ...start, spawn: mirante, yaw: -Math.PI / 2 },
 		bridge: {

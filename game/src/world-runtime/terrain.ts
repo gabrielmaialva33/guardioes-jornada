@@ -32,6 +32,48 @@ export function terrainColor(
 	if (zone === ZONE.highland) return RAMPS.rock[2];
 	return RAMPS.grass[2];
 }
+const palette = new Map<string, Color>();
+function cachedColor(hex: string): Color {
+	let value = palette.get(hex);
+	if (!value) {
+		value = new Color(hex);
+		palette.set(hex, value);
+	}
+	return value;
+}
+/** Bank-only colour blending; heights/physics and authored cliffs remain unchanged. */
+function vertexColor(
+	world: SurvivalWorld,
+	x: number,
+	z: number,
+	colorAt: (x: number, z: number) => Color,
+	out: Color
+): Color {
+	const index = z * world.grid + x;
+	const base = colorAt(x, z);
+	// Keep trail and camp footprints readable; blend the wet soil/vegetation seam only.
+	if (base === cachedColor(RAMPS.soil[2]) || world.flags[index] & FLAG.base) return out.copy(base);
+	let wet = false,
+		dry = false,
+		total = 0;
+	out.setRGB(0, 0, 0);
+	for (let dz = -1; dz <= 1; dz++)
+		for (let dx = -1; dx <= 1; dx++) {
+			const px = Math.min(world.size, Math.max(0, x + dx)),
+				pz = Math.min(world.size, Math.max(0, z + dz)),
+				i = pz * world.grid + px;
+			if (Math.abs(world.heights[i] - world.heights[index]) > 1.2) continue;
+			if (world.flags[i] & FLAG.river) wet = true;
+			else dry = true;
+			const weight = (dx === 0 ? 2 : 1) * (dz === 0 ? 2 : 1);
+			const c = colorAt(px, pz);
+			out.r += c.r * weight;
+			out.g += c.g * weight;
+			out.b += c.b * weight;
+			total += weight;
+		}
+	return wet && dry ? out.multiplyScalar(1 / total) : out.copy(base);
+}
 /** Six independent vertices per cell: flat normals and no seams at chunk boundaries. */
 export function terrainChunk(
 	world: SurvivalWorld,
@@ -41,9 +83,26 @@ export function terrainChunk(
 	const positions: number[] = [],
 		colors: number[] = [];
 	const color = new Color();
+	const rawColors = new Map<number, Color>();
+	const colorAt = (x: number, z: number) => {
+		const index = z * world.grid + x;
+		let value = rawColors.get(index);
+		if (!value) {
+			value = cachedColor(terrainColor(world, x, z, trails));
+			rawColors.set(index, value);
+		}
+		return value;
+	};
+	const side = BLOCK_SIZE + 1,
+		vertexColors = new Float32Array(side * side * 3);
+	for (let z = 0; z < side; z++)
+		for (let x = 0; x < side; x++) {
+			vertexColor(world, block.x0 + x, block.z0 + z, colorAt, color);
+			color.toArray(vertexColors, (z * side + x) * 3);
+		}
+
 	for (let z = block.z0; z < Math.min(block.z0 + BLOCK_SIZE, world.size); z++)
 		for (let x = block.x0; x < Math.min(block.x0 + BLOCK_SIZE, world.size); x++) {
-			color.set(terrainColor(world, x, z, trails));
 			for (const [px, pz] of [
 				[x, z],
 				[x, z + 1],
@@ -53,7 +112,8 @@ export function terrainChunk(
 				[x + 1, z + 1]
 			]) {
 				positions.push(px, world.heights[pz * world.grid + px], pz);
-				colors.push(color.r, color.g, color.b);
+				const i = ((pz - block.z0) * side + px - block.x0) * 3;
+				colors.push(vertexColors[i], vertexColors[i + 1], vertexColors[i + 2]);
 			}
 		}
 	const g = new BufferGeometry();

@@ -32,7 +32,7 @@ try {
 		if (message.type() === 'error') errors.push(message.text());
 	});
 	const origin = process.env.GAME_MEASURE_URL ?? 'http://localhost:5196/';
-	for (const pose of ['spawn', 'stones', 'mirante', 'bridge']) {
+	for (const pose of ['spawn', 'stones', 'mirante', 'bridge', 'edge']) {
 		const url = new URL(origin);
 		url.searchParams.set('debug', '');
 		url.searchParams.set('pose', pose);

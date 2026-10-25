@@ -2,12 +2,11 @@ import {
 	BoxGeometry,
 	BufferGeometry,
 	CylinderGeometry,
-	DoubleSide,
 	Float32BufferAttribute,
 	Group,
 	Matrix4,
 	Mesh,
-	MeshLambertMaterial,
+	type MeshLambertMaterial,
 	RingGeometry,
 	Shape,
 	ShapeGeometry
@@ -16,9 +15,11 @@ import type { Checkpoint } from '../engine/checkpoints.ts';
 import type { StoryLevel } from '../level/types.ts';
 import { mergePieces } from '../render/index.ts';
 import { ensureVertexColors } from '../scene/materials.ts';
-import { ACCENT, RAMPS } from '../style/palette.ts';
+
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
+import { boundaryTerrain } from './boundary.ts';
 import { deckGeometry, prefabProxies, propGeometry } from './collision.ts';
+import { createMapMaterials } from './materials.ts';
 import { terrainChunk } from './terrain.ts';
 
 export function createMapVisual(
@@ -27,18 +28,9 @@ export function createMapVisual(
 	pads: readonly Checkpoint[] = level ? [level.start, ...level.checkpoints] : []
 ) {
 	const object = new Group();
-	const ownedGeometries: BufferGeometry[] = [],
-		materials: MeshLambertMaterial[] = [];
-	const material = (color: string, vertexColors = true) => {
-		const m = new MeshLambertMaterial({ color, vertexColors, flatShading: true });
-		materials.push(m);
-		return m;
-	};
-	const groundMaterial = material('#ffffff'),
-		rock = material(RAMPS.rock[2]),
-		wood = material(RAMPS.wood[2]),
-		gray = material(RAMPS.rock[1]),
-		gold = material(ACCENT.gold);
+	const ownedGeometries: BufferGeometry[] = [];
+	const materials = createMapMaterials();
+	const { ground: groundMaterial, rock, wood, proxy: gray, checkpoint: gold } = materials;
 	const add = (geometry: BufferGeometry, m: MeshLambertMaterial) => {
 		ensureVertexColors(geometry);
 		ownedGeometries.push(geometry);
@@ -49,6 +41,10 @@ export function createMapVisual(
 	for (const b of world.blocks) {
 		const mesh = add(terrainChunk(world, b, level?.trails), groundMaterial);
 		mesh.name = `terrain-${b.index}`;
+	}
+	for (const geometry of boundaryTerrain(world)) {
+		const mesh = add(geometry, groundMaterial);
+		mesh.name = 'terrain-exterior';
 	}
 	// Join the ribbon at shared control-point cross sections, with no independently overlapping segments.
 	const p: number[] = [],
@@ -69,8 +65,7 @@ export function createMapVisual(
 	water.setAttribute('position', new Float32BufferAttribute(p, 3));
 	water.setIndex(indices);
 	water.computeVertexNormals();
-	const waterMaterial = material(RAMPS.water[1]);
-	waterMaterial.side = DoubleSide;
+	const waterMaterial = materials.water;
 	add(water, waterMaterial);
 	if (level?.pool) {
 		const pool = level.pool;
@@ -156,9 +151,7 @@ export function createMapVisual(
 	shape.lineTo(0.26, 0.3);
 	shape.lineTo(0.7, 0.3);
 	shape.closePath();
-	const arrowMaterial = material(ACCENT.gold);
-	arrowMaterial.depthTest = false;
-	arrowMaterial.depthWrite = false;
+	const arrowMaterial = materials.arrow;
 	const arrow = add(new ShapeGeometry(shape).rotateX(-Math.PI / 2), arrowMaterial);
 	arrow.renderOrder = 2;
 	return {
@@ -170,7 +163,7 @@ export function createMapVisual(
 		},
 		dispose() {
 			for (const g of ownedGeometries) g.dispose();
-			for (const m of materials) m.dispose();
+			materials.dispose();
 			object.removeFromParent();
 			object.clear();
 		}
