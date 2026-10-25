@@ -1,5 +1,5 @@
-import { type CloudAdapter, createCloudAdapter } from '#lib/supabase/adapter.ts';
-import { supabase } from '#lib/supabase/client.ts';
+import { type CloudAdapter, createLazyCloudAdapter } from '#lib/supabase/adapter.ts';
+import { cloudAvailable } from '#lib/supabase/client.ts';
 import { auth } from './auth.svelte.ts';
 import { type Sessions, sessions } from './sessions.svelte.ts';
 
@@ -39,7 +39,7 @@ export class CloudSync {
 	constructor(options: Options = {}) {
 		this.#store = options.store ?? sessions;
 		this.#client =
-			options.client === undefined ? (supabase ? createCloudAdapter(supabase) : null) : options.client;
+			options.client === undefined ? (cloudAvailable ? createLazyCloudAdapter() : null) : options.client;
 		this.#identity = options.identity ?? auth;
 		this.#online = options.online ?? (() => typeof navigator === 'undefined' || navigator.onLine);
 		this.#timeout = options.timeoutMs ?? 15000;

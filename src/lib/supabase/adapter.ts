@@ -4,6 +4,7 @@ import type { Session } from '#lib/session.ts';
 import { standings } from '#lib/session.ts';
 import type { RemoteSession } from '#lib/state/sessions.svelte.ts';
 import type { Database, JourneyMutationReply, Json } from './database.types.ts';
+import { getSupabase } from './client.ts';
 
 export interface PushReply extends Omit<JourneyMutationReply, 'server_doc'> {
 	server_doc: RemoteSession | null;
@@ -71,5 +72,19 @@ export function createCloudAdapter(client: SupabaseClient<Database>): CloudAdapt
 			if (error) throw error;
 			return v.parse(v.array(remoteSchema), data);
 		}
+	};
+}
+
+/** Constructing the queue transport does not download or initialize the SDK. */
+export function createLazyCloudAdapter(): CloudAdapter {
+	async function adapter() {
+		const client = await getSupabase();
+		if (!client) throw new Error('Cloud unavailable');
+		return createCloudAdapter(client);
+	}
+	return {
+		push: async (...args) => (await adapter()).push(...args),
+		delete: async (...args) => (await adapter()).delete(...args),
+		pull: async (...args) => (await adapter()).pull(...args)
 	};
 }

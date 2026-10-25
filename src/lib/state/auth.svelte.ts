@@ -1,5 +1,6 @@
-import type { AuthError, User } from '@supabase/supabase-js';
-import { supabase } from '#lib/supabase/client.ts';
+import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js';
+import { AUTH_STORAGE_KEY, cloudAvailable, getSupabase, readStoredUser } from '#lib/supabase/client.ts';
+import type { Database } from '#lib/supabase/database.types.ts';
 import { sessions } from './sessions.svelte.ts';
 
 /**
@@ -11,10 +12,11 @@ class GuideAuth {
 	user = $state<User | null>(null);
 	ready = $state(false);
 	generation = $state(0);
-	readonly available = supabase !== null;
+	readonly available = cloudAvailable;
 	#listeners = new Set<() => void>();
 	#initializing: Promise<void> | null = null;
 	#signingOut: Promise<void> | null = null;
+	#connection: Promise<SupabaseClient<Database> | null> | null = null;
 	onChange(listener: () => void) {
 		this.#listeners.add(listener);
 		return () => {
@@ -36,32 +38,54 @@ class GuideAuth {
 		return this.#initializing;
 	}
 	async #init() {
-		if (!supabase) {
-			this.#apply(null);
-			this.ready = true;
-			return;
+		this.#apply(this.available ? readStoredUser() : null);
+		if (typeof window !== 'undefined') {
+			window.addEventListener('storage', (event) => {
+				if (event.key !== AUTH_STORAGE_KEY && event.key !== null) return;
+				this.#apply(this.available ? readStoredUser() : null);
+				if (this.user && navigator.onLine) void this.#restore();
+			});
+			window.addEventListener('online', () => { if (this.user) void this.#restore(); });
 		}
-		// getSession reads local storage, so the guide stays signed in offline.
-		// Keep this callback synchronous: awaiting other Supabase calls here can deadlock.
-		supabase.auth.onAuthStateChange((_event, session) => {
-			if (this.#signingOut && session?.user) return;
-			this.#apply(session?.user ?? null);
-		});
+		try {
+			if (this.user && (typeof navigator === 'undefined' || navigator.onLine !== false)) await this.#restore();
+		} finally { this.ready = true; }
+	}
+	#connect(): Promise<SupabaseClient<Database> | null> {
+		if (!this.#connection) {
+			const generation = this.generation;
+			this.#connection = getSupabase().then((client) => {
+				// Keep callbacks synchronous: awaited SDK calls here can deadlock.
+				client?.auth.onAuthStateChange((event, session) => {
+					if (this.#signingOut && session?.user) return;
+					if (event === 'INITIAL_SESSION' && generation !== this.generation) return;
+					this.#apply(session?.user ?? null);
+				});
+				return client;
+			}).catch((error) => { this.#connection = null; throw error; });
+		}
+		return this.#connection;
+	}
+	async #restore() {
 		const generation = this.generation;
 		try {
-			const { data, error } = await supabase.auth.getSession();
+			const client = await this.#connect();
+			if (!client || generation !== this.generation) return;
+			const { data, error } = await client.auth.getSession();
 			if (generation === this.generation) this.#apply(error ? null : (data.session?.user ?? null));
 		} catch {
-			if (generation === this.generation) this.#apply(null);
-		} finally {
-			this.ready = true;
+			// A new SDK chunk may be unavailable after an offline update. Keep the
+			// cached owner visible; the queue cannot send without a real SDK session.
+			if (generation === this.generation) this.#apply(readStoredUser());
 		}
 	}
 
 	async sendCode(email: string) {
-		if (!supabase) throw new Error('cloud-unavailable');
+		if (!this.available) throw new Error('cloud-unavailable');
 		await this.#signingOut;
-		const { error } = await supabase.auth.signInWithOtp({
+		const client = await this.#connect();
+		if (!client) throw new Error('cloud-unavailable');
+		const { error } = await client.auth.signInWithOtp({
 			email: email.trim().toLowerCase(),
 			options: { shouldCreateUser: true }
 		});
@@ -69,9 +93,11 @@ class GuideAuth {
 	}
 
 	async verifyCode(email: string, code: string) {
-		if (!supabase) throw new Error('cloud-unavailable');
+		if (!this.available) throw new Error('cloud-unavailable');
 		await this.#signingOut;
-		const { error } = await supabase.auth.verifyOtp({
+		const client = await this.#connect();
+		if (!client) throw new Error('cloud-unavailable');
+		const { error } = await client.auth.verifyOtp({
 			email: email.trim().toLowerCase(),
 			token: code.replace(/\D/g, ''),
 			type: 'email'
@@ -82,13 +108,15 @@ class GuideAuth {
 	signOut(): Promise<void> {
 		if (this.#signingOut) return this.#signingOut;
 		// Invalidate requests and hide this owner's records before any network await.
+		const needsClient = this.#connection !== null || readStoredUser() !== null;
 		this.#apply(null);
 		// Also invalidate initialization when the previous user was not known yet.
 		this.generation++;
 		// Local scope: sign out on this phone without touching the guide's other devices.
 		this.#signingOut = Promise.resolve()
 			.then(async () => {
-				const result = await supabase?.auth.signOut({ scope: 'local' });
+				const client = needsClient ? await this.#connect() : null;
+				const result = await client?.auth.signOut({ scope: 'local' });
 				if (result?.error) throw result.error;
 			})
 			.finally(() => {
