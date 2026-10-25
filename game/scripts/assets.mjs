@@ -741,6 +741,288 @@ function encodePng(width, height, rgba) {
  *   crown, back, and tail of Ramphastos dicolorus render glossy black while the front breast is yellow/red
  *   and the beak cells (7,3)/(6,3) are pale green.
  */
+function splitPetHeadFromBody(petName, json, bin) {
+	const bodyNode = (json.nodes || []).find((n) => n.name === 'body' && n.mesh !== undefined);
+	if (!bodyNode) return bin;
+	const bodyMesh = json.meshes[bodyNode.mesh];
+	const prim = bodyMesh?.primitives?.[0];
+	if (!prim) return bin;
+
+	const posAcc = json.accessors[prim.attributes.POSITION];
+	const normAcc = json.accessors[prim.attributes.NORMAL];
+	const uvAcc = json.accessors[prim.attributes.TEXCOORD_0];
+	const idxAcc = json.accessors[prim.indices];
+
+	const posBv = json.bufferViews[posAcc.bufferView];
+	const normBv = json.bufferViews[normAcc.bufferView];
+	const uvBv = json.bufferViews[uvAcc.bufferView];
+	const idxBv = json.bufferViews[idxAcc.bufferView];
+
+	const posBase = (posBv.byteOffset || 0) + (posAcc.byteOffset || 0);
+	const posStride = posBv.byteStride || 12;
+	const normBase = (normBv.byteOffset || 0) + (normAcc.byteOffset || 0);
+	const normStride = normBv.byteStride || 12;
+	const uvBase = (uvBv.byteOffset || 0) + (uvAcc.byteOffset || 0);
+	const uvStride = uvBv.byteStride || 8;
+	const idxBase = (idxBv.byteOffset || 0) + (idxAcc.byteOffset || 0);
+	const idxBytes = idxAcc.componentType === 5121 ? 1 : idxAcc.componentType === 5123 ? 2 : 4;
+
+	const readIdx = (i) =>
+		idxBytes === 1
+			? bin.readUInt8(idxBase + i)
+			: idxBytes === 2
+				? bin.readUInt16LE(idxBase + i * 2)
+				: bin.readUInt32LE(idxBase + i * 4);
+	const readPos = (vi) => [
+		bin.readFloatLE(posBase + vi * posStride),
+		bin.readFloatLE(posBase + vi * posStride + 4),
+		bin.readFloatLE(posBase + vi * posStride + 8)
+	];
+	const readNorm = (vi) => [
+		bin.readFloatLE(normBase + vi * normStride),
+		bin.readFloatLE(normBase + vi * normStride + 4),
+		bin.readFloatLE(normBase + vi * normStride + 8)
+	];
+	const readUv = (vi) => [
+		bin.readFloatLE(uvBase + vi * uvStride),
+		bin.readFloatLE(uvBase + vi * uvStride + 4)
+	];
+
+	// Connected components of triangles (welding vertices with identical positions)
+	const parent = Array.from({ length: posAcc.count }, (_, i) => i);
+	const find = (x) => {
+		let cur = x;
+		while (parent[cur] !== cur) {
+			parent[cur] = parent[parent[cur]];
+			cur = parent[cur];
+		}
+		return cur;
+	};
+	const union = (a, b) => {
+		const ra = find(a);
+		const rb = find(b);
+		if (ra !== rb) parent[ra] = rb;
+	};
+	const posKeyMap = new Map();
+	for (let i = 0; i < posAcc.count; i++) {
+		const key = readPos(i)
+			.map((v) => v.toFixed(4))
+			.join(',');
+		if (posKeyMap.has(key)) union(i, posKeyMap.get(key));
+		else posKeyMap.set(key, i);
+	}
+	for (let t = 0; t < idxAcc.count; t += 3) {
+		union(readIdx(t), readIdx(t + 1));
+		union(readIdx(t + 1), readIdx(t + 2));
+	}
+
+	let mainCubeRoot = -1;
+	for (let i = 0; i < posAcc.count; i++) {
+		if (readPos(i)[2] <= -0.62) {
+			mainCubeRoot = find(i);
+			break;
+		}
+	}
+
+	// Neck pivot in body-local space at the center of the z = 0.3125 neck ring
+	const neckPivot = [0, 0.625, 0.3125];
+	const bodyTris = [];
+	const headTris = [];
+
+	for (let t = 0; t < idxAcc.count; t += 3) {
+		const i0 = readIdx(t);
+		const i1 = readIdx(t + 1);
+		const i2 = readIdx(t + 2);
+		const p0 = readPos(i0);
+		const p1 = readPos(i1);
+		const p2 = readPos(i2);
+		const zMin = Math.min(p0[2], p1[2], p2[2]);
+		const isHead = find(i0) !== mainCubeRoot || zMin >= 0.312;
+		if (isHead) headTris.push([i0, i1, i2]);
+		else bodyTris.push([i0, i1, i2]);
+	}
+
+	// Coat UV cell for the 2-triangle internal neck cap on body (+Z) and head (-Z)
+	const coatCell =
+		petName === 'monkey'
+			? [2, 2]
+			: petName === 'tiger'
+				? [3, 3]
+				: petName === 'koala'
+					? [6, 3]
+					: [1, 3];
+	const capUv = [(coatCell[0] + 0.5) / 8, (coatCell[1] * 16 + 8) / 64];
+
+	function buildMeshBuffers(triList, shift, capNormalZ) {
+		const verts = [];
+		const norms = [];
+		const uvs = [];
+		const indices = [];
+		const remap = new Map();
+
+		for (const tri of triList) {
+			for (const vi of tri) {
+				let nvi = remap.get(vi);
+				if (nvi === undefined) {
+					nvi = verts.length;
+					remap.set(vi, nvi);
+					const p = readPos(vi);
+					verts.push([p[0] - shift[0], p[1] - shift[1], p[2] - shift[2]]);
+					norms.push(readNorm(vi));
+					uvs.push(readUv(vi));
+				}
+				indices.push(nvi);
+			}
+		}
+
+		// Add 2-triangle neck cap at z = 0.3125 so steep head yaw/pitch never exposes hollow interior
+		const capBase = verts.length;
+		const capCorners = [
+			[-0.48, 0.14, 0.3125],
+			[0.48, 0.14, 0.3125],
+			[0.48, 1.11, 0.3125],
+			[-0.48, 1.11, 0.3125]
+		];
+		for (const c of capCorners) {
+			verts.push([c[0] - shift[0], c[1] - shift[1], c[2] - shift[2]]);
+			norms.push([0, 0, capNormalZ]);
+			uvs.push(capUv);
+		}
+		if (capNormalZ > 0) {
+			indices.push(capBase, capBase + 1, capBase + 2, capBase, capBase + 2, capBase + 3);
+		} else {
+			indices.push(capBase, capBase + 2, capBase + 1, capBase, capBase + 3, capBase + 2);
+		}
+
+		const posBuf = Buffer.alloc(verts.length * 12);
+		const normBuf = Buffer.alloc(norms.length * 12);
+		const uvBuf = Buffer.alloc(uvs.length * 8);
+		const idxBuf = Buffer.alloc(indices.length * 2);
+
+		const minPos = [Infinity, Infinity, Infinity];
+		const maxPos = [-Infinity, -Infinity, -Infinity];
+		const minUv = [Infinity, Infinity];
+		const maxUv = [-Infinity, -Infinity];
+
+		for (let i = 0; i < verts.length; i++) {
+			const [x, y, z] = verts[i];
+			posBuf.writeFloatLE(x, i * 12);
+			posBuf.writeFloatLE(y, i * 12 + 4);
+			posBuf.writeFloatLE(z, i * 12 + 8);
+			if (x < minPos[0]) minPos[0] = x;
+			if (y < minPos[1]) minPos[1] = y;
+			if (z < minPos[2]) minPos[2] = z;
+			if (x > maxPos[0]) maxPos[0] = x;
+			if (y > maxPos[1]) maxPos[1] = y;
+			if (z > maxPos[2]) maxPos[2] = z;
+
+			const [nx, ny, nz] = norms[i];
+			normBuf.writeFloatLE(nx, i * 12);
+			normBuf.writeFloatLE(ny, i * 12 + 4);
+			normBuf.writeFloatLE(nz, i * 12 + 8);
+
+			const [u, v] = uvs[i];
+			uvBuf.writeFloatLE(u, i * 8);
+			uvBuf.writeFloatLE(v, i * 8 + 4);
+			if (u < minUv[0]) minUv[0] = u;
+			if (v < minUv[1]) minUv[1] = v;
+			if (u > maxUv[0]) maxUv[0] = u;
+			if (v > maxUv[1]) maxUv[1] = v;
+		}
+		for (let i = 0; i < indices.length; i++) {
+			idxBuf.writeUInt16LE(indices[i], i * 2);
+		}
+
+		return {
+			posBuf,
+			normBuf,
+			uvBuf,
+			idxBuf,
+			vCount: verts.length,
+			iCount: indices.length,
+			minPos,
+			maxPos,
+			minUv,
+			maxUv
+		};
+	}
+
+	let currentBin = bin;
+	function addPrimitiveAccessors(built) {
+		const posRes = appendBufferView(json, currentBin, built.posBuf, 34962);
+		currentBin = posRes.bin;
+		const normRes = appendBufferView(json, currentBin, built.normBuf, 34962);
+		currentBin = normRes.bin;
+		const uvRes = appendBufferView(json, currentBin, built.uvBuf, 34962);
+		currentBin = uvRes.bin;
+		const idxRes = appendBufferView(json, currentBin, built.idxBuf, 34963);
+		currentBin = idxRes.bin;
+
+		const pIdx = json.accessors.length;
+		json.accessors.push({
+			bufferView: posRes.viewIndex,
+			byteOffset: 0,
+			componentType: 5126,
+			count: built.vCount,
+			type: 'VEC3',
+			min: built.minPos,
+			max: built.maxPos
+		});
+		const nIdx = json.accessors.length;
+		json.accessors.push({
+			bufferView: normRes.viewIndex,
+			byteOffset: 0,
+			componentType: 5126,
+			count: built.vCount,
+			type: 'VEC3'
+		});
+		const uIdx = json.accessors.length;
+		json.accessors.push({
+			bufferView: uvRes.viewIndex,
+			byteOffset: 0,
+			componentType: 5126,
+			count: built.vCount,
+			type: 'VEC2',
+			min: built.minUv,
+			max: built.maxUv
+		});
+		const iIdx = json.accessors.length;
+		json.accessors.push({
+			bufferView: idxRes.viewIndex,
+			byteOffset: 0,
+			componentType: 5123,
+			count: built.iCount,
+			type: 'SCALAR'
+		});
+
+		return {
+			attributes: { POSITION: pIdx, NORMAL: nIdx, TEXCOORD_0: uIdx },
+			indices: iIdx,
+			material: prim.material
+		};
+	}
+
+	const bodyBuilt = buildMeshBuffers(bodyTris, [0, 0, 0], 1);
+	const headBuilt = buildMeshBuffers(headTris, neckPivot, -1);
+
+	bodyMesh.primitives = [addPrimitiveAccessors(bodyBuilt)];
+	const headMeshIdx = json.meshes.length;
+	json.meshes.push({
+		name: 'head',
+		primitives: [addPrimitiveAccessors(headBuilt)]
+	});
+	const headNodeIdx = json.nodes.length;
+	json.nodes.push({
+		name: 'head',
+		translation: neckPivot,
+		mesh: headMeshIdx
+	});
+	bodyNode.children = bodyNode.children || [];
+	bodyNode.children.push(headNodeIdx);
+
+	return currentBin;
+}
+
 function remapPetUvsForSpecies(petName, json, bin) {
 	if (petName !== 'tiger' && petName !== 'parrot') return;
 	for (const mesh of json.meshes || []) {
@@ -1339,7 +1621,8 @@ function main() {
 				json.animations = json.animations.filter((a) => PET_KEEP_ANIMS.has(a.name));
 			}
 			remapPetUvsForSpecies(pet, json, bin);
-			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [boundedPetsPalBytes] }, bin);
+			const splitBin = splitPetHeadFromBody(pet, json, bin);
+			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [boundedPetsPalBytes] }, splitBin);
 			const step1 = path.join(workDir, `${pet}-step1.glb`);
 			const step2 = path.join(workDir, `${pet}-step2.glb`);
 			writeGlb(step1, json, nextBin);
