@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GAME_ABI, type GameManifest } from '../../../game/protocol.ts';
-import { GamePacks } from './game-pack.ts';
+import { GamePacks, getGamePackInfo } from './game-pack.ts';
 import { gameCacheName, gameFileUrl, matchGamePack } from './game-pack-cache.ts';
 import { cachePrefix, obsoleteCaches } from './worker-cache.ts';
 
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
 const root = new URL('https://app.invalid/park/');
 function memoryCaches() {
 	const caches = new Map<string, Map<string, Response>>();
@@ -92,8 +96,7 @@ describe('optional independent packs', () => {
 				root,
 				storage,
 				fetch: vi.fn(
-					async () =>
-						new Response(failure === 'hash' ? 'bad' : 'C', { status: failure === 'http' ? 503 : 200 })
+					async () => new Response(failure === 'hash' ? 'X' : 'C', { status: failure === 'http' ? 503 : 200 })
 				)
 			});
 			await expect(manager.download(c, { signal: controller.signal })).rejects.toThrow();
@@ -114,5 +117,45 @@ describe('optional independent packs', () => {
 			fetch: vi.fn(async () => new Response('abc'))
 		});
 		await expect(broken.download(manifest)).rejects.toThrow();
+	});
+	it('exposes an estimated download size to the discovery sheet, and reads a complete pack without network', async () => {
+		const storage = memoryCaches(),
+			manifest = await pack('A');
+		manifest.files[0].gzipBytes = 1025;
+		vi.stubGlobal('caches', storage);
+		const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(manifest));
+		expect(await getGamePackInfo(root)).toEqual({
+			complete: false,
+			packId: manifest.packId,
+			missingBytes: 1025,
+			sizeKB: 2
+		});
+		await new GamePacks({ root, storage, fetch: vi.fn(async () => new Response('A')) }).download(manifest);
+		request.mockClear();
+		expect(await getGamePackInfo(root)).toEqual({
+			complete: true,
+			packId: manifest.packId,
+			missingBytes: 0,
+			sizeKB: 0
+		});
+		expect(request).not.toHaveBeenCalled();
+	});
+	it('does not publish an interrupted streaming download', async () => {
+		const storage = memoryCaches(),
+			manifest = await pack('ABC'),
+			controller = new AbortController();
+		const manager = new GamePacks({ root, storage, fetch: vi.fn(async () => new Response('ABC')) });
+		await expect(
+			manager.download(manifest, {
+				signal: controller.signal,
+				progress: ({ loaded }) => {
+					if (loaded) controller.abort();
+				}
+			})
+		).rejects.toThrow();
+		expect(await manager.current()).toBeNull();
+		expect(
+			await matchGamePack(storage, root, new URL(gameFileUrl(root, manifest.packId, manifest.entry)))
+		).toBeUndefined();
 	});
 });
