@@ -1,7 +1,7 @@
+import { type CloudAdapter, createCloudAdapter } from '#lib/supabase/adapter.ts';
 import { supabase } from '#lib/supabase/client.ts';
-import { createCloudAdapter, type CloudAdapter } from '#lib/supabase/adapter.ts';
 import { auth } from './auth.svelte.ts';
-import { sessions, type Sessions } from './sessions.svelte.ts';
+import { type Sessions, sessions } from './sessions.svelte.ts';
 
 export type SyncStatus = 'unavailable' | 'signed-out' | 'offline' | 'idle' | 'syncing' | 'error';
 export interface SyncIdentity {

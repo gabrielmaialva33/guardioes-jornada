@@ -6,7 +6,7 @@
  * It grows in order: the trunk rises, each whorl unfolds as the trunk
  * passes it, and the tufts pop at the branch tips.
  */
-import { add, blob, groundDisc, hash3, MeshBuilder, prism, scale, type V3 } from './builder.ts';
+import { add, blob, groundDisc, hash3, type MeshBuilder, prism, scale, type V3 } from './builder.ts';
 import { heightAt } from './layout.ts';
 
 export interface AraucariaOptions {

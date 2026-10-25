@@ -307,8 +307,11 @@ select {
 	*,
 	*::before,
 	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override component animation durations for accessibility. */
 		animation-duration: 1ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override component animation loops for accessibility. */
 		animation-iteration-count: 1 !important;
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override component transitions for accessibility. */
 		transition-duration: 1ms !important;
 	}
 }

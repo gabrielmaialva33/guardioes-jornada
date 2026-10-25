@@ -7,20 +7,20 @@
  * `step(dt)`, which reports whether anything is still moving; the engine
  * stops rendering as soon as it returns false.
  */
-import { Fog, Mesh, MeshBasicMaterial, Scene, type BufferAttribute, type Camera, type Material } from 'three';
+import { type BufferAttribute, type Camera, Fog, type Material, Mesh, MeshBasicMaterial, Scene } from 'three';
 import { araucaria } from './araucaria.ts';
-import { MeshBuilder, repaint, smoothstep, type Paintable, type V3 } from './builder.ts';
+import { MeshBuilder, type Paintable, repaint, smoothstep, type V3 } from './builder.ts';
 import { Birds, Fireflies, glowDisc } from './fauna.ts';
 import { buildDeepForest, buildFirstTrees } from './flora.ts';
 import { ARAUCARIA, heightAt, YOUNG_ARAUCARIAS } from './layout.ts';
 import {
+	type GrowthUniforms,
 	growthMaterial,
 	setFireflyBlending,
-	waterMaterial,
-	type GrowthUniforms,
-	type WaterUniforms
+	type WaterUniforms,
+	waterMaterial
 } from './materials.ts';
-import { TONE, type Palette } from './palette.ts';
+import { type Palette, TONE } from './palette.ts';
 import { buildRiver } from './river.ts';
 import { buildIsland, buildMountains, buildTrail } from './terrain.ts';
 
@@ -372,7 +372,10 @@ export class World {
 			const m = o as Mesh;
 			m.geometry?.dispose();
 			const mat = m.material as Material | Material[] | undefined;
-			if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+			if (Array.isArray(mat))
+				mat.forEach((x) => {
+					x.dispose();
+				});
 			else mat?.dispose();
 		});
 		this.birds.mesh.dispose();

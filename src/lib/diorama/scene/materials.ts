@@ -10,10 +10,10 @@ import {
 	AdditiveBlending,
 	Color,
 	DoubleSide,
+	type IUniform,
 	MeshBasicMaterial,
 	NormalBlending,
-	ShaderMaterial,
-	type IUniform
+	ShaderMaterial
 } from 'three';
 
 export interface GrowthUniforms {

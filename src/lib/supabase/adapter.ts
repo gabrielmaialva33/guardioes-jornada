@@ -1,9 +1,9 @@
-import * as v from 'valibot';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import * as v from 'valibot';
 import type { Session } from '#lib/session.ts';
 import { standings } from '#lib/session.ts';
 import type { RemoteSession } from '#lib/state/sessions.svelte.ts';
-import type { Database, Json, JourneyMutationReply } from './database.types.ts';
+import type { Database, JourneyMutationReply, Json } from './database.types.ts';
 
 export interface PushReply extends Omit<JourneyMutationReply, 'server_doc'> {
 	server_doc: RemoteSession | null;

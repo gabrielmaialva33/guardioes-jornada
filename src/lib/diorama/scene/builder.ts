@@ -7,7 +7,7 @@
  * collapses to before it has grown, and a growth threshold (0..1).
  */
 import { BufferAttribute, BufferGeometry, IcosahedronGeometry } from 'three';
-import { TONE, type Palette, type Tone } from './palette.ts';
+import { type Palette, TONE, type Tone } from './palette.ts';
 
 export type V3 = [number, number, number];
 

@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { IndexedRepository, type LocalRecord } from '#lib/data/repository.ts';
 import { decodeSession } from '#lib/data/session-schema.ts';
-import { normalizeSession, todayIso, type Session } from '#lib/session.ts';
+import { normalizeSession, type Session, todayIso } from '#lib/session.ts';
 import { Sessions } from './sessions.svelte.ts';
 
 const A = '11111111-1111-4111-8111-111111111111';

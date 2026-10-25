@@ -10,7 +10,7 @@
 import { MathUtils, NoToneMapping, PerspectiveCamera, Vector2, Vector3, WebGLRenderer } from 'three';
 import { weakGpu } from '../tier.ts';
 import { readPalette } from './palette.ts';
-import { World, type Quality, type View } from './world.ts';
+import { type Quality, type View, World } from './world.ts';
 
 export type { View } from './world.ts';
 export type FailReason = 'slow' | 'lost';

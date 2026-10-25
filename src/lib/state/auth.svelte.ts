@@ -32,7 +32,8 @@ class GuideAuth {
 	}
 
 	init(): Promise<void> {
-		return (this.#initializing ??= this.#init());
+		this.#initializing ??= this.#init();
+		return this.#initializing;
 	}
 	async #init() {
 		if (!supabase) {
@@ -85,14 +86,15 @@ class GuideAuth {
 		// Also invalidate initialization when the previous user was not known yet.
 		this.generation++;
 		// Local scope: sign out on this phone without touching the guide's other devices.
-		return (this.#signingOut = Promise.resolve()
+		this.#signingOut = Promise.resolve()
 			.then(async () => {
 				const result = await supabase?.auth.signOut({ scope: 'local' });
 				if (result?.error) throw result.error;
 			})
 			.finally(() => {
 				this.#signingOut = null;
-			}));
+			});
+		return this.#signingOut;
 	}
 }
 

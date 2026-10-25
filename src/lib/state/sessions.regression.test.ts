@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { del } from 'idb-keyval';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	IndexedRepository,
 	type LocalRecord,
@@ -7,11 +7,11 @@ import {
 	type WriterLock
 } from '#lib/data/repository.ts';
 import { decodeSession } from '#lib/data/session-schema.ts';
-import { photoKey, readPhoto, savePhoto } from '#lib/photos.ts';
 import * as photos from '#lib/photos.ts';
+import { photoKey, readPhoto, savePhoto } from '#lib/photos.ts';
 import type { Session } from '#lib/session.ts';
 import type { CloudAdapter, PushReply } from '#lib/supabase/adapter.ts';
-import { Sessions, type RemoteSession } from './sessions.svelte.ts';
+import { type RemoteSession, Sessions } from './sessions.svelte.ts';
 import { CloudSync, type SyncIdentity } from './sync.svelte.ts';
 
 const A = '11111111-1111-4111-8111-111111111111';
@@ -404,7 +404,7 @@ describe('persistent CAS outbox', () => {
 		s.score(visit, visit.groups[0].id, 1, null);
 		release.resolve();
 		await upload;
-		expect((cloud.rows.get(visit.id)?.doc as Session).scores).toHaveLength(2);
+		expect((cloud.rows.get(visit.id)?.doc as Session | undefined)?.scores).toHaveLength(2);
 		expect(sync.pending).toBe(0);
 	});
 	it('R6 preserves local changes as a duplicate rather than ACKing a CAS conflict', async () => {

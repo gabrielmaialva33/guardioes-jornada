@@ -35,7 +35,7 @@ export class IndexedRepository implements Repository {
 	#db?: Promise<IDBDatabase>;
 	constructor(private name = 'guardioes-data-v2') {}
 	#open() {
-		return (this.#db ??= new Promise<IDBDatabase>((resolve, reject) => {
+		this.#db ??= new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open(this.name, 1);
 			request.onupgradeneeded = () => {
 				request.result.createObjectStore('records', { keyPath: 'id' });
@@ -43,7 +43,8 @@ export class IndexedRepository implements Repository {
 			};
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
-		}));
+		});
+		return this.#db;
 	}
 	async read(): Promise<unknown[]> {
 		const db = await this.#open();

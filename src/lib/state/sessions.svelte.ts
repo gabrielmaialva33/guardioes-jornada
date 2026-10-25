@@ -1,30 +1,30 @@
 import * as v from 'valibot';
 import { journeys, mataAtlantica } from '#lib/content/mata-atlantica.ts';
 import type { Journey } from '#lib/content/types.ts';
-import { decodeSession } from '#lib/data/session-schema.ts';
 import { clearJournalEntry, clearJournalRecord, journalRecord, readJournal } from '#lib/data/journal.ts';
 import {
-	IndexedRepository,
 	acquireWriter,
+	IndexedRepository,
 	type LocalRecord,
 	type Operation,
 	type Repository,
 	type WriterLease,
 	type WriterLock
 } from '#lib/data/repository.ts';
+import { decodeSession } from '#lib/data/session-schema.ts';
 import { copySessionPhotos, deletePhoto, deleteSessionPhotos } from '#lib/photos.ts';
 import {
 	currentStep,
+	type Gains,
+	type Group,
 	gainsBetween,
 	newCertificateCode,
 	newId,
 	normalizeSession,
 	progressOf,
-	todayIso,
-	type Gains,
-	type Group,
 	type ScoreEvent,
-	type Session
+	type Session,
+	todayIso
 } from '#lib/session.ts';
 
 export type SessionChange = { kind: 'saved' | 'removed' | 'remote'; id: string };

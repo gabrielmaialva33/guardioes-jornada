@@ -1,8 +1,8 @@
+import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
 import { version } from '$app/env';
 import { assets, immutable, prerendered } from '$app/manifest';
 import { asset, resolve } from '$app/paths';
 import { self } from '$app/service-worker';
-import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
 
 /**
  * Caches the whole app on the first visit with a connection. After that it

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Sessions } from './sessions.svelte.ts';
 import type { LocalRecord, Repository } from '#lib/data/repository.ts';
+import { Sessions } from './sessions.svelte.ts';
 
 const stores: Sessions[] = [];
 class MemoryRepository implements Repository {

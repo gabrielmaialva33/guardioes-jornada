@@ -1,10 +1,10 @@
 /**
- * Trees of the Atlantic Forest: canela (round canopy), cedro-rosa (layered
- * cone with pink blossoms), the deep forest's canopy trees, palmito-juçara
+ * Trees of the Atlantic Forest: canela-preta (round canopy), cedro-rosa
+ * (layered cone with woody fruits that stay on the branches), the deep forest's canopy trees, palmito-juçara
  * and samambaiaçu (tree fern). Each tree grows from its base: `order` (0..1)
  * staggers when it sprouts within its stage.
  */
-import { blob, cone, groundDisc, hash3, MeshBuilder, prism, rng, type V3 } from './builder.ts';
+import { blob, cone, groundDisc, hash3, type MeshBuilder, prism, rng, type V3 } from './builder.ts';
 import { FIRST_TREES, freeForTree, heightAt, RX, rimZ } from './layout.ts';
 
 function growTree(b: MeshBuilder, base: V3, height: number, order: number, span = 0.55) {
@@ -77,7 +77,7 @@ export function cedro(b: MeshBuilder, base: V3, s: number, order: number, seed: 
 			(k) => ({ tone: 'canopy-light', mix: 'canopy', t: 0.1 + (k % 2) * 0.12 + i * 0.05, k: 1.02 }),
 			seed + i
 		);
-		// Pink blossoms on each layer.
+		// Woody fruit capsules, which often stay on the branches (Embrapa).
 		for (let k = 0; k < 4; k++) {
 			const a = rand() * Math.PI * 2;
 			const f = 0.25 + rand() * 0.5;
@@ -88,7 +88,7 @@ export function cedro(b: MeshBuilder, base: V3, s: number, order: number, seed: 
 				p,
 				[0.045 * s, 0.04 * s, 0.045 * s],
 				0,
-				() => ({ tone: 'blossom', k: 1.12 }),
+				() => ({ tone: 'bark', mix: 'sun', t: 0.3, k: 1.15 }),
 				0.2,
 				seed * 7 + k + i * 4
 			);

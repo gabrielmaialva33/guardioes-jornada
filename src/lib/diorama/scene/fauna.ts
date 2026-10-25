@@ -6,18 +6,18 @@
 import {
 	BufferAttribute,
 	BufferGeometry,
+	type Color,
 	InstancedMesh,
 	Matrix4,
 	Mesh,
-	MeshBasicMaterial,
+	type MeshBasicMaterial,
 	Points,
 	Quaternion,
-	Vector3,
-	type Color
+	Vector3
 } from 'three';
 import { rng, type V3 } from './builder.ts';
-import { birdMaterial, fireflyMaterial, glowMaterial, type FireflyUniforms } from './materials.ts';
 import { ARAUCARIA, heightAt, RX, RZ, rimDistance } from './layout.ts';
+import { birdMaterial, type FireflyUniforms, fireflyMaterial, glowMaterial } from './materials.ts';
 
 const UP = new Vector3(0, 1, 0);
 

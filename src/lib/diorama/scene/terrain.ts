@@ -2,7 +2,7 @@
  * The floating island (stage 0, with the clearing's flowers), the trail
  * (stage 1) and the Serra de Paranapiacaba with its mist (stage 4).
  */
-import { blob, hash3, MeshBuilder, rng, smoothstep, type Paint, type V3 } from './builder.ts';
+import { blob, hash3, type MeshBuilder, type Paint, rng, smoothstep, type V3 } from './builder.ts';
 import {
 	CLEARING,
 	distanceToPath,

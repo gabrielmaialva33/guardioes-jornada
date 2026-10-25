@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { expect, it } from 'vitest';
 import { normalizeSession } from '#lib/session.ts';
 import { createCloudAdapter } from './adapter.ts';
 import type { Database } from './database.types.ts';

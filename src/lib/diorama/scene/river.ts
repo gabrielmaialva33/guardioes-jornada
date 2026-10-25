@@ -7,7 +7,7 @@
  * Two builders: the water (flow-stripe shader, `aFlow` = [distance, across])
  * and its bed (dark banks and the stones around the spring).
  */
-import { blob, hash3, MeshBuilder, smoothstep, type V3 } from './builder.ts';
+import { blob, hash3, type MeshBuilder, smoothstep, type V3 } from './builder.ts';
 import { heightAt, RIVER, RX, RZ, SPRING } from './layout.ts';
 
 function catmull(p0: number, p1: number, p2: number, p3: number, t: number) {
