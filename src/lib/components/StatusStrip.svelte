@@ -48,19 +48,22 @@
 </div>
 
 <style>
+	/* Pages reserve 2.75rem per row for this strip (5.5rem when large text wraps it). */
 	.strip {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
-		gap: 0.5rem;
+		column-gap: 0.5rem;
 		font-size: 0.8rem;
 		line-height: 1;
 	}
 
+	/* The text stays small; the row is a full 2.75rem (44px) so the backup link is easy to tap. */
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		min-height: 1.75rem;
+		min-height: 2.75rem;
 		color: var(--text-faint);
 		font-weight: 700;
 		text-decoration: none;

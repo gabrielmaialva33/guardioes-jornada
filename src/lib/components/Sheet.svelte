@@ -49,6 +49,8 @@
 <style>
 	dialog {
 		width: min(100%, var(--measure));
+		/* The browser's modal dialog keeps 1em + 3px from each side; a bottom sheet spans the phone. */
+		max-width: 100%;
 		max-height: 88dvh;
 		margin: auto auto 0;
 		padding: 0;
@@ -73,10 +75,21 @@
 		}
 	}
 
+	/* Title and buttons stay in view; only the body scrolls when the sheet is taller than the screen. */
 	.sheet {
 		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
 		gap: 1rem;
+		max-height: 88dvh;
 		padding: 1rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
+	}
+
+	/* The padding keeps focus rings from being clipped by the scroll box. */
+	.body {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		margin: -0.35rem;
+		padding: 0.35rem;
 	}
 
 	header {

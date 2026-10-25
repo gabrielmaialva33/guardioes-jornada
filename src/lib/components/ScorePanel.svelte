@@ -67,6 +67,7 @@
 
 <style>
 	.scores {
+		container-type: inline-size;
 		display: grid;
 		gap: 0.5rem;
 		margin: 0;
@@ -163,6 +164,49 @@
 
 	.large .score {
 		font-size: var(--step-4);
+	}
+
+	/*
+	 * When the row is too narrow for the name next to the score and both buttons
+	 * (phones, large text), the name takes the first line and the score with the
+	 * buttons the second, so a name like "Canela-preta" never breaks.
+	 */
+	@container (width < 23rem) {
+		li {
+			grid-template-columns: auto minmax(0, 1fr) auto auto;
+			row-gap: 0.25rem;
+		}
+
+		li > :global(:first-child) {
+			grid-row: span 2;
+		}
+
+		.name {
+			grid-column: 2 / -1;
+		}
+
+		.score {
+			grid-column: 2;
+		}
+	}
+
+	@container (width < 28rem) {
+		.large li {
+			grid-template-columns: auto minmax(0, 1fr) auto auto;
+			row-gap: 0.25rem;
+		}
+
+		.large li > :global(:first-child) {
+			grid-row: span 2;
+		}
+
+		.large .name {
+			grid-column: 2 / -1;
+		}
+
+		.large .score {
+			grid-column: 2;
+		}
 	}
 
 	@keyframes tick {

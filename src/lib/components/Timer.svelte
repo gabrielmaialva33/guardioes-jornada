@@ -109,7 +109,8 @@
 	}
 	.time {
 		font-family: var(--font-story);
-		font-size: clamp(3.5rem, 16vw, 5rem);
+		/* The 17vw cap only bites with large system text on a phone, where 3.5rem would overflow. */
+		font-size: min(clamp(3.5rem, 16vw, 5rem), 17vw);
 		font-weight: 700;
 		font-variant-numeric: lining-nums tabular-nums;
 		line-height: 1.1;

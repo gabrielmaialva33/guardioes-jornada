@@ -14,7 +14,10 @@
 
 	let { session, step }: Props = $props();
 	let selectedId = $state('');
-	const group = $derived(session.groups.find((entry) => entry.id === selectedId) ?? session.groups[0]);
+	// Starts on the participant's own group; anyone can switch to score another.
+	const group = $derived(
+		session.groups.find((entry) => entry.id === (selectedId || session.myGroupId)) ?? session.groups[0]
+	);
 	const items = $derived(step.checklist ?? []);
 	const count = $derived(
 		group ? items.filter((item) => itemFound(session, group.id, step.id, item.id)).length : 0

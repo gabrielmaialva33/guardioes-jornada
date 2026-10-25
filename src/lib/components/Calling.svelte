@@ -86,9 +86,10 @@
 		white-space: pre-line;
 	}
 
+	/* A page with a fixed bar at the bottom sets --sticky-bottom so the button stops above it. */
 	.accept {
 		position: sticky;
-		bottom: max(1rem, env(safe-area-inset-bottom));
+		bottom: var(--sticky-bottom, max(1rem, env(safe-area-inset-bottom)));
 		font-size: var(--step-1);
 		box-shadow:
 			var(--highlight),

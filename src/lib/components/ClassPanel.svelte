@@ -60,11 +60,23 @@
 
 <style>
 	.panel {
+		position: relative;
 		display: grid;
-		grid-template-columns: auto 1fr auto;
+		grid-template-columns: auto minmax(0, 1fr);
 		align-items: center;
 		gap: 0.875rem;
 		padding: 1rem;
+	}
+
+	/* Large system text on a phone: the seal gets its own row so the name keeps a usable width. */
+	@media (max-width: 19.5em) {
+		.panel {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.panel .who strong {
+			padding-right: 0;
+		}
 	}
 
 	.seal {
@@ -99,12 +111,12 @@
 		line-height: 1.25;
 	}
 
+	/* The whole name, wrapped (up to 40 letters); it leaves room for the level pill on the right. */
 	.who strong {
-		overflow: hidden;
+		padding-right: 4rem;
 		font-family: var(--font-story);
 		font-size: var(--step-1);
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		text-wrap: balance;
 	}
 
 	.group {
@@ -128,8 +140,11 @@
 		font-size: var(--step--1);
 	}
 
+	/* In the top corner, so the group and rank lines below the name use the full width. */
 	.level {
-		align-self: start;
+		position: absolute;
+		top: 1rem;
+		right: 1rem;
 		padding: 0.25rem 0.625rem;
 		border-radius: var(--radius-pill);
 		background: var(--accent-gradient);

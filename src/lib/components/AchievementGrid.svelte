@@ -43,6 +43,7 @@
 
 <style>
 	.achievements {
+		container-type: inline-size;
 		display: grid;
 		gap: 1rem;
 		padding: 1rem;
@@ -65,6 +66,14 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+	}
+
+	/* Four badges need about 20rem (a word like "Treinamento" under each); narrower cards use two rows. */
+	@container (width < 20rem) {
+		ul {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			row-gap: 1rem;
+		}
 	}
 
 	li {
