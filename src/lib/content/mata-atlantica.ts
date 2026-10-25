@@ -1,14 +1,16 @@
 import type { Journey } from './types.ts';
 
 /**
- * The original PENAP journey, written for the guardioes-da-floresta prototype
- * on Replit. The texts are unchanged; the timers and the checklist are
- * additions that help the guide in the field.
+ * The Atlantic Forest journey, written for the guardioes-da-floresta prototype
+ * on Replit. It was first designed on a trail at PENAP but works in any
+ * Atlantic Forest setting. The timers and the checklist are additions that
+ * help in the field.
  */
-export const penap: Journey = {
+export const mataAtlantica: Journey = {
+	// Stable id: sessions saved on phones and in the cloud reference it.
 	id: 'penap',
 	name: 'Guardiões da Mata Atlântica',
-	place: 'PENAP',
+	place: 'Mata Atlântica',
 	steps: [
 		{
 			id: 'chamado',
@@ -135,6 +137,10 @@ Sua jornada começa agora.`
 			instructions: 'Repita o juramento em voz alta, com seu grupo de mãos dadas.'
 		}
 	],
+	groups: [
+		{ name: 'Canela-preta', color: '#ea9356', hint: 'Árvore de casca escura e madeira aromática' },
+		{ name: 'Cedro-rosa', color: '#ff9fb7', hint: 'Árvore alta de madeira rosada e perfumada' }
+	],
 	areas: [
 		{
 			id: 'clareira',
@@ -184,9 +190,9 @@ Sua jornada começa agora.`
 	],
 	closing: {
 		title: 'Vocês são Guardiões da Mata Atlântica!',
-		text: 'A jornada na PENAP foi cumprida. A promessa de vocês agora vive em cada árvore, cada som e cada caminho desta floresta.',
+		text: 'A jornada pela Mata Atlântica foi cumprida. A promessa de vocês agora vive em cada árvore, cada som e cada caminho desta floresta.',
 		pledge: 'Levem este compromisso para fora da mata: protejam, ensinem, inspirem.'
 	}
 };
 
-export const journeys: Record<string, Journey> = { [penap.id]: penap };
+export const journeys: Record<string, Journey> = { [mataAtlantica.id]: mataAtlantica };

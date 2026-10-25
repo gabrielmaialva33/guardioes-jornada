@@ -4,12 +4,12 @@
 	import { resolve } from '$app/paths';
 	import { renderSVG } from 'uqr';
 	import Icon from '#lib/components/Icon.svelte';
-	import { journeys, penap } from '#lib/content/penap.ts';
+	import { journeys, mataAtlantica } from '#lib/content/mata-atlantica.ts';
 	import { formatDate, groupScore, isFinished } from '#lib/session.ts';
 	import { sessions } from '#lib/state/sessions.svelte.ts';
 
 	const session = $derived(sessions.find(page.url.searchParams.get('id')));
-	const journey = $derived(session ? (journeys[session.journeyId] ?? penap) : penap);
+	const journey = $derived(session ? (journeys[session.journeyId] ?? mataAtlantica) : mataAtlantica);
 	const powers = $derived(journey.steps.filter((step) => step.kind === 'mission' && step.power));
 	let origin = $state('');
 	const verificationUrl = $derived(

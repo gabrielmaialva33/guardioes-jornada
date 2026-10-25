@@ -1,6 +1,6 @@
 /**
  * Shape of a journey script. The app is only the engine: every line the guide
- * reads lives in content files like `penap.ts`, so whoever owns the story can
+ * reads lives in content files like `mata-atlantica.ts`, so whoever owns the story can
  * edit missions without touching the rest of the code.
  */
 
@@ -54,6 +54,14 @@ export interface Achievement {
 	oath?: boolean;
 }
 
+/** A team participants can join; named after a tree they meet on the trail. */
+export interface GroupOption {
+	name: string;
+	color: string;
+	/** One line shown when choosing the group. */
+	hint: string;
+}
+
 export interface Closing {
 	title: string;
 	text: string;
@@ -65,6 +73,8 @@ export interface Journey {
 	name: string;
 	place: string;
 	steps: Step[];
+	/** Teams offered when a participant joins; points and certificates follow them. */
+	groups: GroupOption[];
 	areas: Area[];
 	ranks: Rank[];
 	achievements: Achievement[];

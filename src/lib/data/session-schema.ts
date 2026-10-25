@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { journeys } from '#lib/content/penap.ts';
+import { journeys } from '#lib/content/mata-atlantica.ts';
 import type { Session } from '#lib/session.ts';
 
 const integer = v.pipe(v.number(), v.safeInteger(), v.minValue(0));

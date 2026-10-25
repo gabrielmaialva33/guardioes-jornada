@@ -4,7 +4,7 @@
 	import GroupMark from '#lib/components/GroupMark.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
-	import { journeys } from '#lib/content/penap.ts';
+	import { journeys } from '#lib/content/mata-atlantica.ts';
 	import { formatDate, normalizeCertificateCode } from '#lib/session.ts';
 	import { supabase } from '#lib/supabase/client.ts';
 	import type { Database, Json } from '#lib/supabase/database.types.ts';
