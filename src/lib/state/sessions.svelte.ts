@@ -90,6 +90,10 @@ export class Sessions {
 			.filter((r) => r.ownerId === this.ownerId && r.quarantine)
 			.map((r) => ({ id: r.id, ...r.quarantine! }));
 	}
+	/** No journey stored on this phone for any account: a first visit. */
+	get empty() {
+		return this.#records.every((r) => r.deleted);
+	}
 	get guestCount() {
 		return this.#records.filter((r) => r.ownerId === null && !r.deleted && !!r.session && !r.quarantine)
 			.length;
