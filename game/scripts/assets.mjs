@@ -760,15 +760,7 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 			{ col: 7, band: 3, spec: ['#2b2830', '#1d1b21'] }, // Tiger stripe cell matched to base coat (uniformly dark!)
 			{ col: 5, band: 3, spec: ['#121015', '#08070a'] }, // Eyes, nose & subtle ghost-rosette rings: deep velvet-black
 			{ col: 2, band: 3, spec: ['#302c36', '#211e26'] }, // Paws & inner ears: subtle dark slate
-			{
-				col: 1,
-				band: 2,
-				spec: (r) => {
-					// Rows 0..3: golden-amber jaguar eyes; Rows 4..15: subtle dark charcoal muzzle & underbelly
-					if (r <= 3) return lerpHex('#ffcf40', '#e09f1f', r / 3);
-					return lerpHex('#35313c', '#242129', (r - 4) / 11);
-				}
-			},
+			{ col: 1, band: 2, spec: ['#46414f', '#2f2b36'] }, // Muzzle cheeks, underbelly & eye sclera: muted dark pewter
 			{ col: 3, band: 2, spec: ['#221f26', '#161419'] }  // Inner ghost-rosette center geometry
 		],
 
@@ -797,9 +789,10 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 				col: 1,
 				band: 1,
 				spec: (r) => {
-					// Front breast & undertail: Rows 0..7: golden-yellow throat/breast; Rows 8..15: crimson-red belly & undertail
-					if (r <= 7) return lerpHex('#ffe033', '#f5b814', r / 7);
-					return lerpHex('#e6392e', '#b8221a', (r - 8) / 7);
+					// Rows 0..4: head & upper back (jet black); Rows 5..8: upper breast (golden-yellow); Rows 9..15: belly & undertail (crimson-red)
+					if (r <= 4) return lerpHex('#242730', '#181a22', r / 4);
+					if (r <= 8) return lerpHex('#ffe033', '#f5b814', (r - 5) / 3);
+					return lerpHex('#e6392e', '#b8221a', (r - 9) / 6);
 				}
 			},
 			{ col: 1, band: 3, spec: ['#242730', '#15171e'] }, // Wings, back, crown & tail feathers: glossy jet-black
