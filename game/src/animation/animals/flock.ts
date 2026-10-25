@@ -5,6 +5,10 @@
  * 50 agents = 2,500 checks), plus a smooth wander and a soft box. All state is
  * in fixed-size typed arrays; update() allocates nothing.
  *
+ * The state is in Float64Arrays: with Float32Arrays, V8 boxed numbers in the
+ * steering loop on every update for some flight dynamics (measured, ~100 B per
+ * update); the float32 copy happens once, in writeMatrices.
+ *
  * Integration is semi-implicit Euler in substeps of at most 1/60 s, speeds are
  * clamped to [minSpeed, maxSpeed] and positions are clamped to the box with the
  * velocity reflected, so agents stay inside the bounds at any frame rate; a
@@ -137,16 +141,16 @@ export class Flock {
 	readonly count: number;
 	readonly params: FlockParams;
 	/** Packed x, y, z per agent. */
-	readonly position: Float32Array;
-	readonly velocity: Float32Array;
+	readonly position: Float64Array;
+	readonly velocity: Float64Array;
 	/** Per-agent wingbeat phase offset in cycles, for the shader's aFlapPhase attribute. */
 	readonly phase: Float32Array;
 	/** min x, y, z, max x, y, z. */
-	readonly bounds = new Float32Array(6);
+	readonly bounds = new Float64Array(6);
 	/** Simulated time, seconds (also the shader's uFlapTime). */
 	time = 0;
-	readonly #wanderPhase: Float32Array;
-	readonly #acceleration: Float32Array;
+	readonly #wanderPhase: Float64Array;
+	readonly #acceleration: Float64Array;
 	#h = 0;
 
 	constructor(options: FlockOptions) {
@@ -154,11 +158,11 @@ export class Flock {
 		this.kind = options.kind;
 		this.count = count;
 		this.params = new FlockSettings({ ...FLOCK_KINDS[options.kind], ...options.params });
-		this.position = new Float32Array(count * 3);
-		this.velocity = new Float32Array(count * 3);
+		this.position = new Float64Array(count * 3);
+		this.velocity = new Float64Array(count * 3);
 		this.phase = new Float32Array(count);
-		this.#wanderPhase = new Float32Array(count * 3);
-		this.#acceleration = new Float32Array(count * 3);
+		this.#wanderPhase = new Float64Array(count * 3);
+		this.#acceleration = new Float64Array(count * 3);
 		this.setBounds(options.bounds);
 		const rng = new Rng(options.seed ?? 0xb01d);
 		const b = this.bounds;

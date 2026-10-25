@@ -17,7 +17,7 @@
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
 import type { AnimalWorld } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
-import { approach, DEG } from './scalar.ts';
+import { DEG } from './scalar.ts';
 
 export const BUGIO_STATES = ['idle', 'move', 'rest', 'howl', 'feed-hang'] as const;
 export type BugioState = (typeof BUGIO_STATES)[number];
@@ -97,7 +97,9 @@ export class BugioBehaviour extends Behaviour<BugioState> {
 		this.drive.targetYaw = this.cursor.yaw;
 		if (this.state !== 'feed-hang') this.turn();
 		// Howl envelope rises while howling and fades after.
-		this.#howl = approach(this.#howl, this.state === 'howl' ? 1 : 0, h / BUGIO.howlRamp);
+		// approach() written out: no number arguments on the per-frame path.
+		const step = h / BUGIO.howlRamp;
+		this.#howl = this.state === 'howl' ? Math.min(1, this.#howl + step) : Math.max(0, this.#howl - step);
 		if (this.state === 'idle') {
 			this.#glance -= h;
 			if (this.#glance <= 0) {

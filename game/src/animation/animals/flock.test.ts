@@ -88,7 +88,7 @@ describe('boids', () => {
 			const v = flock.velocity.subarray(i * 3, i * 3 + 3);
 			const speed = Math.hypot(v[0], v[1], v[2]);
 			expect(dot(forward, [v[0] / speed, v[1] / speed, v[2] / speed])).toBeCloseTo(1, 5);
-			expect(m[12]).toBe(flock.position[i * 3]);
+			expect(m[12]).toBeCloseTo(flock.position[i * 3], 5);
 			expect(m[15]).toBe(1);
 		}
 	});

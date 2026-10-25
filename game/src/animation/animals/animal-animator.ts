@@ -48,7 +48,7 @@ import {
 	TAIL
 } from './rigs.ts';
 import { clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
-import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams, } from './species.ts';
+import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
 
 const STAND = POSTURE_INDEX.stand;
 const SIT = POSTURE_INDEX.sit;

@@ -22,7 +22,7 @@ import { DampedSpring } from './damped-spring.ts';
 import type { AnimalWorld } from './motion.ts';
 import { MODELS } from './rigs.ts';
 import type { Route } from './route.ts';
-import { clamp01, DEG, smoothstep, TAU, wrapAngle } from './scalar.ts';
+import { clamp01, DEG, TAU, wrapAngle } from './scalar.ts';
 
 export const MURIQUI_STATES = ['idle', 'move', 'rest', 'tail-hang'] as const;
 export type MuriquiState = (typeof MURIQUI_STATES)[number];
@@ -134,7 +134,10 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 		const decay = Math.exp(-TAU * SPRING.body.hz * this.species.tempo * h);
 		this.#snapForward *= decay;
 		this.#snapUp *= decay;
-		this.tilt.step(this.theta * MURIQUI.tiltFollow, h);
+		const tilt = this.tilt;
+		tilt.target = this.theta * MURIQUI.tiltFollow;
+		tilt.dt = h;
+		tilt.update();
 		this.turn();
 		if (this.state === 'idle') {
 			this.#glance -= h;
@@ -198,8 +201,11 @@ export class MuriquiBehaviour extends Behaviour<MuriquiState> {
 			const forward = Math.sqrt(fx * fx + fz * fz);
 			motion.reachForward = forward / scale;
 			motion.reachUp = (point[1] - ay) / scale;
-			if (this.omega > 0)
-				motion.reach = smoothstep((this.theta + 0.2 * this.#maxSwing) / (0.9 * this.#maxSwing));
+			if (this.omega > 0) {
+				// smoothstep written out (a call taking and returning numbers boxes them when not inlined).
+				const r = Math.min(1, Math.max(0, (this.theta + 0.2 * this.#maxSwing) / (0.9 * this.#maxSwing)));
+				motion.reach = r * r * (3 - 2 * r);
+			}
 		}
 		this.#placeAtAnchor();
 	}
