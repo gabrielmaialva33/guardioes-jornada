@@ -1,6 +1,6 @@
 import { shell } from 'virtual:offline-shell';
-import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
 import { matchGamePack } from '#lib/data/game-pack-cache.ts';
+import { cachePrefix, obsoleteCaches, previousAsset } from '#lib/data/worker-cache.ts';
 import { version } from '$app/env';
 import { assets, immutable, prerendered } from '$app/manifest';
 import { asset, resolve } from '$app/paths';
