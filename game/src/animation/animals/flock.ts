@@ -93,6 +93,45 @@ export interface FlockOptions {
 	params?: Partial<FlockParams>;
 }
 
+/**
+ * The parameters as a class, so every flock's params share one hidden class and
+ * one field layout: two plain objects whose fields mix small integers and
+ * fractions make the shared steering code box numbers on every update (measured).
+ */
+class FlockSettings implements FlockParams {
+	minSpeed = 0;
+	maxSpeed = 0;
+	maxAccel = 0;
+	neighbourRadius = 0;
+	separationRadius = 0;
+	alignment = 0;
+	cohesion = 0;
+	separation = 0;
+	margin = 0;
+	boundsWeight = 0;
+	wander = 0;
+	wanderRate = 0;
+	level = 0;
+	maxPitch = 0;
+
+	constructor(params: FlockParams) {
+		this.minSpeed = params.minSpeed;
+		this.maxSpeed = params.maxSpeed;
+		this.maxAccel = params.maxAccel;
+		this.neighbourRadius = params.neighbourRadius;
+		this.separationRadius = params.separationRadius;
+		this.alignment = params.alignment;
+		this.cohesion = params.cohesion;
+		this.separation = params.separation;
+		this.margin = params.margin;
+		this.boundsWeight = params.boundsWeight;
+		this.wander = params.wander;
+		this.wanderRate = params.wanderRate;
+		this.level = params.level;
+		this.maxPitch = params.maxPitch;
+	}
+}
+
 export class Flock {
 	readonly kind: FlockKind;
 	readonly count: number;
@@ -114,7 +153,7 @@ export class Flock {
 		const count = Math.max(0, Math.floor(options.count));
 		this.kind = options.kind;
 		this.count = count;
-		this.params = { ...FLOCK_KINDS[options.kind], ...options.params };
+		this.params = new FlockSettings({ ...FLOCK_KINDS[options.kind], ...options.params });
 		this.position = new Float32Array(count * 3);
 		this.velocity = new Float32Array(count * 3);
 		this.phase = new Float32Array(count);
