@@ -11,7 +11,8 @@ Shape decisions and sources:
   faz com que caia": INEPAC-RJ, http://www.inepac.rj.gov.br/application/assets/img/site/Aves_23out05.pdf
   ; "four-sided pyramidal structures ... suspended and armed with a trigger": Alves et al.
   2009, https://pmc.ncbi.nlm.nih.gov/articles/PMC2678999/ . So: a log-cabin pyramid of
-  pairs of sticks, each layer shorter, closed on top, tilted up on one side by a prop stick
+  pairs of sticks, each layer shorter (about 45 degrees), closed on top by a lid of sticks,
+  tilted up on one side by a prop stick
   (armed, which is what makes it read as a trap, not a box).
 - Laço: a noose "bound to a tensioned branch of a tree ... the branch snaps upward" (Alves
   et al. 2009); "vara de bambu que, envergada em forma de arco" (INEPAC-RJ). So: a sapling
@@ -36,11 +37,12 @@ CORD = C.ramp("soil", 3)
 
 def arapuca() -> C.Mesh:
     m = C.Mesh("arapuca")
-    t = 0.062  # stick thickness
-    step = t - 0.006  # each layer rests on the one below
+    t = 0.088  # stick thickness
+    step = t - 0.008  # each layer rests on the one below
     layers = 5
+    inset = 0.16  # per layer, both sides: about 45 degrees, a pyramid
     for i in range(layers):
-        length = 1.0 - 0.13 * i
+        length = 1.0 - inset * i
         z = t / 2 + i * step
         off = length / 2 - 0.05
         col = STICK if i % 2 == 0 else STICK_ALT
@@ -50,10 +52,10 @@ def arapuca() -> C.Mesh:
             else:
                 m.box((s * off, 0, z), (t, length, t), col, skip=("bottom",))
     # Lid: one stick across the narrow top opening.
-    top_len = 1.0 - 0.13 * (layers - 1)
-    m.box((0, 0, t / 2 + layers * step), (top_len, t * 1.4, t), STICK, skip=("bottom",))
+    top_len = 1.0 - inset * (layers - 1)
+    m.box((0, 0, t / 2 + layers * step), (top_len, top_len * 0.7, t * 0.8), STICK, skip=("bottom",))
     # Armed: hinge on the -X bottom edge, the +X side lifted by the prop stick.
-    tilt = math.radians(17)
+    tilt = math.radians(13)
     hinge = Vector((-0.5, 0, 0))
     rot = Matrix.Translation(hinge) @ Matrix.Rotation(tilt, 4, "Y").inverted() @ Matrix.Translation(-hinge)
     m.transformed(rot)
@@ -76,7 +78,7 @@ def laco() -> C.Mesh:
     ring = []
     for k in range(9):
         a = 2 * math.pi * k / 8 + math.pi / 2
-        ring.append(noose_c + Matrix.Rotation(math.radians(-40), 3, "Z") @ Vector((0, math.cos(a) * r, math.sin(a) * r)))
+        ring.append(noose_c + Matrix.Rotation(math.radians(60), 3, "Z") @ Vector((0, math.cos(a) * r, math.sin(a) * r)))
     m.tube(ring, [0.03] * 9, 3, CORD, cap_end=False)
     # Trigger peg that holds the noose down.
     m.box((0.47, 0.0, 0.07), (0.07, 0.07, 0.18), PROP, skip=("bottom",))
