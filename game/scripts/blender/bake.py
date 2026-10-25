@@ -257,12 +257,32 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
         o for o in bpy.context.scene.objects if o.type == "MESH" and o != ground_obj
     ]
 
-    # Prepare COLOR_0 attribute on every mesh
+    # Prepare COLOR_0 attribute on every mesh (preserving any existing painted COLOR_0 RGB)
+    orig_vertex_colors: dict[str, list[tuple[float, float, float]]] = {}
     for obj in mesh_objs:
         mesh = obj.data
         if not mesh.materials:
             m = bpy.data.materials.new("DefaultBakeMat")
             mesh.materials.append(m)
+        existing_ca = mesh.color_attributes.get("COLOR_0")
+        if existing_ca is None and len(mesh.color_attributes) > 0:
+            existing_ca = mesh.color_attributes[0]
+        if existing_ca is not None:
+            if existing_ca.domain == "POINT":
+                orig_vertex_colors[obj.name] = [
+                    (
+                        existing_ca.data[i].color[0],
+                        existing_ca.data[i].color[1],
+                        existing_ca.data[i].color[2],
+                    )
+                    for i in range(len(mesh.vertices))
+                ]
+            elif existing_ca.domain == "CORNER":
+                v_cols: list[tuple[float, float, float]] = [(1.0, 1.0, 1.0)] * len(mesh.vertices)
+                for loop_idx, loop in enumerate(mesh.loops):
+                    c = existing_ca.data[loop_idx].color
+                    v_cols[loop.vertex_index] = (c[0], c[1], c[2])
+                orig_vertex_colors[obj.name] = v_cols
         while len(mesh.color_attributes) > 0:
             mesh.color_attributes.remove(mesh.color_attributes[0])
         ca = mesh.color_attributes.new(name="COLOR_0", type="BYTE_COLOR", domain="POINT")
@@ -310,6 +330,7 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
             ca = mesh.color_attributes.get("COLOR_0")
             if ca is None:
                 continue
+            saved_vc = orig_vertex_colors.get(m_obj.name)
             for v_idx, vert in enumerate(mesh.vertices):
                 wz = (mw @ vert.co).z
                 h = max(0.0, min(1.0, (wz - z_min) / span))
@@ -319,13 +340,24 @@ def bake_static_glb(in_glb: Path, out_glb: Path) -> dict:
                 if ao_raw <= 0.001:
                     ao_raw = 0.85
                 ao_q = round(max(0.0, min(1.0, ao_raw)) * 16.0) / 16.0
-                ao_term = 0.68 + 0.32 * ao_q
-                grad_term = 0.76 + 0.24 * h_smooth
-                shade = max(0.52, min(1.0, ao_term * grad_term))
-                # Subtle warm-sun top / cool-canopy base tint (multiply-ready)
-                r_val = min(1.0, shade * (0.96 + 0.04 * h_smooth))
-                g_val = shade
-                b_val = min(1.0, shade * (0.94 + 0.06 * h_smooth))
+                ao_term = 0.72 + 0.28 * ao_q
+                grad_term = 0.78 + 0.22 * h_smooth
+                shade = max(0.56, min(1.0, ao_term * grad_term))
+                base_r, base_g, base_b = saved_vc[v_idx] if saved_vc else (1.0, 1.0, 1.0)
+                r_val = min(1.0, base_r * shade * (0.97 + 0.03 * h_smooth))
+                g_val = min(1.0, base_g * shade)
+                b_val = min(1.0, base_b * shade * (0.95 + 0.05 * h_smooth))
+                if saved_vc:
+                    # Clamp sRGB lightness of pre-colored vertex attributes strictly into [0.125, 0.895]
+                    srgb_tuple = (
+                        int(round(recolor.linear_to_srgb(r_val) * 255)),
+                        int(round(recolor.linear_to_srgb(g_val) * 255)),
+                        int(round(recolor.linear_to_srgb(b_val) * 255)),
+                    )
+                    cr, cg, cb = recolor.clamp_lightness(srgb_tuple, 0.125, 0.895)
+                    r_val = recolor.srgb_to_linear(cr)
+                    g_val = recolor.srgb_to_linear(cg)
+                    b_val = recolor.srgb_to_linear(cb)
                 ca.data[v_idx].color = (r_val, g_val, b_val, 1.0)
 
     # Remove ground plane and restore original root positions

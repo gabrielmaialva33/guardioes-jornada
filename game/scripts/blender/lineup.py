@@ -186,12 +186,13 @@ def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | N
         for poly in mesh.polygons:
             poly.use_smooth = False
 
-        has_vc = "COLOR_0" in mesh.color_attributes
+        has_vc = len(mesh.color_attributes) > 0
+        vc_attr_name = mesh.color_attributes[0].name if has_vc else "COLOR_0"
         for slot in cur.material_slots:
             orig_mat = slot.material
             if not orig_mat:
                 continue
-            cache_key = f"{orig_mat.name}|{override_image_path}|{has_vc}"
+            cache_key = f"{orig_mat.name}|{override_image_path}|{has_vc}|{vc_attr_name}"
             if cache_key in converted_cache:
                 slot.material = converted_cache[cache_key]
                 continue
@@ -230,9 +231,9 @@ def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | N
                 rgb_node.outputs[0].default_value = base_rgba
                 color_out_socket = rgb_node.outputs[0]
 
-            if has_vc:
+            if has_vc and tex_img is not None:
                 vc = nodes.new("ShaderNodeVertexColor")
-                vc.layer_name = "COLOR_0"
+                vc.layer_name = vc_attr_name
                 mix = nodes.new("ShaderNodeMix")
                 mix.data_type = "RGBA"
                 mix.blend_type = "MULTIPLY"
@@ -240,6 +241,10 @@ def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | N
                 links.new(color_out_socket, mix.inputs[6])
                 links.new(vc.outputs["Color"], mix.inputs[7])
                 links.new(mix.outputs[2], diff.inputs["Color"])
+            elif has_vc:
+                vc = nodes.new("ShaderNodeVertexColor")
+                vc.layer_name = vc_attr_name
+                links.new(vc.outputs["Color"], diff.inputs["Color"])
             else:
                 links.new(color_out_socket, diff.inputs["Color"])
 
@@ -378,8 +383,8 @@ def main() -> None:
         # 1. Scale bar (1.0 u + 3.0 u) & Grey card at front-left (-11.5, 5.5)
         build_reference_bars_and_grey_card((-11.5, 5.5))
 
-        # 2. Avatar (3.0 u tall, in 3 skins: skin-a, skin-f, skin-l)
-        for idx, skin_id in enumerate(("skin-a", "skin-f", "skin-l")):
+        # 2. Avatar (3.0 u tall, in 3 skins: skin-a, skin-c, skin-k)
+        for idx, skin_id in enumerate(("skin-a", "skin-c", "skin-k")):
             roots = import_single_glb(MODELS_DIR / "avatar.glb", tmp_dir)
             if roots:
                 av = roots[0]
@@ -471,13 +476,21 @@ def main() -> None:
             if obj:
                 place_and_scale_root(obj, xy, target_height=th, target_length=tl, yaw_deg=12.0)
 
-        # Also place any custom-*.glb models if present
+        # Also place any custom-*.glb models at their native 1:1 ART scale
         custom_glbs = sorted(MODELS_DIR.glob("custom-*.glb"))
-        for idx, c_glb in enumerate(custom_glbs):
+        tree_idx = 0
+        prop_idx = 0
+        for c_glb in custom_glbs:
             c_roots = import_single_glb(c_glb, tmp_dir)
             for cr in c_roots:
                 convert_to_flat_lambert(cr)
-                place_and_scale_root(cr, (-11.0 + idx * 2.5, 8.0), target_height=1.5)
+                mins, maxs = get_hierarchy_bounds(cr)
+                if (maxs.z - mins.z) > 4.0:
+                    place_and_scale_root(cr, (-17.5 + tree_idx * 5.2, -13.5), uniform_scale=1.0, yaw_deg=15.0)
+                    tree_idx += 1
+                else:
+                    place_and_scale_root(cr, (11.5 + prop_idx * 2.0, 5.5), uniform_scale=1.0, yaw_deg=155.0)
+                    prop_idx += 1
 
         # Render 1: Master Lineup Overview (2560x1440) — pulled back to show full 18 u emergent tree height
         render_camera_view(

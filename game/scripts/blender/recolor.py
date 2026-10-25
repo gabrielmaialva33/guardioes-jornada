@@ -303,19 +303,30 @@ def enforce_species_and_skin_bounds(cmap: dict) -> None:
 
 def recolor_custom_glb(glb_path: Path, out_path: Path, cmap: dict) -> list[dict]:
     """
-    Remap material baseColorFactors in a custom GLB to the nearest CIE Lab ART ramp colour.
+    Remap material baseColorFactors in a custom GLB to the nearest CIE Lab ART ramp colour,
+    unless the mesh already uses painted vertex colours (`COLOR_0`) with a neutral white material.
     """
     buf = glb_path.read_bytes()
     j_len = struct.unpack_from("<I", buf, 12)[0]
     j_obj = json.loads(buf[20 : 20 + j_len].decode("utf-8"))
     bin_chunk = buf[28 + j_len :] if len(buf) > 20 + j_len else b""
 
+    has_vertex_colors = any(
+        "COLOR_0" in prim.get("attributes", {})
+        for mesh in j_obj.get("meshes", [])
+        for prim in mesh.get("primitives", [])
+    )
+
     entries = build_ramp_lookup(cmap, include_accent=True)
     report = []
     for mat in j_obj.get("materials", []):
         pbr = mat.setdefault("pbrMetallicRoughness", {})
         factor = pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])
-        # Interpret factor: if all components <= 1, convert linear->sRGB or direct sRGB
+        if has_vertex_colors and factor[0] > 0.98 and factor[1] > 0.98 and factor[2] > 0.98:
+            pbr["baseColorFactor"] = [1.0, 1.0, 1.0, 1.0]
+            pbr["metallicFactor"] = 0.0
+            pbr["roughnessFactor"] = 1.0
+            continue
         srgb = (
             int(round(linear_to_srgb(factor[0]) * 255)),
             int(round(linear_to_srgb(factor[1]) * 255)),
