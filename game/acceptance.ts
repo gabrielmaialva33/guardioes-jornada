@@ -20,7 +20,11 @@ async function build(label: string, snapshot = true) {
 	await new Promise<void>((done, reject) => {
 		const child = spawn('pnpm', ['build'], {
 			cwd: project,
-			env: { ...process.env, GAME_BUILD_TAG: snapshot ? label : '' },
+			env: {
+				...process.env,
+				GAME_BUILD_TAG: snapshot ? label : '',
+				GAME_ALLOW_SOFTWARE_TEST: snapshot ? '1' : '0'
+			},
 			stdio: ['ignore', 'pipe', 'pipe']
 		});
 		child.stdout.pipe(log);

@@ -28,7 +28,10 @@ export default defineConfig({
 			}
 		}
 	],
-	define: { __PACK_BUILD__: JSON.stringify(process.env.GAME_BUILD_TAG ?? '') },
+	define: {
+		__PACK_BUILD__: JSON.stringify(process.env.GAME_BUILD_TAG ?? ''),
+		__PACK_SOFTWARE_TEST__: process.env.GAME_ALLOW_SOFTWARE_TEST === '1'
+	},
 	build: {
 		outDir: '.build',
 		emptyOutDir: true,

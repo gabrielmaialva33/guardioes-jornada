@@ -2,6 +2,9 @@ import { flushSync, mount, unmount } from 'svelte';
 import { WebGLRenderer } from 'three';
 import { GAME_ABI, type GameBridge, type GameDispose } from '../abi.ts';
 import Root from './Root.svelte';
+import { pickQuality, readCapabilities } from './render/index.ts';
+
+declare const __PACK_SOFTWARE_TEST__: boolean;
 
 declare const __PACK_BUILD__: string;
 export const abi = GAME_ABI;
@@ -23,6 +26,20 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 			value = new WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' });
 		} catch (cause) {
 			throw new Error('game-webgl-unavailable', { cause });
+		}
+		const context = value.getContext();
+		const choice = pickQuality(
+			readCapabilities(
+				context instanceof WebGL2RenderingContext ? context : null,
+				navigator,
+				matchMedia('(pointer: coarse)').matches
+			),
+			{ mobileMedium: false }
+		);
+		if (!choice.canRender && !__PACK_SOFTWARE_TEST__) {
+			value.dispose();
+			value.forceContextLoss();
+			throw new Error('game-webgl-unavailable');
 		}
 		renderer = value;
 		const setLoop = value.setAnimationLoop.bind(value);
