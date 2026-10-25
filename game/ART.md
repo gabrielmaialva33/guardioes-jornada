@@ -14,6 +14,9 @@ The values in code live in `src/style/palette.ts` and `src/style/motion.ts`; thi
 
 The default avatar is Roblox-classic: Kenney's 6-block character with one flat colour per part (skin, hair, shirt, pants) and a simple face decal, composited at runtime into its 64×64 skin from the regions in `src/assets/skins/avatar-regions.json`. Kids pick colours or one of 18 presets with diverse, realistic skin tones. Kenney's 18 pixel-art skins remain as extra options in the chooser. Clothes may use ramp and accent colours, never gold.
 
+- **Clothes stand out from the forest:** shirts come from the water, wood, soil and rock ramps or the ipê accents. At most 2 of the 18 presets wear leaf or grass greens, which disappear against the trees.
+- **Hair is an accessory, as in Roblox:** besides the painted short hair, small meshes attach to the head node and take the hair colour (long, ponytail, bun, black power, braids, and a cap that takes the shirt colour). Each is ≤ 80 triangles, so the presets vary in silhouette, not only in colour.
+
 ### Forest
 
 The trees are the custom Atlantic Forest species (araucária, jequitibá, juçara, embaúba, ipês, xaxim). Kenney's Nature Kit supplies only bushes, rocks, logs, stumps, grass, flowers and props. No coconut palms or other species that do not belong in the Mata Atlântica.
