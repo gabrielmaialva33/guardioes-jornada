@@ -8,8 +8,8 @@ import {
 	PLANT_GRID,
 	RESPONDER,
 	type Responder,
-	type Seedling,
 	SEEDLINGS,
+	type Seedling,
 	type SurvivalWorld
 } from './types.ts';
 

@@ -17,7 +17,6 @@ import { classify, flatten, heightAt, type Relief, shapeRelief, slopes } from '.
 import {
 	ALBUM,
 	type AnimalHome,
-	BASE_PIECES,
 	type BaseCamp,
 	type BasePieceKind,
 	BLOCK_SIZE,
@@ -35,14 +34,14 @@ import {
 	MIN_POI_STEPS,
 	PLANT_GRID,
 	PLANT_STEP,
-	type PlantingCell,
 	type Placements,
-	type Poi,
+	type PlantingCell,
 	POI_KINDS,
+	type Poi,
 	type Point,
 	RESOURCE_KINDS,
-	type ResourceNode,
 	RESPONDER,
+	type ResourceNode,
 	ROCK_KINDS,
 	type SurvivalWorld,
 	THREAT_KINDS,
@@ -349,7 +348,8 @@ function build(seed: number, relaxed: boolean) {
 			const q = cellOf(x, z);
 			const y = heightAt(heights, x, z);
 			const [yawC, yawS] = threatRng.heading();
-			const seen = lookout !== undefined && lineOfSight(heights, flags, lookout, x, y + (kind === 'fire' ? 10 : 1), z);
+			const seen =
+				lookout !== undefined && lineOfSight(heights, flags, lookout, x, y + (kind === 'fire' ? 10 : 1), z);
 			threats.push({
 				id: threats.length,
 				kind,
@@ -720,7 +720,13 @@ function planCorridor(
 	const joinsForest = (q: number) => {
 		if (flags[q] & FLAG.forest) return true;
 		const i = columnOf(q);
-		return (flags[q] & FLAG.river) !== 0 && i >= SERRA_COLUMN && i < N - MARGIN && rowOf(q) >= MARGIN && rowOf(q) < N - MARGIN;
+		return (
+			(flags[q] & FLAG.river) !== 0 &&
+			i >= SERRA_COLUMN &&
+			i < N - MARGIN &&
+			rowOf(q) >= MARGIN &&
+			rowOf(q) < N - MARGIN
+		);
 	};
 	for (let start = 0; start < CELLS; start++) {
 		if (label[start] >= 0 || (flags[start] & FLAG.forest) === 0) continue;
@@ -966,7 +972,14 @@ function crossingSteps(crossings: Crossing[], kind: 'rope-bridge' | 'stepping-st
  * the terrain and the forest canopy (CANOPY u over forest cells). A trap under
  * the trees stays hidden; the smoke of a fire (top 10 u up) rises above them.
  */
-function lineOfSight(heights: Float32Array, flags: Uint8Array, lookout: Point, x: number, top: number, z: number) {
+function lineOfSight(
+	heights: Float32Array,
+	flags: Uint8Array,
+	lookout: Point,
+	x: number,
+	top: number,
+	z: number
+) {
 	const eye = lookout.y + 6;
 	const dx = x - lookout.x;
 	const dz = z - lookout.z;
