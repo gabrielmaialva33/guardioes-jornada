@@ -86,11 +86,13 @@ it('automatically reloads and becomes writable after the Web Lock is released', 
 	await first.load();
 	await second.load();
 	const visit = first.create({
+		participant: 'Synthetic participant',
+		myGroupIndex: 0,
 		school: 'Synthetic school',
 		className: '',
 		guide: '',
 		date: '2026-10-25',
-		groups: []
+		groups: [{ name: 'Canela', color: '#123456' }]
 	});
 	await first.flush();
 	first.close();

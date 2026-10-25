@@ -20,6 +20,7 @@ import {
 	newId,
 	normalizeSession,
 	progressOf,
+	todayIso,
 	type Gains,
 	type Group,
 	type ScoreEvent,
@@ -27,11 +28,15 @@ import {
 } from '#lib/session.ts';
 
 export type SessionChange = { kind: 'saved' | 'removed' | 'remote'; id: string };
+const participantInput = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40));
 export interface NewSession {
-	school: string;
-	className: string;
-	guide: string;
-	date: string;
+	participant: string;
+	myGroupIndex: number;
+	school?: string;
+	className?: string;
+	guide?: string;
+	date?: string;
+	startStep?: number;
 	groups: Omit<Group, 'id'>[];
 }
 export interface RemoteSession {
@@ -384,6 +389,26 @@ export class Sessions {
 	}
 	create(data: NewSession, journeyId = 'penap'): Session {
 		if (!this.ready) throw new Error('As jornadas ainda não estão prontas para alterações.');
+		const input = v.safeParse(
+			v.object({
+				participant: participantInput,
+				myGroupIndex: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+				groups: v.pipe(
+					v.array(v.strictObject({ name: v.pipe(v.string(), v.trim(), v.minLength(1)), color: v.string() })),
+					v.minLength(1)
+				),
+				school: v.optional(v.string()),
+				className: v.optional(v.string()),
+				guide: v.optional(v.string()),
+				date: v.optional(v.string()),
+				startStep: v.optional(v.pipe(v.number(), v.safeInteger(), v.minValue(0)))
+			}),
+			data
+		);
+		if (!input.success) throw new Error('Informe seu nome com até 40 caracteres e escolha um grupo válido.');
+		const values = input.output;
+		if (values.myGroupIndex >= values.groups.length) throw new Error('Escolha um grupo desta jornada.');
+		const groups = values.groups.map((group) => ({ ...group, id: newId() }));
 		const session = normalizeSession({
 			id: crypto.randomUUID(),
 			ownerId: this.ownerId,
@@ -391,8 +416,14 @@ export class Sessions {
 			journeyId,
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
-			...data,
-			groups: data.groups.map((g) => ({ ...g, id: newId() }))
+			participant: values.participant,
+			myGroupId: groups[values.myGroupIndex].id,
+			school: values.school ?? '',
+			className: values.className ?? '',
+			guide: values.guide ?? '',
+			date: values.date ?? todayIso(),
+			step: values.startStep ?? 0,
+			groups
 		});
 		const parsed = decodeSession(session);
 		if (!parsed.session) throw new Error(parsed.reason);
@@ -412,6 +443,24 @@ export class Sessions {
 		);
 		if (typeof navigator !== 'undefined') void navigator.storage?.persist?.().catch(() => {});
 		return this.find(session.id)!;
+	}
+	setMyGroup(s: Session, groupId: string) {
+		const session = this.#current(s);
+		if (!session) return;
+		if (!session.groups.some((group) => group.id === groupId))
+			throw new Error('Escolha um grupo desta jornada.');
+		if (session.myGroupId === groupId) return;
+		session.myGroupId = groupId;
+		this.#persist(session);
+	}
+	rename(s: Session, participant: string) {
+		const session = this.#current(s);
+		if (!session) return;
+		const parsed = v.safeParse(participantInput, participant);
+		if (!parsed.success) throw new Error('Informe seu nome com até 40 caracteres.');
+		if (session.participant === parsed.output) return;
+		session.participant = parsed.output;
+		this.#persist(session);
 	}
 	async remove(id: string) {
 		const session = this.find(id);

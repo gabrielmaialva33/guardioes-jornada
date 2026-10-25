@@ -20,6 +20,8 @@ export const sessionSchema = v.strictObject({
 	journeyId: id,
 	createdAt: timestamp,
 	updatedAt: timestamp,
+	participant: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(40)), ''),
+	myGroupId: v.optional(v.nullable(id), null),
 	school: v.string(),
 	className: v.string(),
 	guide: v.string(),
@@ -54,5 +56,7 @@ export function decodeSession(
 		return { reason: 'Etapa da jornada incompatível com esta versão.' };
 	if (new Set(session.groups.map((g) => g.id)).size !== session.groups.length)
 		return { reason: 'Há grupos com identificadores repetidos.' };
+	if (session.myGroupId !== null && !session.groups.some((group) => group.id === session.myGroupId))
+		return { reason: 'O grupo escolhido não pertence a esta jornada.' };
 	return { session };
 }

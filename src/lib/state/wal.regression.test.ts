@@ -5,7 +5,15 @@ import { clearJournalRecord, journalRecord } from '#lib/data/journal.ts';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
-const input = { school: 'Synthetic school', className: '', guide: '', date: '2026-10-25', groups: [] };
+const input = {
+	participant: 'Synthetic participant',
+	myGroupIndex: 0,
+	school: 'Synthetic school',
+	className: '',
+	guide: '',
+	date: '2026-10-25',
+	groups: [{ name: 'Canela', color: '#123456' }]
+};
 const stores: Sessions[] = [];
 class MemoryStorage implements Storage {
 	values = new Map<string, string>();
@@ -298,4 +306,37 @@ it('preserves the journey if interrupted between the fork and retirement journal
 	const recovered = create(new IndexedRepository(name));
 	await recovered.load();
 	expect(recovered.list.some((session) => session.revealed)).toBe(true);
+});
+it('journals participant changes synchronously and recovers them after immediate unload', async () => {
+	const name = 'wal-participant-' + crypto.randomUUID(),
+		disk = new IndexedRepository(name);
+	let blocked = false;
+	const store = create({
+		read: () => disk.read(),
+		close: () => disk.close(),
+		write: (rows) => (blocked ? new Promise(() => {}) : disk.write(rows))
+	});
+	await store.load();
+	const session = store.create({
+		participant: 'Ana',
+		myGroupIndex: 0,
+		groups: [
+			{ name: 'Canela', color: '#123456' },
+			{ name: 'Cedro', color: '#654321' }
+		]
+	});
+	await store.flush();
+	blocked = true;
+	store.rename(session, '  Bruno  ');
+	store.setMyGroup(session, session.groups[1].id);
+	const snapshot = JSON.parse(localStorage.getItem('guardioes-wal:' + session.id)!);
+	expect(snapshot.session.participant).toBe('Bruno');
+	expect(snapshot.session.myGroupId).toBe(session.groups[1].id);
+	expect(snapshot.rev).toBe(3);
+	store.close();
+	const restored = create(new IndexedRepository(name));
+	await restored.load();
+	expect(restored.find(session.id)?.participant).toBe('Bruno');
+	expect(restored.find(session.id)?.myGroupId).toBe(session.groups[1].id);
+	expect(restored.pendingCount).toBe(1);
 });

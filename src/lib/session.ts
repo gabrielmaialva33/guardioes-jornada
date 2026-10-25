@@ -17,7 +17,7 @@ export interface ScoreEvent {
 	item?: string;
 }
 
-/** One class going through a journey, run from the guide's phone. */
+/** A participant's journey, including visits saved before participant profiles. */
 export interface Session {
 	id: string;
 	/** Local revision, independent of the phone's wall clock. */
@@ -26,6 +26,8 @@ export interface Session {
 	journeyId: string;
 	createdAt: number;
 	updatedAt: number;
+	participant: string;
+	myGroupId: string | null;
 	school: string;
 	className: string;
 	guide: string;
@@ -82,6 +84,8 @@ export function normalizeSession(raw: Partial<Session> & Pick<Session, 'id'>): S
 		journeyId: 'penap',
 		createdAt: Date.now(),
 		updatedAt: 0,
+		participant: '',
+		myGroupId: null,
 		school: '',
 		className: '',
 		guide: '',

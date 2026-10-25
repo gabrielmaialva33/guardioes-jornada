@@ -17,6 +17,8 @@ import { CloudSync, type SyncIdentity } from './sync.svelte.ts';
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const input = {
+	participant: 'Synthetic participant',
+	myGroupIndex: 0,
 	school: 'Synthetic school',
 	className: 'Synthetic class',
 	guide: 'Synthetic guide',
