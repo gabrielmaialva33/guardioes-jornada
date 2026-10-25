@@ -484,10 +484,10 @@ function main() {
 			petsPalPath,
 			64
 		);
-		const skinAPngBytes = resizeNearestPng(
+		const skinAPlaceholderBytes = resizeNearestPng(
 			path.join(blockyTexDir, 'texture-a.png'),
-			path.join(workDir, 'skin-a-256.png'),
-			256
+			path.join(workDir, 'skin-a-4.png'),
+			4
 		);
 
 		// 2. Avatar: character-a.glb -> strip animations, normalize head scale to [1,1,1], keep 6 named nodes
@@ -496,7 +496,11 @@ function main() {
 			const { json, bin } = readGlb(rawAvatar);
 			delete json.animations;
 			normalizeAvatarHeadScale(json, bin);
-			const nextBin = cleanMaterialsAndAttributes(json, { replaceImages: [skinAPngBytes] }, bin);
+			const nextBin = cleanMaterialsAndAttributes(
+				json,
+				{ replaceImages: [skinAPlaceholderBytes] },
+				bin
+			);
 			const step1 = path.join(workDir, 'avatar-step1.glb');
 			const step2 = path.join(workDir, 'avatar-step2.glb');
 			writeGlb(step1, json, nextBin);
@@ -519,16 +523,18 @@ function main() {
 			runGltfpack(step2, path.join(OUT_MODELS, `${pet}.glb`), ['-vpf']);
 		}
 
-		// 4. Flora: merge 18 Nature Kit models -> palette() -> NEAREST sampler -> gltfpack -cc -kn
+		// 4. Flora: merge 18 Nature Kit models -> prune unused TEXCOORD_0 -> palette() -> NEAREST sampler -> gltfpack -cc -kn
 		{
 			const items = FLORA_MODELS.map((name) => ({
 				name,
 				path: path.join(RAW_ROOT, 'nature-kit', 'Models', 'GLTF format', `${name}.glb`)
 			}));
 			const mergedPath = path.join(workDir, 'flora-merged.glb');
+			const prunedPath = path.join(workDir, 'flora-pruned.glb');
 			const palPath = path.join(workDir, 'flora-pal.glb');
 			mergeStaticGlbs(items, mergedPath);
-			runGltfTransform(['palette', mergedPath, palPath, '--min', '2']);
+			runGltfTransform(['prune', mergedPath, prunedPath]);
+			runGltfTransform(['palette', prunedPath, palPath, '--min', '2']);
 			// Ensure NEAREST sampler on the generated palette texture
 			const palGlb = readGlb(palPath);
 			const nextBin = cleanMaterialsAndAttributes(palGlb.json, {}, palGlb.bin);
