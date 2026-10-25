@@ -3,11 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Session } from '#lib/session.ts';
 import { standings } from '#lib/session.ts';
 import type { RemoteSession } from '#lib/state/sessions.svelte.ts';
-import type { Database, Json } from './database.types.ts';
+import type { Database, Json, JourneyMutationReply } from './database.types.ts';
 
-export interface PushReply {
-	status: 'ok' | 'conflict';
-	rev: number;
+export interface PushReply extends Omit<JourneyMutationReply, 'server_doc'> {
 	server_doc: RemoteSession | null;
 }
 export interface CloudAdapter {
@@ -27,7 +25,8 @@ const remoteSchema = v.object({
 const replySchema = v.object({
 	status: v.picklist(['ok', 'conflict']),
 	rev,
-	server_doc: v.nullable(remoteSchema)
+	server_doc: v.nullable(remoteSchema),
+	reason: v.optional(v.string())
 });
 
 export function createCloudAdapter(client: SupabaseClient<Database>): CloudAdapter {
