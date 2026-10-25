@@ -10,6 +10,14 @@ The values in code live in `src/style/palette.ts` and `src/style/motion.ts`; thi
 - Readability over realism, but never false biology: the right colours, proportions and behaviour of each species, simplified.
 - Daylight by default; night (survival mode) is a lighting and fog change, never new materials.
 
+### Avatar
+
+The default avatar is Roblox-classic: Kenney's 6-block character with one flat colour per part (skin, hair, shirt, pants) and a simple face decal, composited at runtime into its 64×64 skin from the regions in `src/assets/skins/avatar-regions.json`. Kids pick colours or one of 18 presets with diverse, realistic skin tones. Kenney's 18 pixel-art skins remain as extra options in the chooser. Clothes may use ramp and accent colours, never gold.
+
+### Forest
+
+The trees are the custom Atlantic Forest species (araucária, jequitibá, juçara, embaúba, ipês, xaxim). Kenney's Nature Kit supplies only bushes, rocks, logs, stumps, grass, flowers and props. No coconut palms or other species that do not belong in the Mata Atlântica.
+
 ## 2. Palette
 
 All colours come from the ramps in `src/style/palette.ts`. They extend the app's own tokens (`src/app.css`: `--canopy`, `--canopy-light`, `--bark`, `--sun`, `--gold`, `--water`), brightened for daylight, so the game and the app's diorama are the same place.
