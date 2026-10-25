@@ -83,6 +83,7 @@ def length(points):
 out = []
 size = W * P + 2 * M
 out.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size + 300}" height="{size}" font-family="Atkinson Hyperlegible Next, sans-serif">')
+out.append("<title>Reserva da Iara: planta do mapa da história</title>")
 out.append(f'<rect width="{size + 300}" height="{size}" fill="#f4f6ee"/>')
 out.append(f'<rect x="{M}" y="{M}" width="{W * P}" height="{W * P}" fill="#86bf7c"/>')
 # restinga strip on the west edge

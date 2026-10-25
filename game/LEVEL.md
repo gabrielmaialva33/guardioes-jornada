@@ -19,14 +19,14 @@ Author the map as data with the shape of `SurvivalWorld` (`src/survival/types.ts
 
 ## 3. Geography
 
-| Area | Where (x, z) | Height (y) | Notes |
-|---|---|---|---|
-| Restinga | x < 10 | 0.5 | Sandy strip on the west edge, low bushes, map edge |
-| Baixada | x 10–110 | 1–4, gentle noise ±1 | Most of the map: forest fragments, pasture, trails |
-| Encosta | x 110–126 | 3 → 6 | Rises towards the plateau |
-| Mirante (plateau) | polygon (128, 40) (158, 40) (158, 100) (130, 100) (126, 70) | 15, flat top | West face is a cliff (> 50°, not walkable) except the ledges |
-| Serra edge | x > 150 outside the plateau, z < 40 | 10–18 | Steep forest: the east boundary |
-| Map edges | all sides | | Rising ground plus dense trees, then an invisible wall at 1 u inside the edge |
+| Area              | Where (x, z)                                                | Height (y)           | Notes                                                                         |
+| ----------------- | ----------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------- |
+| Restinga          | x < 10                                                      | 0.5                  | Sandy strip on the west edge, low bushes, map edge                            |
+| Baixada           | x 10–110                                                    | 1–4, gentle noise ±1 | Most of the map: forest fragments, pasture, trails                            |
+| Encosta           | x 110–126                                                   | 3 → 6                | Rises towards the plateau                                                     |
+| Mirante (plateau) | polygon (128, 40) (158, 40) (158, 100) (130, 100) (126, 70) | 15, flat top         | West face is a cliff (> 50°, not walkable) except the ledges                  |
+| Serra edge        | x > 150 outside the plateau, z < 40                         | 10–18                | Steep forest: the east boundary                                               |
+| Map edges         | all sides                                                   |                      | Rising ground plus dense trees, then an invisible wall at 1 u inside the edge |
 
 Forest fragments, the pasture and the clareira are the polygons in `docs/level-plan.py` (the plan's generator). Forest means `FLAG.forest`. The pasture between the west and north fragments is the corridor (`FLAG.corridor`), and the clareira is `FLAG.cleared`.
 
@@ -39,22 +39,22 @@ Forest fragments, the pasture and the clareira are the polygons in `docs/level-p
 
 ## 5. Places
 
-| Key | (x, z) | What |
-|---|---|---|
-| Spawn | (34, 92), facing north-east | Checkpoint 0. First view: Iara, the ipê-amarelo and the trail sign |
-| Iara | (38, 80) | Park ranger NPC, the hub: gives and closes missions |
-| Viveiro | (27, 79) | Seedling nursery; the six seedlings for mission 4 come from here |
-| Ipê-amarelo | (30, 70) | Base landmark: the only yellow canopy on the map |
-| Trail sign | (42, 88) | Neutral sign: "Trilha da Reserva", no institution's logo |
-| Pasture / corridor | polygon (44, 46) (76, 44) (78, 58) (46, 60) | Mission 1 planting cells in a line across it |
-| Observation rock | (100, 24), boulder about 4 u tall | Mission 2: hide behind it |
-| Illegal cutting | (114, 14), next to a jequitibá-rosa | Mission 2: observed from the rock, never approached |
-| Stones | from (86, 70) to (103, 82) | Obby 1, mission 3 |
-| Bridge | (50, 124) to (62, 134) | The long way across; always open |
-| Clareira | centre (112, 118), radius 14 | Mission 4: six planting spots on a ring of radius 7 |
-| Traps | (124, 104), (142, 128), (96, 140) | Mission 5 |
-| Mirante ledges | from (121, 97) to (128.6, 78) | Obby 2, mission 6 |
-| Jequitibá (landmark) | (146, 62) on the plateau, 18 u tall | Visible from the whole map (section 9) |
+| Key                  | (x, z)                                      | What                                                               |
+| -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| Spawn                | (34, 92), facing north-east                 | Checkpoint 0. First view: Iara, the ipê-amarelo and the trail sign |
+| Iara                 | (38, 80)                                    | Park ranger NPC, the hub: gives and closes missions                |
+| Viveiro              | (27, 79)                                    | Seedling nursery; the six seedlings for mission 4 come from here   |
+| Ipê-amarelo          | (30, 70)                                    | Base landmark: the only yellow canopy on the map                   |
+| Trail sign           | (42, 88)                                    | Neutral sign: "Trilha da Reserva", no institution's logo           |
+| Pasture / corridor   | polygon (44, 46) (76, 44) (78, 58) (46, 60) | Mission 1 planting cells in a line across it                       |
+| Observation rock     | (100, 24), boulder about 4 u tall           | Mission 2: hide behind it                                          |
+| Illegal cutting      | (114, 14), next to a jequitibá-rosa         | Mission 2: observed from the rock, never approached                |
+| Stones               | from (86, 70) to (103, 82)                  | Obby 1, mission 3                                                  |
+| Bridge               | (50, 124) to (62, 134)                      | The long way across; always open                                   |
+| Clareira             | centre (112, 118), radius 14                | Mission 4: six planting spots on a ring of radius 7                |
+| Traps                | (124, 104), (142, 128), (96, 140)           | Mission 5                                                          |
+| Mirante ledges       | from (121, 97) to (128.6, 78)               | Obby 2, mission 6                                                  |
+| Jequitibá (landmark) | (146, 62) on the plateau, 18 u tall         | Visible from the whole map (section 9)                             |
 
 ## 6. Trails
 
@@ -90,15 +90,14 @@ The gaps are fractions of `jumpReach(rise)` (`src/engine/graybox.ts`). A full-sp
 
 The yellow arrow points to the next one. Mission 1 comes first (it introduces planting and the mico companion); the rest can be done in any order. The text keys are those of `conteudo-jogo.md`, sections 2 and 4.
 
-| # | Name (pt-BR) | Goal | Teaches | Done when |
-|---|---|---|---|---|
-| 1 | Sementes de juçara | Pick 5 juçara fruits by the trail and plant them in the pasture gap | Ecological corridors reconnect forest fragments (AMLD) | 5 planting cells filled. The micos cross the corridor through the canopy and one follows the child (never fed by hand: `MICO_FEED`) |
-| 2 | Olho no corte ilegal | Reach the observation rock and call Iara on the radio | Keep a safe distance; call the authorities | Choice in `LOGGER_DIALOG`. Inside 12 u of the cutting, Iara says on the radio to go back behind the rock, and the mission waits |
-| 3 | Pedras do rio | Cross on the stones | Platforming; the bridge is the safe way | Reached the east bank checkpoint by the stones or the bridge. Stones give the gold leaf |
-| 4 | Mudas na clareira | Plant the 6 nursery seedlings in the clareira | Restoration with native species | 6 spots planted; the seedlings grow one step at once (no waiting) |
-| 5 | Armadilhas | Find 3 traps, mark each one and call the wildlife inspector | Never touch a trap; mark it and call an adult | 3 traps marked (`TRAP_FACT`, Lei 9.605/1998, art. 29) |
-| 6 | Mirante | Climb to the top after missions 1–5 | Reward: the whole reserve in view | Top reached: Iara's closing line, badge `earnBadge()` (Sentinela da Trilha Secreta) |
-
+| #   | Name (pt-BR)         | Goal                                                                | Teaches                                                | Done when                                                                                                                           |
+| --- | -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Sementes de juçara   | Pick 5 juçara fruits by the trail and plant them in the pasture gap | Ecological corridors reconnect forest fragments (AMLD) | 5 planting cells filled. The micos cross the corridor through the canopy and one follows the child (never fed by hand: `MICO_FEED`) |
+| 2   | Olho no corte ilegal | Reach the observation rock and call Iara on the radio               | Keep a safe distance; call the authorities             | Choice in `LOGGER_DIALOG`. Inside 12 u of the cutting, Iara says on the radio to go back behind the rock, and the mission waits     |
+| 3   | Pedras do rio        | Cross on the stones                                                 | Platforming; the bridge is the safe way                | Reached the east bank checkpoint by the stones or the bridge. Stones give the gold leaf                                             |
+| 4   | Mudas na clareira    | Plant the 6 nursery seedlings in the clareira                       | Restoration with native species                        | 6 spots planted; the seedlings grow one step at once (no waiting)                                                                   |
+| 5   | Armadilhas           | Find 3 traps, mark each one and call the wildlife inspector         | Never touch a trap; mark it and call an adult          | 3 traps marked (`TRAP_FACT`, Lei 9.605/1998, art. 29)                                                                               |
+| 6   | Mirante              | Climb to the top after missions 1–5                                 | Reward: the whole reserve in view                      | Top reached: Iara's closing line, badge `earnBadge()` (Sentinela da Trilha Secreta)                                                 |
 - **Collectibles:** 10 pieces of trash along the trails (optional, counter in the HUD) and the gold leaves (one on stone 4, one per mission). Gold is only on things to touch.
 - **Fire** is not on the story map. It belongs to survival and its night mode, where the rule is: move away and call an adult or the Bombeiros (193).
 
@@ -114,15 +113,15 @@ The yellow arrow points to the next one. Mission 1 comes first (it introduces pl
 
 The behaviour and constraints are in `src/animation/animals/` (report `p3-animals.md`):
 
-| Animal | Home (x, z) | Notes |
-|---|---|---|
-| Micos | (60, 38), canopy of the north fragment | After mission 1, one follows the child. It needs `heightAt` for the ground and never freezes |
-| Bugios | (18, 20) | Resting and howling in the canopy; the howl is the north-west's sound landmark |
-| Muriquis | (108, 32) | Brachiation needs branch handholds 1.2–1.5 u apart. A row of canopy trees near the cutting shows what logging would cut off |
-| Preguiça | (128, 124), in an embaúba | Sloths favour embaúbas |
-| Tucanos | (138, 58), araucárias on the plateau | Seen at the mission 6 finale |
-| Onça | (146, 148), south-east forest | Walks away when the child comes within 15 u; seen from the mirante and the trap loop |
-| Borboletas | the clareira, once planted | One flock, one draw |
+| Animal     | Home (x, z)                            | Notes                                                                                                                                                                                             |
+| ---------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Micos      | (60, 38), canopy of the north fragment | After mission 1, one follows the child. It needs `heightAt` for the ground and never freezes                                                                                                      |
+| Bugios     | (18, 20)                               | Resting and howling in the canopy; the howl is the north-west's sound landmark                                                                                                                    |
+| Muriquis   | (108, 32)                              | Brachiation needs branch handholds 1.0–1.25 u apart, never more than 1.33 u (`MURIQUI_HOLDS` in `src/animation/animals`). A row of canopy trees near the cutting shows what logging would cut off |
+| Preguiça   | (128, 124), in an embaúba              | Sloths favour embaúbas                                                                                                                                                                            |
+| Tucanos    | (138, 58), araucárias on the plateau   | Seen at the mission 6 finale                                                                                                                                                                      |
+| Onça       | (146, 148), south-east forest          | Walks away when the child comes within 15 u; seen from the mirante and the trap loop                                                                                                              |
+| Borboletas | the clareira, once planted             | One flock, one draw                                                                                                                                                                               |
 
 ## 11. Assets this map needs
 
