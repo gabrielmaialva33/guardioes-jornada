@@ -34,6 +34,8 @@ export const MICO = {
 	/** Settles inside ±bandIn of the gap, starts again outside ±bandOut. */
 	bandIn: 0.25 * STUD,
 	bandOut: 1 * STUD,
+	/** The pull stops inside this error, well within bandIn. */
+	aimBand: 0.1 * STUD,
 	/** Radial correction per unit of gap error, 1/s. */
 	gain: 4,
 	/** A quarter faster than the player's walk so it can catch up. */
@@ -243,8 +245,9 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		let tvx = 0;
 		let tvz = 0;
 		if (!this.settled) {
-			// Dead band, then a proportional pull capped by a braking curve (arrive).
-			const excess = Math.max(0, Math.abs(error) - MICO.bandIn);
+			// Dead band (inside the settle band, so it is reached in finite time), then a
+			// proportional pull capped by a braking curve (arrive).
+			const excess = Math.max(0, Math.abs(error) - MICO.aimBand);
 			const pull = Math.min(MICO.gain * excess, Math.sqrt(2 * MICO.accel * excess), MICO.maxSpeed);
 			const radial = error > 0 ? -pull : pull;
 			tvx = this.#playerVx + radial * nx;
@@ -272,14 +275,15 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 	#wander() {
 		const motion = this.motion;
 		const route = this.route;
-		const cruise = this.state === 'move' && route ? this.#cruise : 0;
-		const before = this.#speed;
-		this.#speed = approach(before, cruise, MICO.wanderAccel * this.h);
-		motion.accel = (this.#speed - before) / this.h;
+		this.cruise = this.state === 'move' && route ? this.#cruise : 0;
+		this.rampRate = MICO.wanderAccel;
+		this.speed = this.#speed;
+		this.ramp();
+		this.#speed = this.speed;
 		this.vx = this.vz = 0;
-		if (route && this.#speed > 0) {
+		if (route && this.travel > 0) {
 			const step = this.#advance;
-			step.distance = 0.5 * (before + this.#speed) * this.h;
+			step.distance = this.travel;
 			route.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
@@ -351,7 +355,7 @@ export class MicoBehaviour extends Behaviour<MicoState> {
 		}
 		this.#glance -= this.h;
 		if (this.#glance <= 0) {
-			const rng = this.rng;
+			const rng = this.cosmetic;
 			this.#glance = rng.range(MICO.glance[0], MICO.glance[1]);
 			this.#lookAtPlayer = this.companion && rng.chance(MICO.lookAtPlayer);
 			if (!this.#lookAtPlayer) {

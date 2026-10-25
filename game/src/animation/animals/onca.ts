@@ -92,7 +92,9 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 				if (this.state !== 'move') {
 					if (ahead > 0) this.#reverse();
 					this.leaving = true;
-					this.enter('move', this.rng.range(ONCA.move[0], ONCA.move[1]));
+					// A fixed duration: this reaction happens at substep granularity, and a draw
+					// here would shift the decisions' random sequence between frame rates.
+					this.enter('move', ONCA.move[1]);
 				} else if (ahead > 0) {
 					this.#reverse();
 					this.leaving = true;
@@ -103,15 +105,21 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 			if (distance > ONCA.avoidRadius * 1.5) this.leaving = false;
 		}
 
-		const cruise = this.state === 'move' ? (this.leaving ? ONCA.leaveSpeed : ONCA.walkSpeed) : 0;
-		const before = this.#speed;
+		let cruise = this.state === 'move' ? (this.leaving ? ONCA.leaveSpeed : ONCA.walkSpeed) : 0;
+		// Cornered at the end of an open trail: stop and watch rather than turn back past the player.
+		if (this.leaving && !this.route.closed) {
+			const left = this.cursor.direction > 0 ? this.route.length - this.cursor.s : this.cursor.s;
+			if (left < ONCA.walkSpeed * 0.5) cruise = 0;
+		}
 		// Wait to finish turning around before walking on.
 		const aligned = Math.abs(wrapAngle(this.targetYaw - motion.yaw)) < 0.35;
-		this.#speed = approach(before, aligned ? cruise : 0, ONCA.accel * h);
-		motion.accel = (this.#speed - before) / h;
-		if (this.#speed > 0) {
+		this.cruise = aligned ? cruise : 0;
+		this.rampRate = ONCA.accel;
+		this.ramp();
+		this.#speed = this.speed;
+		if (this.travel > 0) {
 			const step = this.#advance;
-			step.distance = 0.5 * (before + this.#speed) * h;
+			step.distance = this.travel;
 			this.route.advance(this.cursor, step);
 			motion.distance += step.distance;
 			this.#place();
@@ -171,8 +179,8 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		}
 		this.#glance -= this.h;
 		if (this.#glance <= 0) {
-			this.#glance = this.rng.range(ONCA.glance[0], ONCA.glance[1]);
-			this.#lookYaw = this.rng.range(-ONCA.glanceYaw, ONCA.glanceYaw);
+			this.#glance = this.cosmetic.range(ONCA.glance[0], ONCA.glance[1]);
+			this.#lookYaw = this.cosmetic.range(-ONCA.glanceYaw, ONCA.glanceYaw);
 		}
 	}
 
