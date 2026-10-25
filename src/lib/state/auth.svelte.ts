@@ -8,7 +8,7 @@ import { sessions } from './sessions.svelte.ts';
  * code typed inside the app: email links would open a separate browser tab
  * that does not share the installed PWA's storage.
  */
-class GuideAuth {
+export class GuideAuth {
 	user = $state<User | null>(null);
 	ready = $state(false);
 	generation = $state(0);
