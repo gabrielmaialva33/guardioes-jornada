@@ -108,13 +108,15 @@
 						<ellipse cx="0" cy="-23" rx="11" ry="13" class="canopy-dark" />
 						<ellipse cx="-4" cy="-27" rx="4" ry="5" class="canopy" />
 					{:else}
-						<path d="M-1.2 0 L-0.8 -9 L0.8 -9 L1.2 0Z" class="bark" />
-						<path d="M0 -38 L-8 -25 L8 -25Z" class="canopy-light" />
-						<path d="M0 -31 L-10 -17 L10 -17Z" class="canopy-light" />
-						<path d="M0 -23 L-12 -8 L12 -8Z" class="canopy-light" />
-						<circle cx="-4" cy="-20" r="1.3" class="fruit" />
-						<circle cx="5" cy="-14" r="1.3" class="fruit" />
-						<circle cx="-6" cy="-11" r="1.2" class="fruit" />
+						<!-- Cedro-rosa is a broadleaf: tall straight trunk, wide open crown. -->
+						<path d="M-1.4 0 L-0.8 -24 L0.8 -24 L1.4 0Z" class="bark" />
+						<ellipse cx="0" cy="-28" rx="13" ry="6.5" class="canopy-light" />
+						<ellipse cx="-7" cy="-31" rx="7" ry="5" class="canopy-light" />
+						<ellipse cx="7" cy="-32" rx="7.5" ry="5.5" class="canopy-light" />
+						<ellipse cx="1" cy="-35" rx="5.5" ry="3.5" class="canopy" />
+						<circle cx="-8" cy="-22" r="1.3" class="fruit" />
+						<circle cx="5" cy="-21.5" r="1.3" class="fruit" />
+						<circle cx="10" cy="-24" r="1.2" class="fruit" />
 					{/if}
 				</g>
 			</g>

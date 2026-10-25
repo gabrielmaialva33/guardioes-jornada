@@ -1,10 +1,10 @@
 /**
- * Trees of the Atlantic Forest: canela-preta (round canopy), cedro-rosa
- * (layered cone with woody fruits that stay on the branches), the deep forest's canopy trees, palmito-juçara
+ * Trees of the Atlantic Forest: canela-preta (dense round canopy), cedro-rosa
+ * (broadleaf with a wide crown and woody fruits that stay on the branches), the deep forest's canopy trees, palmito-juçara
  * and samambaiaçu (tree fern). Each tree grows from its base: `order` (0..1)
  * staggers when it sprouts within its stage.
  */
-import { blob, cone, groundDisc, hash3, type MeshBuilder, prism, rng, type V3 } from './builder.ts';
+import { blob, groundDisc, hash3, type MeshBuilder, prism, rng, type V3 } from './builder.ts';
 import { FIRST_TREES, freeForTree, heightAt, RX, rimZ } from './layout.ts';
 
 function growTree(b: MeshBuilder, base: V3, height: number, order: number, span = 0.55) {
@@ -58,42 +58,42 @@ export function canela(b: MeshBuilder, base: V3, s: number, order: number, seed:
 
 export function cedro(b: MeshBuilder, base: V3, s: number, order: number, seed: number) {
 	growTree(b, base, 1.3 * s, order);
-	shadow(b, base, 0.42 * s);
-	prism(b, base, [base[0], base[1] + 0.3 * s, base[2]], 0.05 * s, 0.035 * s, 5, { tone: 'bark', k: 0.92 });
-	const layers = [
-		{ y: 0.2, h: 0.5, r: 0.44 },
-		{ y: 0.47, h: 0.46, r: 0.35 },
-		{ y: 0.72, h: 0.42, r: 0.25 }
-	];
-	const rand = rng(seed);
-	layers.forEach((l, i) => {
-		const lb: V3 = [base[0], base[1] + l.y * s, base[2]];
-		cone(
-			b,
-			lb,
-			l.h * s,
-			l.r * s,
-			7,
-			(k) => ({ tone: 'canopy-light', mix: 'canopy', t: 0.1 + (k % 2) * 0.12 + i * 0.05, k: 1.02 }),
-			seed + i
-		);
-		// Woody fruit capsules, which often stay on the branches (Embrapa).
-		for (let k = 0; k < 4; k++) {
-			const a = rand() * Math.PI * 2;
-			const f = 0.25 + rand() * 0.5;
-			const r = l.r * s * (1 - f) * 0.98;
-			const p: V3 = [lb[0] + Math.cos(a) * r, lb[1] + l.h * s * f + 0.01, lb[2] + Math.sin(a) * r];
-			blob(
-				b,
-				p,
-				[0.045 * s, 0.04 * s, 0.045 * s],
-				0,
-				() => ({ tone: 'bark', mix: 'sun', t: 0.3, k: 1.15 }),
-				0.2,
-				seed * 7 + k + i * 4
-			);
-		}
+	shadow(b, base, 0.44 * s);
+	// A broadleaf, not a conifer: tall straight trunk and a wide, open crown.
+	const top: V3 = [base[0], base[1] + 0.78 * s, base[2]];
+	prism(b, base, top, 0.055 * s, 0.035 * s, 5, { tone: 'bark', k: 0.92 });
+	const crown = (n: V3) => ({
+		tone: 'canopy-light' as const,
+		mix: 'canopy' as const,
+		t: 0.3 - Math.max(0, n[1]) * 0.2,
+		k: 1.02
 	});
+	const rand = rng(seed);
+	blob(b, [top[0], top[1] + 0.1 * s, top[2]], [0.4 * s, 0.18 * s, 0.38 * s], 1, crown, 0.18, seed);
+	for (let i = 0; i < 3; i++) {
+		const a = (i / 3) * Math.PI * 2 + rand();
+		const lobe: V3 = [
+			top[0] + Math.cos(a) * 0.24 * s,
+			top[1] + (0.06 + rand() * 0.08) * s,
+			top[2] + Math.sin(a) * 0.22 * s
+		];
+		blob(b, lobe, [0.2 * s, 0.12 * s, 0.2 * s], 0, crown, 0.2, seed + 1 + i);
+	}
+	// Woody fruit capsules, which often stay on the branches (Embrapa).
+	for (let k = 0; k < 6; k++) {
+		const a = rand() * Math.PI * 2;
+		const r = (0.26 + rand() * 0.14) * s;
+		const p: V3 = [top[0] + Math.cos(a) * r, top[1] + (rand() * 0.06 - 0.02) * s, top[2] + Math.sin(a) * r];
+		blob(
+			b,
+			p,
+			[0.045 * s, 0.04 * s, 0.045 * s],
+			0,
+			() => ({ tone: 'bark', mix: 'sun', t: 0.3, k: 1.15 }),
+			0.2,
+			seed * 7 + k
+		);
+	}
 }
 
 /** The deep forest's canopy trees: taller, darker, irregular crowns. */
