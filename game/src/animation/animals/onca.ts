@@ -13,7 +13,7 @@ import { STUD } from '../../engine/constants.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
 import type { AnimalWorld } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
-import { approach, clamp, DEG, wrapAngle } from './scalar.ts';
+import { clamp, DEG, wrapAngle } from './scalar.ts';
 
 export const ONCA_STATES = ['idle', 'move', 'sit', 'rest'] as const;
 export type OncaState = (typeof ONCA_STATES)[number];

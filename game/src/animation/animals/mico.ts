@@ -22,7 +22,7 @@ import { LIMITS } from '../../style/motion.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
 import type { AnimalWorld } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
-import { approach, clamp, DEG, wrapAngle } from './scalar.ts';
+import { clamp, DEG, wrapAngle } from './scalar.ts';
 
 export const MICO_STATES = ['idle', 'move', 'rest', 'follow', 'hop'] as const;
 export type MicoState = (typeof MICO_STATES)[number];

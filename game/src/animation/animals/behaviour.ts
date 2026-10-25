@@ -96,7 +96,7 @@ export abstract class Behaviour<S extends string = string> {
 		this.sense(world);
 		let left = Math.min(this.frameDt, MAX_DT);
 		for (let guard = 0; left > 1e-9 && guard < 64; guard++) {
-			let h = left < MAX_SUBSTEP ? left : MAX_SUBSTEP;
+			let h = Math.min(left, MAX_SUBSTEP);
 			if (this.timer > 1e-9 && this.timer < h) h = this.timer;
 			this.h = h;
 			const distance = motion.distance;
@@ -138,7 +138,7 @@ export abstract class Behaviour<S extends string = string> {
 	protected enter(state: S, duration: number) {
 		this.state = state;
 		this.stateTime = 0;
-		this.timer = duration > 1e-3 ? duration : 1e-3;
+		this.timer = Number.isFinite(duration) ? Math.max(duration, 1e-3) : 1e-3;
 	}
 
 	/**

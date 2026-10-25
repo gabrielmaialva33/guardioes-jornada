@@ -203,7 +203,7 @@ export class PreguicaBehaviour extends Behaviour<PreguicaState> {
 			}
 			const leg = this.moving;
 			const need = (1 - this.progress) * this.#duration;
-			const used = left < need ? left : need;
+			const used = Math.min(left, need);
 			this.progress = used >= need ? 1 : this.progress + used / this.#duration;
 			left -= used;
 			const step = PREGUICA.step * this.cursor.direction;

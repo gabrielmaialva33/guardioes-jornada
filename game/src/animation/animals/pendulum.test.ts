@@ -43,7 +43,7 @@ describe('muriqui brachiation pendulum', () => {
 		for (const rate of rates) {
 			const got = intervals(switchTimes(rate));
 			expect(got.length).toBe(reference.length);
-			got.forEach((interval, i) => expect(interval).toBeCloseTo(reference[i], 9));
+			for (let i = 0; i < got.length; i++) expect(got[i]).toBeCloseTo(reference[i], 9);
 		}
 	});
 

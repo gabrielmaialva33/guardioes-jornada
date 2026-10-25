@@ -151,7 +151,7 @@ export class Flock {
 	update(rawDt: number) {
 		let left = safeDt(rawDt);
 		while (left > 1e-9) {
-			this.#h = left < FLOCK_SUBSTEP ? left : FLOCK_SUBSTEP;
+			this.#h = Math.min(left, FLOCK_SUBSTEP);
 			this.#steer();
 			this.#integrate();
 			left -= this.#h;
@@ -273,7 +273,7 @@ export class Flock {
 				vz = 0;
 				speed = p.minSpeed;
 			}
-			const target = speed > p.maxSpeed ? p.maxSpeed : speed < p.minSpeed ? p.minSpeed : speed;
+			const target = Math.min(p.maxSpeed, Math.max(p.minSpeed, speed));
 			const k = target / speed;
 			vx *= k;
 			vy *= k;
