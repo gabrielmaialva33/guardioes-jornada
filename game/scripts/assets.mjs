@@ -581,7 +581,104 @@ function encodePng(width, height, rgba) {
 }
 
 /**
- * Paint an 8x16 swatch cell (col = 0..7, band = 0..3) in a 64x64 RGBA buffer.
+ * Remap UVs in tiger.glb and parrot.glb so Atlantic Forest species palettes map cleanly:
+ * - In tiger.glb: eyes/nose (front face z > 0.625) and stripes (sides/back/forehead) both shared
+ *   swatch(col=7, band=3). Move the 49 eye/nose triangles to swatch(col=5, band=3) so swatch(col=7, band=3)
+ *   can be set to the base coat in jaguar palettes (eliminating tiger stripes while keeping black eyes/nose).
+ * - In parrot.glb: wing tops, crest ('Group'), tail base, and the back of the body shared swatch(col=1, band=1)
+ *   with the front breast/undertail. Move wing/crest/back triangles to swatch(col=1, band=3) so the wings,
+ *   crown, back, and tail of Ramphastos dicolorus render glossy black while the front breast is yellow/red
+ *   and the beak cells (7,3)/(6,3) are pale green.
+ */
+function remapPetUvsForSpecies(petName, json, bin) {
+	if (petName !== 'tiger' && petName !== 'parrot') return;
+	for (const mesh of json.meshes || []) {
+		for (const prim of mesh.primitives || []) {
+			const posAcc = json.accessors[prim.attributes.POSITION];
+			const uvAcc = json.accessors[prim.attributes.TEXCOORD_0];
+			const idxAcc = json.accessors[prim.indices];
+			const posBv = json.bufferViews[posAcc.bufferView];
+			const uvBv = json.bufferViews[uvAcc.bufferView];
+			const idxBv = json.bufferViews[idxAcc.bufferView];
+			const posBase = (posBv.byteOffset || 0) + (posAcc.byteOffset || 0);
+			const posStride = posBv.byteStride || 12;
+			const uvBase = (uvBv.byteOffset || 0) + (uvAcc.byteOffset || 0);
+			const uvStride = uvBv.byteStride || 8;
+			const idxBase = (idxBv.byteOffset || 0) + (idxAcc.byteOffset || 0);
+			const idxBytes = idxAcc.componentType === 5123 ? 2 : 4;
+
+			const readIdx = (i) =>
+				idxBytes === 2 ? bin.readUInt16LE(idxBase + i * 2) : bin.readUInt32LE(idxBase + i * 4);
+			const readPos = (vi) => [
+				bin.readFloatLE(posBase + vi * posStride),
+				bin.readFloatLE(posBase + vi * posStride + 4),
+				bin.readFloatLE(posBase + vi * posStride + 8)
+			];
+			const readUv = (vi) => [
+				bin.readFloatLE(uvBase + vi * uvStride),
+				bin.readFloatLE(uvBase + vi * uvStride + 4)
+			];
+			const writeUv = (vi, u, v) => {
+				bin.writeFloatLE(u, uvBase + vi * uvStride);
+				bin.writeFloatLE(v, uvBase + vi * uvStride + 4);
+			};
+
+			for (let i = 0; i < idxAcc.count; i += 3) {
+				const tris = [readIdx(i), readIdx(i + 1), readIdx(i + 2)];
+				const uv0 = readUv(tris[0]);
+				const uv1 = readUv(tris[1]);
+				const uv2 = readUv(tris[2]);
+				const cu = (uv0[0] + uv1[0] + uv2[0]) / 3;
+				const cv = (uv0[1] + uv1[1] + uv2[1]) / 3;
+				const col = Math.floor(cu * 8);
+				const band = Math.floor(cv * 4);
+
+				const p0 = readPos(tris[0]);
+				const p1 = readPos(tris[1]);
+				const p2 = readPos(tris[2]);
+				const cx = (p0[0] + p1[0] + p2[0]) / 3;
+				const cy = (p0[1] + p1[1] + p2[1]) / 3;
+				const cz = (p0[2] + p1[2] + p2[2]) / 3;
+
+				if (petName === 'tiger' && mesh.name === 'body' && col === 7 && band === 3) {
+					const isEyeOrNose = cz > 0.625 && Math.abs(cx) < 0.35 && cy > 0.48 && cy < 0.9;
+					if (isEyeOrNose) {
+						// Move eye/nose to col=5, band=3 (u shifted by -2/8 = -0.25)
+						for (const vi of tris) {
+							const [u, v] = readUv(vi);
+							if (Math.floor(u * 8) === 7) writeUv(vi, u - 2 / 8, v);
+						}
+					}
+				} else if (petName === 'parrot') {
+					if (
+						(mesh.name === 'wing-left' ||
+							mesh.name === 'wing-right' ||
+							mesh.name === 'Group' ||
+							mesh.name === 'tail') &&
+						col === 1 &&
+						band === 1
+					) {
+						// Move wing tops, crest, and tail base from (1,1) to (1,3) (black plumage, v += 2/4 = +0.5)
+						for (const vi of tris) {
+							const [u, v] = readUv(vi);
+							if (Math.floor(v * 4) === 1) writeUv(vi, u, v + 0.5);
+						}
+					} else if (mesh.name === 'body' && col === 1 && band === 1) {
+						// Keep front breast (cz >= 0.35, cy <= 0.90) and undertail (cy < 0.22) in (1,1);
+						// move upper head and back/sides to (1,3) (black plumage)
+						const isFrontBreastOrUndertail = (cz >= 0.35 && cy <= 0.9) || cy < 0.22;
+						if (!isFrontBreastOrUndertail) {
+							for (const vi of tris) {
+								const [u, v] = readUv(vi);
+								if (Math.floor(v * 4) === 1) writeUv(vi, u, v + 0.5);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
  * Supports either [topHex, bottomHex] or a custom rowStops function(row 0..15) => [r, g, b].
  */
 function paintSwatch(rgba, col, band, spec) {
@@ -650,31 +747,33 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 		],
 
 		// 4. Onça-pintada (Panthera onca) — base: tiger.glb
-		// Warm golden-ochre coat, cream-white belly/throat/muzzle, jet-black spots/rosettes + rusty-brown rosette center cell.
+		// Golden-ochre base coat (stripe cell 7,3 also set to base coat so tiger stripes disappear; rosettes added in code).
 		'onca-pintada': [
 			{ col: 3, band: 3, spec: ['#f2a93b', '#cc7a1d'] }, // Main dorsal coat (body, tail, upper legs): golden-ochre
-			{ col: 7, band: 3, spec: ['#292321', '#141110'] }, // Built-in dark markings, ears, nose & outer rosette rings: jet black
+			{ col: 7, band: 3, spec: ['#f2a93b', '#cc7a1d'] }, // Tiger stripe cell matched to base coat (no tiger stripes!)
+			{ col: 5, band: 3, spec: ['#26201e', '#14100f'] }, // Eyes, nose & outer rosette ring geometry: jet-black
 			{ col: 2, band: 3, spec: ['#f7d399', '#dfb06b'] }, // Paws & inner ear tufts: warm buff-gold
-			{ col: 1, band: 2, spec: ['#fffaf0', '#dfd5c5'] }, // Belly, chest, muzzle cheeks & tail underside: cream-white
-			{ col: 3, band: 2, spec: ['#b85d19', '#8a3f0b'] }  // Reserved cell for inner rosette centers (rusty-ochre)
+			{ col: 1, band: 2, spec: ['#fffaf0', '#dfd5c5'] }, // Belly, chest, muzzle cheeks & eye sclera: cream-white
+			{ col: 3, band: 2, spec: ['#b85d19', '#8a3f0b'] }  // Inner rosette center geometry: rusty-ochre
 		],
 
 		// 5. Onça-preta / Melânica (Panthera onca melanistic variant) — base: tiger.glb
-		// Deep charcoal-espresso coat with velvet-black ghost markings/rosettes, golden-amber eyes, and dark slate belly/paws.
+		// Uniformly dark charcoal-espresso coat (stripe cell 7,3 matched to base coat so stripes do not show), subtle contrast.
 		'onca-melanica': [
-			{ col: 3, band: 3, spec: ['#322e36', '#211e24'] }, // Main dorsal coat: dark charcoal-espresso
-			{ col: 7, band: 3, spec: ['#141217', '#09080b'] }, // Ghost markings / outer rosette rings: deep velvet-black
-			{ col: 2, band: 3, spec: ['#3d3842', '#2b272f'] }, // Paws & inner ears: muted dark slate
+			{ col: 3, band: 3, spec: ['#2b2830', '#1d1b21'] }, // Main dorsal coat: dark charcoal-espresso
+			{ col: 7, band: 3, spec: ['#2b2830', '#1d1b21'] }, // Tiger stripe cell matched to base coat (uniformly dark!)
+			{ col: 5, band: 3, spec: ['#121015', '#08070a'] }, // Eyes, nose & subtle ghost-rosette rings: deep velvet-black
+			{ col: 2, band: 3, spec: ['#302c36', '#211e26'] }, // Paws & inner ears: subtle dark slate
 			{
 				col: 1,
 				band: 2,
 				spec: (r) => {
-					// Rows 0..3: glowing golden-amber jaguar eyes; Rows 4..15: dark slate muzzle & underbelly
+					// Rows 0..3: golden-amber jaguar eyes; Rows 4..15: subtle dark charcoal muzzle & underbelly
 					if (r <= 3) return lerpHex('#ffcf40', '#e09f1f', r / 3);
-					return lerpHex('#48434f', '#2f2b36', (r - 4) / 11);
+					return lerpHex('#35313c', '#242129', (r - 4) / 11);
 				}
 			},
-			{ col: 3, band: 2, spec: ['#241f26', '#171419'] }  // Reserved cell for inner ghost-rosette centers
+			{ col: 3, band: 2, spec: ['#221f26', '#161419'] }  // Inner ghost-rosette center geometry
 		],
 
 		// 6. Preguiça-de-coleira (Bradypus torquatus) — base: koala.glb
@@ -696,22 +795,21 @@ function generateSpeciesPalettes(basePetPngPath, outSkinsDir) {
 		],
 
 		// 7. Tucano-de-bico-verde (Ramphastos dicolorus) — base: parrot.glb
-		// Glossy black plumage, golden-yellow throat/upper breast, crimson-red belly & undertail, pale yellow-green bill, sky-blue lower eye ring.
+		// Glossy black wings/back/crown/tail, golden-yellow throat/upper breast, crimson-red lower breast & undertail, pale green bill.
 		'tucano-de-bico-verde': [
 			{
 				col: 1,
 				band: 1,
 				spec: (r) => {
-					// Rows 0..4: head & upper back (jet black); Rows 5..8: upper breast (golden-yellow); Rows 9..15: belly & undertail (crimson-red)
-					if (r <= 4) return lerpHex('#282b34', '#1c1e26', r / 4);
-					if (r <= 8) return lerpHex('#ffe033', '#f2bd18', (r - 5) / 3);
-					return lerpHex('#e6392e', '#b8221a', (r - 9) / 6);
+					// Front breast & undertail: Rows 0..7: golden-yellow throat/breast; Rows 8..15: crimson-red belly & undertail
+					if (r <= 7) return lerpHex('#ffe033', '#f5b814', r / 7);
+					return lerpHex('#e6392e', '#b8221a', (r - 8) / 7);
 				}
 			},
-			{ col: 1, band: 3, spec: ['#262932', '#171920'] }, // Wings & tail feathers: glossy jet-black
-			{ col: 7, band: 3, spec: ['#b5e645', '#84bd24'] }, // Upper beak: signature yellow-green bill
-			{ col: 6, band: 3, spec: ['#99cf30', '#6da118'] }, // Lower beak: yellow-green bill
-			{ col: 7, band: 2, spec: ['#5a6878', '#3e4956'] }, // Legs/feet (blue-grey tarsus of Ramphastos) & wing edge
+			{ col: 1, band: 3, spec: ['#242730', '#15171e'] }, // Wings, back, crown & tail feathers: glossy jet-black
+			{ col: 7, band: 2, spec: ['#22252e', '#14161c'] }, // Lower wing feathers & legs: glossy jet-black
+			{ col: 7, band: 3, spec: ['#bce84c', '#86bf24'] }, // Upper beak cell: signature pale yellow-green bill
+			{ col: 6, band: 3, spec: ['#a3d936', '#72ab18'] }, // Lower beak cell: pale yellow-green bill
 			{
 				col: 1,
 				band: 2,
