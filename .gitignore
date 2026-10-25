@@ -1,0 +1,11 @@
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+vite.config.*.timestamp-*
+.playwright-cli
+/test-results
+/playwright-report

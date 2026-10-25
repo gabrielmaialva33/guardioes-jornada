@@ -1,0 +1,10 @@
+build
+.svelte-kit
+node_modules
+pnpm-lock.yaml
+.agents
+.claude
+supabase/.temp
+src/lib/supabase/database.types.ts
+static
+src/lib/icons.generated.ts

@@ -1,0 +1,58 @@
+{
+	"name": "guardioes-jornada",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Jornada guiada dos Guardiões da Mata Atlântica: PWA offline para o guia conduzir grupos de estudantes na trilha.",
+	"packageManager": "pnpm@11.22.0",
+	"engines": {
+		"node": ">=22.17"
+	},
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build && cp deploy/_headers build/_headers",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && svelte-check --tsconfig ./src/service-worker/tsconfig.json",
+		"db:new": "supabase migration new",
+		"db:push": "supabase db push --linked",
+		"db:lint": "supabase db advisors --linked",
+		"db:types": "supabase gen types typescript --linked --schema public > src/lib/supabase/database.types.ts",
+		"test:e2e": "playwright test",
+		"format": "prettier --write .",
+		"lint": "prettier --check .",
+		"icons": "node scripts/icons.ts",
+		"test": "vitest run",
+		"deploy": "pnpm build && pnpm dlx wrangler@4.152.0 deploy",
+		"db:config": "set -a && . ./supabase/.env && set +a && supabase config push"
+	},
+	"dependencies": {
+		"@fontsource-variable/alegreya": "5.3.0",
+		"@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
+		"@supabase/supabase-js": "2.118.0",
+		"idb-keyval": "6.3.0",
+		"three": "0.186.1",
+		"uqr": "0.1.3",
+		"valibot": "1.5.0"
+	},
+	"devDependencies": {
+		"@iconify-json/ph": "1.2.2",
+		"@playwright/test": "1.64.1",
+		"@sveltejs/adapter-static": "4.0.0",
+		"@sveltejs/kit": "3.1.0",
+		"@sveltejs/vite-plugin-svelte": "7.3.1",
+		"@types/node": "24.19.2",
+		"@types/three": "0.186.0",
+		"fake-indexeddb": "6.2.6",
+		"prettier": "3.9.10",
+		"prettier-plugin-svelte": "4.1.1",
+		"supabase": "2.122.0",
+		"svelte": "5.57.2",
+		"svelte-check": "4.7.7",
+		"typescript": "6.0.3",
+		"vite": "8.3.5",
+		"vitest": "5.0.5"
+	}
+}
