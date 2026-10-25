@@ -240,11 +240,13 @@ it('drops an emote whose character moved before it started', () => {
 it('returns to idle over 0.15 s when a one-shot emote ends', () => {
 	const machine = new AvatarStateMachine();
 	machine.playEmote('point');
-	run(machine, EMOTES.point.period, standing);
+	const end = EMOTES.point.period;
+	run(machine, end + ANIMATE.loopFade / 2, standing, 1 / 60, (time) => {
+		if (time < end - 1e-9) expect(machine.state).toBe('emote');
+		else expect(machine.weight('idle')).toBeCloseTo((time - end) / ANIMATE.loopFade, 9);
+	});
 	expect(machine.state).toBe('idle');
 	expect(machine.emoting).toBe(false);
-	run(machine, ANIMATE.loopFade / 2, standing);
-	expect(machine.weight('idle')).toBeCloseTo(0.5, 6);
 	run(machine, ANIMATE.loopFade / 2, standing);
 	expect(machine.weight('idle')).toBeCloseTo(1, 9);
 });

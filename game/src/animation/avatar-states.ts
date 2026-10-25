@@ -191,9 +191,15 @@ export class AvatarStateMachine {
 			}
 			this.#pendingEmote = null;
 		}
+		// Seconds of this update past the emote's end, or -1.
+		let emoteOver = -1;
 		if (this.emote !== null) {
 			this.emoteTime += dt;
-			if (!still || steering || this.emoteTime >= EMOTES[this.emote].period) this.#emoteActive = false;
+			if (this.#emoteActive) {
+				const over = this.emoteTime - EMOTES[this.emote].period;
+				if (over >= 0) emoteOver = Math.min(dt, over);
+				if (over >= 0 || !still || steering) this.#emoteActive = false;
+			}
 		}
 
 		if (moving) {
@@ -259,6 +265,7 @@ export class AvatarStateMachine {
 		} else {
 			next = IDLE;
 			fade = current === EMOTE ? ANIMATE.loopFade : ANIMATE.idleFade;
+			if (emoteOver >= 0) lead = emoteOver;
 		}
 
 		if (next !== current) {
