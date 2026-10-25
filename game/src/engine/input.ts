@@ -492,7 +492,10 @@ export function attachInput(
 }
 
 function buttonRole(target: EventTarget | null, root: HTMLElement): ButtonRole | null {
-	const button = target instanceof Element ? target.closest<HTMLElement>('[data-game-button]') : null;
+	const button =
+		typeof Element !== 'undefined' && target instanceof Element
+			? target.closest<HTMLElement>('[data-game-button]')
+			: null;
 	if (!button || !root.contains(button)) return null;
 	const role = button.dataset.gameButton;
 	return role === 'jump' || role === 'action' || role === 'shiftLock' || role === 'emote' ? role : null;
@@ -500,6 +503,7 @@ function buttonRole(target: EventTarget | null, root: HTMLElement): ButtonRole |
 
 function isTextField(target: EventTarget | null): boolean {
 	return (
+		typeof HTMLElement !== 'undefined' &&
 		target instanceof HTMLElement &&
 		(target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
 	);
