@@ -1,4 +1,5 @@
 import type { Handle } from '@sveltejs/kit/hooks';
+import { dev } from '$app/env';
 import { immutable } from '$app/manifest';
 import { resolve } from '$app/paths';
 
@@ -6,6 +7,7 @@ import { resolve } from '$app/paths';
 export const handle: Handle = async ({ event, resolve: respond }) =>
 	respond(event, {
 		transformPageChunk: ({ html }) => {
+			if (dev) return html;
 			const root = new URL(resolve('/'), event.url);
 			const fonts = immutable.filter(({ path }) =>
 				/(?:alegreya|atkinson-hyperlegible-next)-latin-wght-normal\.[^/]+\.woff2$/.test(path)
