@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import produced from '../assets/skins/avatar-regions.json';
 import fixture from './atlas.fixture.json';
 import { composePixels, decodeAvatarAtlas } from './atlas.ts';
 
@@ -39,4 +40,10 @@ it('paints in declared order, then draws the nearest-neighbour face while preser
 	expect(pixel(20, 20)).toEqual([34, 51, 68, 255]);
 	expect(pixel(30, 30)).toEqual([51, 68, 85, 255]);
 	expect(pixel(63, 63)).toEqual([17, 34, 51, 255]);
+});
+
+it('consumes the produced v1 atlas with eighteen diverse presets', () => {
+	const atlas = decodeAvatarAtlas(produced);
+	expect(atlas.presets).toHaveLength(18);
+	expect(new Set(atlas.presets.map((p) => p.colors.skin)).size).toBeGreaterThan(8);
 });

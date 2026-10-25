@@ -1,9 +1,7 @@
-// Temporary v1 fixture while the asset producer replaces its earlier region-map format.
-
+import regions from '../assets/skins/avatar-regions.json';
 import type { AvatarProfile } from '../data/local-save.ts';
-import regions from './atlas.fixture.json';
 import { decodeAvatarAtlas } from './atlas.ts';
-export const ATLAS_SOURCE = 'fixture';
+export const ATLAS_SOURCE = 'assets';
 export const AVATAR_ATLAS = decodeAvatarAtlas(regions);
 export const AVATAR_PRESETS = AVATAR_ATLAS.presets;
 export const DEFAULT_AVATAR: AvatarProfile = {
