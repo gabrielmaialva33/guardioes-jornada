@@ -175,6 +175,16 @@ class Mesh:
         self.colours.append(colour)
         self.uvs.append(uv)
 
+    def add2(self, pts, front: str, back: str, uv=None, gap: float = 0.006) -> None:
+        """A two-sided face: the front with its own winding and a reversed back face,
+        each pushed gap/2 along its normal so no renderer has to pick between two
+        coincident faces (three.js culls the back one anyway)."""
+        pts = [Vector(p) for p in pts]
+        n = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+        n = n.normalized() * (gap / 2) if n.length > 1e-12 else Vector()
+        self.add([p + n for p in pts], front, uv)
+        self.add([p - n for p in reversed(pts)], back, uv)
+
     def tris(self) -> int:
         return sum(len(f) - 2 for f in self.faces)
 
@@ -258,10 +268,8 @@ class Mesh:
         top = [root, l + up, tip, r + up] if thickness else [root, l, tip, r]
         # quads would be non-planar when bent: split into 2 triangles each side
         back = colour_under or colour
-        self.add([top[0], top[3], top[2]], back, uv)
-        self.add([top[0], top[2], top[1]], back, uv)
-        self.add([top[0], top[1], top[2]], colour, uv)
-        self.add([top[0], top[2], top[3]], colour, uv)
+        self.add2([top[0], top[1], top[2]], colour, back, uv)
+        self.add2([top[0], top[2], top[3]], colour, back, uv)
 
     def chunk(self, base, rx, ry, h, n, colour, *, chamfer=0.3, twist=0.0, colour_top=None, colour_bottom=None,
               top_scale=1.0, bottom=True, rot: Matrix | None = None, uv=None):
@@ -344,15 +352,12 @@ class Mesh:
                 quad = [pts[i], pts[i + 1], e[i + 1], e[i]]
                 if (e[i + 1] - pts[i + 1]).length < 1e-6:
                     tri = [pts[i], pts[i + 1], e[i]]
-                    self.add(tri if e is right else tri[::-1], colour, uv)
-                    self.add(tri[::-1] if e is right else tri, under, uv)
+                    self.add2(tri if e is right else tri[::-1], colour, under, uv)
                 else:
                     q = quad if e is right else quad[::-1]
                     # keep each side as two triangles: the strip is usually non-planar
-                    self.add([q[0], q[1], q[2]], colour, uv)
-                    self.add([q[0], q[2], q[3]], colour, uv)
-                    self.add([q[2], q[1], q[0]], under, uv)
-                    self.add([q[3], q[2], q[0]], under, uv)
+                    self.add2([q[0], q[1], q[2]], colour, under, uv)
+                    self.add2([q[0], q[2], q[3]], colour, under, uv)
 
     def merge(self, other: "Mesh") -> None:
         base = len(self.verts)
@@ -626,6 +631,7 @@ def setup_cycles(samples: int = 96) -> None:
     scene.cycles.use_adaptive_sampling = True
     scene.cycles.use_denoising = True
     scene.cycles.max_bounces = 4
+    scene.cycles.transparent_max_bounces = 24
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "Standard"  # the game renders with NoToneMapping
     scene.view_settings.look = "None"
@@ -716,7 +722,16 @@ def diffuse_material(name: str, hexc: str | None = None, use_attr: bool = True, 
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     bsdf = nt.nodes.new("ShaderNodeBsdfDiffuse")
     bsdf.inputs["Roughness"].default_value = 0.0
-    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    # three.js renders FrontSide only: back faces are culled, so two-sided leaves show
+    # the face that points at the camera. Cycles has no culling; a transparent back
+    # face reproduces it (also for shadow rays, like a culled shadow pass).
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(geo.outputs["Backfacing"], mix.inputs["Fac"])
+    nt.links.new(bsdf.outputs[0], mix.inputs[1])
+    nt.links.new(clear.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
     if image is not None:
         tex = nt.nodes.new("ShaderNodeTexImage")
         tex.image = image
@@ -953,12 +968,19 @@ def preview_static(glb: Path, png: Path, *, closeup: bool = False, res=(1200, 12
     return out
 
 
-def run(build, *, name: str, budget: int, target: str, preview=None) -> dict:
+def run(build, *, name: str, budget: int, target: str, preview=None, preview_kw: dict | None = None) -> dict:
     """Build -> export -> audit -> preview. `build()` returns the root object."""
     reset_scene()
     root = build()
     glb = export_glb(OUT / f"{name}.glb", root)
     audit = write_audit(glb, budget, target)
     if "--no-render" not in argv_flags():
-        (preview or (lambda g, p: preview_static(g, p)))(glb, OUT / f"{name}.png")
+        if preview is not None:
+            preview(glb, OUT / f"{name}.png")
+        else:
+            preview_static(glb, OUT / f"{name}.png", **(preview_kw or {}))
     return audit
+
+
+# Trees are seen by a 3 u avatar from the trail: a low camera that looks up into the crown.
+TREE_VIEW = {"elevation_deg": 3.0, "res": (1000, 1300), "lens": 45.0}

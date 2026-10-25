@@ -76,4 +76,4 @@ def build():
 
 
 if __name__ == "__main__":
-    C.run(build, name="araucaria", budget=400, target="12-14 u (canopy)")
+    C.run(build, name="araucaria", budget=400, target="12-14 u (canopy)", preview_kw=C.TREE_VIEW)

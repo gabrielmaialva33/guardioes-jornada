@@ -56,4 +56,4 @@ def build():
 
 
 if __name__ == "__main__":
-    C.run(build, name="jequitiba-rosa", budget=400, target="~18 u (emergent)")
+    C.run(build, name="jequitiba-rosa", budget=400, target="~18 u (emergent)", preview_kw=C.TREE_VIEW)

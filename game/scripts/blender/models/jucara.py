@@ -96,4 +96,4 @@ def build():
 
 
 if __name__ == "__main__":
-    C.run(build, name="palmeira-jucara", budget=400, target="~8 u (understorey/mid-storey)")
+    C.run(build, name="palmeira-jucara", budget=400, target="~8 u (understorey/mid-storey)", preview_kw=C.TREE_VIEW)

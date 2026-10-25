@@ -15,9 +15,11 @@ Shape decisions and sources:
   Horto Didático UFSC, https://hortodidatico.ufsc.br/embauba-vermelha/ (weaker source;
   peltate Cecropia leaves are standard botany but not stated by Embrapa).
 - So: a pale grey ringed trunk (rock ramp, darker rings), three candelabrum arms, and at
-  each tip three big 7-lobed star leaves, domed like umbrellas and drooping outwards so
-  their silvery undersides (rock[3], the lightest grey-green in the ramps) show from below
-  and from the side.
+  each tip three big 7-lobed star leaves, domed like umbrellas: two spread out, the oldest
+  hangs down beside the tip with its silvery underside (rock[3], the lightest grey-green in
+  the ramps) turned out to the light. Under the game's hemisphere light a downward-facing
+  underside is lit by the ground colour and looks dark, so the hanging leaf is what shows
+  the silver.
   Leaves are drawn about 3x real size so the umbrella crown reads on a phone.
 """
 
@@ -48,8 +50,7 @@ def star_leaf(m: C.Mesh, centre: Vector, normal: Vector, radius: float, lobes: i
         rim.append(centre + basis @ Vector((math.cos(a) * r, math.sin(a) * r, drop)))
     for k in range(len(rim)):
         a, b = rim[k], rim[(k + 1) % len(rim)]
-        m.add([centre, a, b], LEAF)
-        m.add([centre, b, a], UNDER)
+        m.add2([centre, a, b], LEAF, UNDER)
 
 
 def build():
@@ -71,15 +72,17 @@ def build():
         for k in range(3):
             b = a + (k - 1) * 2.1 + 0.25 * i
             out = Vector((math.cos(b), math.sin(b), 0))
-            # the blade droops outwards (normal leans towards the trunk), so its silvery
-            # underside faces anyone looking up at the crown
-            tilt = math.radians(16 + 6 * k)
+            # Young blades spread and droop a little outwards; the oldest one hangs down
+            # beside the tip with its whitish underside turned out to the light, the
+            # silver flash that marks embaúbas in the forest.
+            hanging = k == 0
+            tilt = math.radians(112 if hanging else 14 + 8 * k)
             normal = (Vector((0, 0, 1)) * math.cos(tilt) - out * math.sin(tilt)).normalized()
-            centre = tip + out * 0.95 + Vector((0, 0, 0.12 + 0.2 * (k % 2)))
-            star_leaf(m, centre, normal, 1.6 - 0.1 * k, 7, b)
+            centre = tip + out * (0.75 if hanging else 0.95) + Vector((0, 0, -0.95 if hanging else 0.1 + 0.2 * (k % 2)))
+            star_leaf(m, centre, normal, 1.35 if hanging else 1.65 - 0.1 * k, 7, b)
     _ = Matrix
     return C.build_object(m, "embauba")
 
 
 if __name__ == "__main__":
-    C.run(build, name="embauba", budget=400, target="~10 u (canopy tier floor)")
+    C.run(build, name="embauba", budget=400, target="~10 u (canopy tier floor)", preview_kw=C.TREE_VIEW)
