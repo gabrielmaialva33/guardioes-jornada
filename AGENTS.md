@@ -1,8 +1,9 @@
 # Guardiões da Mata Atlântica: guided journey
 
-Offline-first PWA a field guide uses on a phone to lead school groups through
-the PENAP journey: opening story, five missions, group points, final oath and
-printable certificates. Students never use or sign in to the app.
+Offline-first PWA for a journey through the Atlantic Forest (Mata Atlântica): the
+call to adventure comes first, then the participant gives a name and picks a group,
+then five missions, group points, the final oath and a printable certificate. It
+works for one person, a family or a class led by a guide; nothing asks for a school.
 
 ## Commands
 
@@ -39,8 +40,10 @@ SvelteKit 3.1, Svelte 5.57 (runes only), Vite 8, TypeScript 6, adapter-static 4.
 
 ## Architecture
 
-- `src/lib/content/`: the journey script as data (`penap.ts`). Story and mission text
-  belong to the content owner; change wording there, not in components.
+- `src/lib/content/`: the journey script as data (`mata-atlantica.ts`). Story, mission
+  text, groups and tree facts belong to the content owner; change wording there, not in
+  components. The journey id stays `'penap'` because stored sessions and cloud rows
+  reference it; it is never shown. Every botanical statement needs a source in `TreeInfo`.
 - `src/lib/session.ts`: pure domain logic (progress, levels, achievements, scores).
 - `src/lib/data/`: IndexedDB repository (one record per session with its outbox state),
   valibot schemas for everything read from disk or the cloud, service worker cache helpers.
@@ -68,7 +71,9 @@ SvelteKit 3.1, Svelte 5.57 (runes only), Vite 8, TypeScript 6, adapter-static 4.
 
 - Code and comments in English; everything the user sees in Brazilian Portuguese.
 - Must keep working in airplane mode. Never require the network to advance a journey.
-- No personal data about students: groups are named after trees; photos are of nature.
+- Personal data is limited to the participant's name (shown on the certificate, never on
+  `/verify`). School and class are optional legacy fields: never require them. Groups are
+  named after trees; photos are of nature. No user-facing text may assume students or PENAP.
 - Never use `alert`/`confirm`/`prompt`; use `Sheet.svelte`.
 - Design tokens live in `src/app.css` (Mata dark default, Sol light). Big touch targets (`--tap`),
   visible focus, respect `prefers-reduced-motion`.

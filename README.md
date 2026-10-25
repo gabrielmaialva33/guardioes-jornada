@@ -1,8 +1,9 @@
 # Guardiões da Mata Atlântica: jornada guiada
 
-App que o guia usa no celular para conduzir turmas pela jornada na PENAP: abertura narrada, cinco
-missões, pontos por grupo, juramento e certificados. Funciona em modo avião: depois do primeiro acesso
-com internet, tudo fica guardado no aparelho. Alunos não usam nem entram no app.
+Uma jornada pela Mata Atlântica no celular: o app abre com o chamado da floresta, a pessoa diz seu nome,
+escolhe um grupo (Canela-preta ou Cedro-rosa) e segue por cinco missões, com pontos por grupo, juramento
+e certificado. Serve para quem vai sozinho, em família ou com uma turma; nada pede escola ou série.
+Funciona em modo avião: depois do primeiro acesso com internet, tudo fica guardado no aparelho.
 
 Baseado no protótipo e no roteiro do [guardioes-da-floresta](https://guardioes-da-floresta--diegojim69.replit.app/).
 
@@ -20,9 +21,15 @@ O modo offline (service worker) só existe no build: `pnpm build && pnpm preview
 
 ## Editar o roteiro
 
-Todo texto da jornada está em [`src/lib/content/penap.ts`](src/lib/content/penap.ts): abertura, missões,
-poderes, cronômetros, lista do registro, áreas do mapa, títulos da turma, conquistas e encerramento.
-Para um roteiro novo (por exemplo, PETAR), copie o arquivo, ajuste os textos e registre em `journeys`.
+Todo texto da jornada está em [`src/lib/content/mata-atlantica.ts`](src/lib/content/mata-atlantica.ts):
+abertura, missões, árvores (com fontes), grupos, poderes, cronômetros, lista do registro, áreas do mapa,
+títulos, conquistas e encerramento. O `id` do roteiro continua `penap` só porque jornadas já guardadas
+apontam para ele; não aparece para ninguém. Para um roteiro de um lugar específico, copie o arquivo,
+ajuste os textos e registre em `journeys`.
+
+Os fatos sobre a canela-preta (*Ocotea catharinensis*) e o cedro-rosa (*Cedrela fissilis*) vêm da
+Embrapa, do CNCFlora e da Flora e Funga do Brasil. Os nomes populares também valem para outras espécies:
+confirme com um botânico quais árvores estão na trilha antes de usar o roteiro em campo.
 Os ícones de cada missão vêm do [Phosphor](https://phosphoricons.com); para usar um novo, inclua em
 `scripts/icons.ts` e rode `pnpm icons`.
 
@@ -70,5 +77,7 @@ endereços levam ao mesmo lugar.
 
 ## Privacidade
 
-Os grupos têm nomes de árvores e as fotos do registro são da natureza, não das pessoas. As fotos ficam
-só no celular. Nenhum dado pessoal de aluno é coletado.
+O app pede só um nome ou apelido, que vai no certificado. Ele fica no aparelho e, se alguém entrar com
+e-mail, na cópia de backup dessa conta; a verificação pública do certificado (`/verify`) não mostra o
+nome. Os grupos têm nomes de árvores e as fotos do registro são da natureza, não das pessoas, e ficam
+só no celular. Escola e turma não são pedidas.
