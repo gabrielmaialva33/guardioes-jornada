@@ -47,7 +47,7 @@ import {
 	ROOT,
 	TAIL
 } from './rigs.ts';
-import { clamp01, DEG, safeDt, smoothstep, TAU, wrap01, wrapAngle } from './scalar.ts';
+import { clamp01, DEG, safeDt, TAU } from './scalar.ts';
 import { type GaitParams, SPECIES, type SpeciesId, type SpeciesParams } from './species.ts';
 
 const STAND = POSTURE_INDEX.stand;
@@ -444,11 +444,12 @@ export class AnimalAnimator {
 	#wingLayer(motion: AnimalMotion, out: Float64Array) {
 		if (!this.#bird) return;
 		const rate = motion.flapRate > 0 && Number.isFinite(motion.flapRate) ? motion.flapRate : 0;
-		this.wingPhase = wrap01(this.wingPhase + rate * this.#dt);
+		const wing = this.wingPhase + rate * this.#dt;
+		this.wingPhase = wing - Math.floor(wing);
 		const weight = this.weights[FLY];
 		if (!(weight > 0)) return;
-		const flap = clamp01(motion.flap);
-		const closed = clamp01(motion.wingsClosed);
+		const flap = Math.min(1, Math.max(0, motion.flap || 0));
+		const closed = Math.min(1, Math.max(0, motion.wingsClosed || 0));
 		const beat = ANIMAL_LAYERS.flapBias + ANIMAL_LAYERS.flapAmplitude * Math.sin(TAU * this.wingPhase);
 		const angle = (closed * (WING_FOLDED - WING_SPREAD) * DEG + flap * (1 - closed) * beat) * weight;
 		out[LIMB_FL * JOINT_STRIDE + 2] += angle;
@@ -461,22 +462,26 @@ export class AnimalAnimator {
 
 	#feedingLayer(motion: AnimalMotion, out: Float64Array) {
 		const layers = ANIMAL_LAYERS;
-		this.#eatPhase = wrap01(this.#eatPhase + layers.eatRate * this.#dt);
-		this.#howlPhase = wrap01(this.#howlPhase + layers.howlRate * this.#dt);
-		const eat = clamp01(motion.eat) * (this.weights[FEED_HANG] + this.weights[HANG_TAIL] + this.weights[SIT]);
+		const eatPhase = this.#eatPhase + layers.eatRate * this.#dt;
+		this.#eatPhase = eatPhase - Math.floor(eatPhase);
+		const howlPhase = this.#howlPhase + layers.howlRate * this.#dt;
+		this.#howlPhase = howlPhase - Math.floor(howlPhase);
+		const eat =
+			Math.min(1, Math.max(0, motion.eat || 0)) *
+			(this.weights[FEED_HANG] + this.weights[HANG_TAIL] + this.weights[SIT]);
 		if (eat > 0 && !this.#bird) {
 			const swing = layers.eatSwing * eat;
 			out[LIMB_FL * JOINT_STRIDE] -= swing * (0.5 + 0.5 * Math.sin(TAU * this.#eatPhase));
 			out[LIMB_FR * JOINT_STRIDE] -= swing * (0.5 - 0.5 * Math.sin(TAU * this.#eatPhase));
 		}
-		const howl = clamp01(motion.howl) * this.weights[HOWL];
+		const howl = Math.min(1, Math.max(0, motion.howl || 0)) * this.weights[HOWL];
 		// Each breath group of the roar pumps the head; the posture itself stays with reduced motion.
 		if (howl > 0 && !this.reducedMotion)
 			out[B] -= layers.howlPump * howl * (0.5 + 0.5 * Math.sin(TAU * this.#howlPhase));
 	}
 
 	#crouchLayer(motion: AnimalMotion, out: Float64Array) {
-		const crouch = this.reducedMotion ? 0 : clamp01(motion.crouch);
+		const crouch = this.reducedMotion ? 0 : Math.min(1, Math.max(0, motion.crouch || 0));
 		if (!(crouch > 0)) return;
 		out[B + 4] -= (ANIMAL_LAYERS.crouchDepth * crouch) / this.model.height;
 		out[B] += ANIMAL_LAYERS.crouchPitch * crouch;
@@ -632,7 +637,9 @@ export class AnimalAnimator {
 		const tilt = Number.isFinite(motion.tilt) ? motion.tilt : 0;
 		const side = motion.grip < 0 ? -1 : 1;
 		const alpha = (-ANIMAL_LAYERS.hangUpright * Math.PI) / 2 - tilt;
-		const gripAngle = wrapAngle(Math.PI - alpha - theta);
+		// Helpers taking and returning numbers are written out on this per-frame path.
+		const grip = Math.PI - alpha - theta;
+		const gripAngle = grip - TAU * Math.round(grip / TAU);
 		if (side !== this.#gripSide) {
 			// Hand switch: the old gripping arm lets go and eases back to rest.
 			this.#releaseFrom = this.#gripAngle;
@@ -661,10 +668,13 @@ export class AnimalAnimator {
 		const mz = -dUp * sa + dForward * ca;
 		const reachAngle = Math.atan2(-mz, -my);
 		const rest = ANIMAL_LAYERS.freeArmRest - alpha;
-		let free = rest + wrapAngle(reachAngle - rest) * clamp01(motion.reach);
+		const toward = reachAngle - rest;
+		const reach = Math.min(1, Math.max(0, motion.reach || 0));
+		let free = rest + (toward - TAU * Math.round(toward / TAU)) * reach;
 		if (this.#releaseElapsed < ANIMAL_LAYERS.releaseTime) {
-			const s = smoothstep(this.#releaseElapsed / ANIMAL_LAYERS.releaseTime);
-			free = this.#releaseFrom + wrapAngle(free - this.#releaseFrom) * s;
+			const t = Math.min(1, this.#releaseElapsed / ANIMAL_LAYERS.releaseTime);
+			const back = free - this.#releaseFrom;
+			free = this.#releaseFrom + (back - TAU * Math.round(back / TAU)) * t * t * (3 - 2 * t);
 		}
 
 		key[R] = alpha;
