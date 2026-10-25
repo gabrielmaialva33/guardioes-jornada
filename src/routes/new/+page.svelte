@@ -1,141 +1,123 @@
+<!--
+	Joining a journey: the call to adventure, then the participant's name,
+	then the group. Nothing else is asked: no school, no class.
+-->
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import Calling from '#lib/components/Calling.svelte';
 	import GroupMark from '#lib/components/GroupMark.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
-	import { groupPresets, MAX_GROUPS, MIN_GROUPS, type GroupPreset } from '#lib/content/groups.ts';
-	import { todayIso } from '#lib/session.ts';
+	import { mataAtlantica as journey } from '#lib/content/mata-atlantica.ts';
 	import { sessions } from '#lib/state/sessions.svelte.ts';
 
+	type Stage = 'calling' | 'name' | 'group';
+
 	const uid = $props.id();
+	const opening = journey.steps.find((s) => s.kind === 'opening');
 
-	let school = $state('');
-	let className = $state('');
-	let guide = $state('');
-	let date = $state(todayIso());
-	let groups = $state<GroupPreset[]>(groupPresets.slice(0, MIN_GROUPS).map((g) => ({ ...g })));
-
-	const nextPreset = $derived(groupPresets.find((p) => !groups.some((g) => g.color === p.color)));
-	const namesValid = $derived(groups.every((g) => g.name.trim() !== ''));
-
-	function addGroup() {
-		if (nextPreset && groups.length < MAX_GROUPS) groups.push({ ...nextPreset });
-	}
-
-	function removeGroup(index: number) {
-		if (groups.length > MIN_GROUPS) groups.splice(index, 1);
-	}
-
+	// Coming from the home screen, the call has already been read.
+	let stage = $state<Stage>(page.url.searchParams.get('etapa') === 'nome' || !opening ? 'name' : 'calling');
+	let name = $state('');
+	let groupIndex = $state<number | null>(null);
 	let error = $state<string | null>(null);
+	let busy = $state(false);
+
+	const trimmed = $derived(name.trim());
+
+	function back() {
+		stage = stage === 'group' ? 'name' : 'calling';
+	}
+
+	function toGroup(event: SubmitEvent) {
+		event.preventDefault();
+		if (trimmed) stage = 'group';
+	}
 
 	async function start(event: SubmitEvent) {
 		event.preventDefault();
-		if (!namesValid || !sessions.ready) return;
+		if (groupIndex === null || !trimmed || !sessions.ready) return;
+		busy = true;
 		error = null;
 		try {
 			const session = sessions.create({
-				school: school.trim(),
-				className: className.trim(),
-				guide: guide.trim(),
-				date,
-				groups: groups.map((g) => ({ name: g.name.trim(), color: g.color }))
+				participant: trimmed,
+				groups: journey.groups.map(({ name, color }) => ({ name, color })),
+				myGroupIndex: groupIndex,
+				// The opening story was just read, so the journey starts at the first mission.
+				startStep: opening ? journey.steps.indexOf(opening) + 1 : 0
 			});
-			// Only leave the form once the journey is safely stored on the phone.
+			// Only leave once the journey is safely stored on the phone.
 			await sessions.flush();
 			await goto(resolve(`/journey?id=${session.id}`), { replace: true });
 		} catch {
 			error = 'Não foi possível guardar a jornada neste celular. Verifique o espaço livre e tente de novo.';
+		} finally {
+			busy = false;
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Nova jornada | Guardiões da Mata Atlântica</title>
+	<title>O chamado | Guardiões da Mata Atlântica</title>
 </svelte:head>
 
 <header class="bar page">
-	<a class="icon-button" href={resolve('/')} aria-label="Voltar para o início"><Icon name="back" /></a>
-	<h1>Nova jornada</h1>
+	{#if stage === 'calling' || (stage === 'name' && !opening)}
+		<a class="icon-button" href={resolve('/')} aria-label="Voltar para o início"><Icon name="back" /></a>
+	{:else}
+		<button class="icon-button" type="button" aria-label="Voltar" onclick={back}><Icon name="back" /></button>
+	{/if}
+	<p class="brand"><Icon name="leaf" weight="duotone" size={22} /> Guardiões da Mata Atlântica</p>
 	<ThemeToggle />
 </header>
 
 <main class="page">
-	<section class="intro">
-		<div class="emblem" aria-hidden="true">
-			<Icon name="compass" weight="duotone" size={40} />
-		</div>
-		<p>Prepare os dados da visita e divida a turma em grupos antes de entrar na trilha.</p>
-	</section>
-
-	<form onsubmit={start}>
-		<fieldset class="card section">
-			<legend><Icon name="users" weight="duotone" size={28} /> A turma</legend>
-
-			<div class="field">
-				<label for="{uid}-school">Escola</label>
-				<input
-					id="{uid}-school"
-					bind:value={school}
-					autocomplete="organization"
-					placeholder="Ex.: EE Capão Bonito"
-				/>
-			</div>
-
-			<div class="field">
-				<label for="{uid}-class">Turma</label>
-				<input id="{uid}-class" bind:value={className} placeholder="Ex.: 6º ano B" />
-			</div>
-
-			<div class="field">
-				<label for="{uid}-guide">Guia</label>
-				<input
-					id="{uid}-guide"
-					bind:value={guide}
-					autocomplete="name"
-					placeholder="Seu nome, para o certificado"
-				/>
-			</div>
-
-			<div class="field">
-				<label for="{uid}-date">Data da visita</label>
-				<input id="{uid}-date" type="date" bind:value={date} required />
-			</div>
-		</fieldset>
-
-		<fieldset class="card section">
-			<legend><Icon name="tree" weight="duotone" size={28} /> Grupos</legend>
-			<p class="hint">Cada grupo leva o nome de uma árvore da Mata Atlântica. Não use nomes de alunos.</p>
-			<ul class="groups">
-				{#each groups as group, i (group.color)}
-					<li>
-						<GroupMark name={group.name || '?'} color={group.color} size={2.5} />
-						<label class="visually-hidden" for="{uid}-group-{i}">Nome do grupo {i + 1}</label>
-						<input id="{uid}-group-{i}" bind:value={group.name} required maxlength="24" />
-						<button
-							class="icon-button remove"
-							type="button"
-							aria-label="Remover grupo {group.name}"
-							disabled={groups.length <= MIN_GROUPS}
-							onclick={() => removeGroup(i)}
-						>
-							<Icon name="close" />
-						</button>
-					</li>
+	{#if stage === 'calling' && opening}
+		<Calling {opening} onaccept={() => (stage = 'name')} />
+	{:else if stage === 'name'}
+		<form class="card step" onsubmit={toGroup}>
+			<div class="emblem" aria-hidden="true"><Icon name="user" weight="duotone" size={40} /></div>
+			<h1>Como devemos te chamar?</h1>
+			<label for="{uid}-name">Seu nome</label>
+			<input
+				id="{uid}-name"
+				bind:value={name}
+				required
+				maxlength="40"
+				autocomplete="nickname"
+				placeholder="Seu nome ou apelido"
+			/>
+			<p class="hint">É assim que você aparece no seu certificado.</p>
+			<button class="button wide" type="submit" disabled={!trimmed}>Continuar</button>
+		</form>
+	{:else}
+		<form class="card step" onsubmit={start}>
+			<div class="emblem" aria-hidden="true"><Icon name="users" weight="duotone" size={40} /></div>
+			<h1>Escolha seu grupo</h1>
+			<p class="lead">{trimmed}, cada guardião caminha com um grupo. Qual será o seu?</p>
+			<fieldset>
+				<legend class="visually-hidden">Grupos</legend>
+				{#each journey.groups as group, i (group.name)}
+					<label class="group" class:selected={groupIndex === i}>
+						<input type="radio" name="group" value={i} bind:group={groupIndex} />
+						<GroupMark name={group.name} color={group.color} size={2.75} />
+						<span>
+							<strong>Grupo {group.name}</strong>
+							<small>{group.hint}</small>
+						</span>
+					</label>
 				{/each}
-			</ul>
-			{#if groups.length < MAX_GROUPS}
-				<button class="button quiet wide" type="button" onclick={addGroup}>
-					<Icon name="plus" size={20} /> Adicionar grupo
-				</button>
-			{/if}
-		</fieldset>
-
-		{#if error}<p class="error" role="alert">{error}</p>{/if}
-		<button class="button wide submit" type="submit" disabled={!namesValid || !sessions.ready}>
-			<Icon name="footprints" weight="duotone" size={22} /> Começar jornada
-		</button>
-	</form>
+			</fieldset>
+			{#if error}<p class="error" role="alert">{error}</p>{/if}
+			<button class="button wide" type="submit" disabled={groupIndex === null || busy || !sessions.ready}>
+				<Icon name="footprints" weight="duotone" size={22} />
+				{busy ? 'Preparando a jornada…' : 'Começar a jornada'}
+			</button>
+		</form>
+	{/if}
 </main>
 
 <style>
@@ -146,143 +128,146 @@
 		padding-block: 0.25rem;
 	}
 
-	.bar .icon-button:first-child {
+	.bar > :first-child {
 		margin-left: -0.75rem;
 	}
 
-	.bar :global(.icon-button:last-child) {
-		margin-right: -0.75rem;
-	}
-
-	h1 {
+	.brand {
+		display: flex;
 		flex: 1;
-		font-size: var(--step-2);
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		color: var(--accent-strong);
+		font-family: var(--font-story);
+		font-size: var(--step-0);
+		font-weight: 700;
+		white-space: nowrap;
 	}
 
 	main {
-		display: grid;
-		gap: 1.25rem;
 		padding-bottom: max(2rem, env(safe-area-inset-bottom));
 	}
 
-	.intro {
-		display: flex;
-		align-items: center;
+	.step {
+		display: grid;
 		gap: 0.875rem;
-		color: var(--text-soft);
+		padding: 1.5rem 1.25rem;
+		animation: enter var(--dur-screen) var(--ease-out);
 	}
 
 	.emblem {
 		display: grid;
 		place-items: center;
-		flex: none;
-		width: 3.75rem;
-		height: 3.75rem;
-		border: 1px solid var(--border);
+		justify-self: center;
+		width: 4.75rem;
+		height: 4.75rem;
 		border-radius: 50%;
-		background: var(--surface-sunken);
+		background: radial-gradient(
+			circle at 35% 30%,
+			color-mix(in oklab, var(--accent) 38%, transparent),
+			var(--surface-sunken) 72%
+		);
 		color: var(--accent-strong);
 		--icon-tone: var(--gold);
-		--icon-tone-opacity: 0.4;
+		--icon-tone-opacity: 0.55;
 	}
 
-	form {
-		display: grid;
-		gap: 1.25rem;
+	h1 {
+		font-size: var(--step-3);
+		text-align: center;
 	}
 
-	.section {
-		display: grid;
-		gap: 0.875rem;
-		margin: 0;
-		padding: 1.25rem;
-		min-width: 0;
-	}
-
-	legend {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0;
-		float: left;
-		width: 100%;
-		margin-bottom: 0.125rem;
-		color: var(--text);
-		font-family: var(--font-story);
-		font-size: var(--step-2);
-		font-weight: 700;
-		--icon-tone: var(--gold);
-		--icon-tone-opacity: 0.45;
-	}
-
-	.field {
-		display: grid;
-		gap: 0.35rem;
+	.lead {
+		color: var(--text-soft);
+		font-size: var(--step-1);
+		text-align: center;
 	}
 
 	label {
-		color: var(--text-soft);
-		font-size: var(--step--1);
 		font-weight: 700;
 	}
 
-	input {
-		width: 100%;
+	input:not([type='radio']) {
 		min-height: var(--tap);
 		padding: 0 0.875rem;
-		border: 1.5px solid var(--border);
+		border: 2px solid var(--border);
 		border-radius: var(--radius-s);
 		background: var(--surface-sunken);
+		font-size: var(--step-1);
 	}
 
-	input::placeholder {
-		color: var(--text-faint);
-	}
-
-	input:focus-visible {
-		border-color: var(--accent-strong);
+	input:not([type='radio']):focus-visible {
+		border-color: var(--accent);
+		outline: none;
 	}
 
 	.hint {
-		color: var(--text-soft);
+		color: var(--text-faint);
 		font-size: var(--step--1);
 	}
 
-	.groups {
+	fieldset {
 		display: grid;
-		gap: 0.625rem;
+		gap: 0.6rem;
 		margin: 0;
 		padding: 0;
-		list-style: none;
+		border: 0;
 	}
 
-	.groups li {
+	.group {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.875rem;
+		padding: 0.875rem 1rem;
+		border: 2px solid var(--border);
+		border-radius: var(--radius-m);
+		background: var(--surface-sunken);
+		cursor: pointer;
+		transition: border-color var(--dur-fast) var(--ease-out);
 	}
 
-	.groups input {
-		flex: 1;
-		min-width: 0;
-		font-weight: 700;
+	.group.selected {
+		border-color: var(--accent);
+		background: var(--accent-soft);
 	}
 
-	.remove {
-		color: var(--text-soft);
+	.group:has(input:focus-visible) {
+		outline: 3px solid var(--accent-strong);
+		outline-offset: 2px;
 	}
 
-	.remove:disabled {
-		opacity: 0.25;
-		cursor: not-allowed;
+	.group input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
 	}
 
-	.submit {
+	.group span {
+		display: grid;
+	}
+
+	.group strong {
+		font-family: var(--font-story);
 		font-size: var(--step-1);
+	}
+
+	.group small {
+		color: var(--text-soft);
+		font-size: var(--step--1);
+		font-weight: 400;
 	}
 
 	.error {
 		color: var(--danger);
 		font-weight: 700;
+	}
+
+	@keyframes enter {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
 	}
 </style>
