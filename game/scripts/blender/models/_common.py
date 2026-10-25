@@ -497,7 +497,25 @@ def export_glb(path: Path, root) -> Path:
         export_animations=False,
         export_image_format="AUTO",
     )
+    _nearest_without_mipmaps(path)
     return path
+
+
+def _nearest_without_mipmaps(path: Path) -> None:
+    """Blender writes Closest images as NEAREST / NEAREST_MIPMAP_NEAREST; ART.md section 6
+    wants NearestFilter with no mipmaps, so both filters become NEAREST (9728)."""
+    buf = Path(path).read_bytes()
+    jlen = struct.unpack_from("<I", buf, 12)[0]
+    doc = json.loads(buf[20 : 20 + jlen])
+    if not doc.get("samplers"):
+        return
+    for smp in doc["samplers"]:
+        smp["magFilter"] = smp["minFilter"] = 9728
+    j = json.dumps(doc, separators=(",", ":")).encode()
+    j += b" " * ((4 - len(j) % 4) % 4)
+    rest = buf[20 + jlen :]
+    out = struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(j) + len(rest)) + struct.pack("<II", len(j), 0x4E4F534A) + j + rest
+    Path(path).write_bytes(out)
 
 
 # --------------------------------------------------------------------------- GLB audit
@@ -580,7 +598,9 @@ def audit_glb(path: Path) -> dict:
                     lo = Vector(map(min, lo, w))
                     hi = Vector(map(max, hi, w))
                 has_uv |= "TEXCOORD_0" in prim["attributes"]
-                if "COLOR_0" in prim["attributes"]:
+                mat = doc.get("materials", [{}])[prim["material"]] if "material" in prim else {}
+                textured = "baseColorTexture" in mat.get("pbrMetallicRoughness", {})
+                if "COLOR_0" in prim["attributes"] and not textured:
                     for c in accessor(doc, binc, prim["attributes"]["COLOR_0"]):
                         h = "#%02x%02x%02x" % tuple(int(round(linear_to_srgb(x) * 255)) for x in c[:3])
                         colours[h] = colours.get(h, 0) + 1
@@ -601,10 +621,22 @@ def audit_glb(path: Path) -> dict:
         "nodes": names,
         "non_identity_nodes": non_identity,
         "materials": [m.get("name") for m in doc.get("materials", [])],
-        "images": len(doc.get("images", [])),
+        "images": [
+            {"name": im.get("name"), "mimeType": im.get("mimeType"),
+             "size": _png_size(binc, doc["bufferViews"][im["bufferView"]]) if "bufferView" in im else None}
+            for im in doc.get("images", [])
+        ],
+        "samplers": doc.get("samplers", []),
         "texcoord": has_uv,
         "extensions": doc.get("extensionsUsed", []),
     }
+
+
+def _png_size(binc: bytes, view: dict):
+    off = view.get("byteOffset", 0)
+    if binc[off + 1 : off + 4] == b"PNG":
+        return struct.unpack(">II", binc[off + 16 : off + 24])
+    return None
 
 
 def write_audit(path: Path, budget: int, target: str, extra: dict | None = None) -> dict:
