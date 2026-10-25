@@ -1,0 +1,12 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	// Static site on Cloudflare Workers (assets only, no server code).
+	"name": "guardioes-jornada",
+	"compatibility_date": "2026-10-25",
+	"assets": {
+		"directory": "./build/",
+		// Every route is prerendered as /route/index.html; unknown paths get a real 404.
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "404-page"
+	}
+}

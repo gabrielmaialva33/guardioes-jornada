@@ -1,0 +1,14 @@
+# Copied into build/ after `vite build` (see package.json). Kept out of static/
+# so the service worker never tries to precache it.
+
+/_app/immutable/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/service-worker.js
+  Cache-Control: no-cache
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), geolocation=(), microphone=(), payment=()
+  X-Frame-Options: DENY
