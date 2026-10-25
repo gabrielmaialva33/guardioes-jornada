@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Canvas } from '@threlte/core';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { NoToneMapping, SRGBColorSpace, type WebGLRenderer } from 'three';
 	import type { GameBridge } from '../abi.ts';
 	import { CheckpointTracker } from './engine/checkpoints.ts';
@@ -8,6 +8,8 @@
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
 	import { InputModel, type ButtonRole } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
+	import HudIcon from './scene/HudIcon.svelte';
+	import { DURATION } from './style/motion.ts';
 	import { LIGHT } from './style/palette.ts';
 	import type { HudState } from './scene/types.ts';
 
@@ -21,13 +23,35 @@
 	let jump: HTMLButtonElement;
 	let sideButtons: HTMLDivElement;
 	let hud: HudState = $state({ notice: 'Abrindo a clareira…', shiftLock: false, ready: false, debug: null });
+	let portrait = $state(innerWidth < innerHeight);
+	let allowPortrait = $state(false);
+	let hasMoved = $state(false);
+	const rotate = $derived(portrait && !allowPortrait);
+	const showNotice = $derived(!hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
 	const level = createGraybox();
 	const world = buildCollisionWorld(level);
 	const checkpoints = new CheckpointTracker(level.start, level.checkpoints, level.killY);
 	const controller = new PlayerController(world, level.start.spawn, { yaw: level.start.yaw, checkpoints });
 	onDestroy(() => world.dispose());
+	onMount(() => {
+		const listeners = new AbortController();
+		const resize = () => {
+			portrait = innerWidth < innerHeight;
+			input.releaseAll();
+			controller.resume();
+		};
+		window.addEventListener('resize', resize, { signal: listeners.signal });
+		return () => listeners.abort();
+	});
+	function playPortrait() {
+		allowPortrait = true;
+		input.releaseAll();
+		controller.resume();
+		wrapper?.focus({ preventScroll: true });
+	}
 	function drawControls() {
+		if (!hasMoved && controller.frame.speed > 0.1) hasMoved = true;
 		const stick = input.stick;
 		stickBase.style.display = stick.active ? 'block' : 'none';
 		stickBase.style.transform = `translate(${stick.originX}px, ${stick.originY}px)`;
@@ -73,6 +97,7 @@
 			{createRenderer}
 			>{#if wrapper}<Graybox
 					{wrapper}
+					paused={rotate}
 					{controller}
 					{input}
 					{level}
@@ -82,60 +107,111 @@
 				/>{/if}</Canvas
 		>
 	</div>
-	<div class="top-bar">
-		<button
-			type="button"
-			onpointerdown={(event) => event.stopPropagation()}
-			onkeydown={keyboardButton}
-			onkeyup={keyboardButton}
-			onclick={backToBase}>Voltar à base</button
+	<div class="hud" inert={rotate}>
+		<div class="top-bar">
+			<button
+				type="button"
+				aria-label="Voltar à jornada"
+				title="Voltar à jornada"
+				onpointerdown={(event) => event.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={() => bridge.exit()}><HudIcon name="back" /></button
+			>
+			<button
+				type="button"
+				aria-label="Voltar à base"
+				title="Voltar à base"
+				onpointerdown={(event) => event.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={backToBase}><HudIcon name="base" /></button
+			>
+		</div>
+		{#if showNotice}<p class="notice" class:sr-only={!!hud.debug} aria-live="polite">{hud.notice}</p>{/if}
+		<div
+			class="stick-zone"
+			class:moved={hasMoved}
+			style:--hint-duration={`${DURATION.state}s`}
+			aria-hidden="true"
 		>
+			Arraste para andar
+		</div>
+		<div bind:this={stickBase} class="stick-base" aria-hidden="true"></div>
+		<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
+		{#if hud.shiftLock}<div class="crosshair" aria-hidden="true"><HudIcon name="lock" /></div>{/if}
+		<div bind:this={sideButtons} class="side-buttons">
+			<button
+				type="button"
+				data-game-button="shiftLock"
+				aria-label="Travar câmera"
+				title="Travar câmera"
+				aria-pressed={hud.shiftLock}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={(event) => activate(event, 'shiftLock')}><HudIcon name="lock" /></button
+			>
+			<button
+				type="button"
+				data-game-button="emote"
+				aria-label="Acenar"
+				title="Acenar"
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={(event) => activate(event, 'emote')}><HudIcon name="wave" /></button
+			>
+			<button
+				type="button"
+				data-game-button="action"
+				aria-label="Explorar"
+				title="Explorar"
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={(event) => activate(event, 'action')}><HudIcon name="explore" /></button
+			>
+		</div>
 		<button
+			bind:this={jump}
+			class="jump"
 			type="button"
-			onpointerdown={(event) => event.stopPropagation()}
+			data-game-button="jump"
+			aria-label="Pular"
+			title="Pular"
 			onkeydown={keyboardButton}
 			onkeyup={keyboardButton}
-			onclick={() => bridge.exit()}>Voltar à jornada</button
+			onclick={(event) => activate(event, 'jump')}><HudIcon name="jump" /></button
 		>
 	</div>
-	<p class="notice" aria-live="polite">{hud.notice}</p>
-	<div class="stick-zone" aria-hidden="true">Arraste para andar</div>
-	<div bind:this={stickBase} class="stick-base" aria-hidden="true"></div>
-	<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
-	{#if hud.shiftLock}<div class="crosshair" aria-hidden="true">+</div>{/if}
-	<div bind:this={sideButtons} class="side-buttons">
-		<button
-			type="button"
-			data-game-button="shiftLock"
-			aria-pressed={hud.shiftLock}
-			onkeydown={keyboardButton}
-			onkeyup={keyboardButton}
-			onclick={(event) => activate(event, 'shiftLock')}>Travar câmera</button
+	{#if rotate}
+		<div
+			class="rotate"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="rotate-title"
+			onpointerdown={(event) => event.stopPropagation()}
+			onkeydown={(event) => event.stopPropagation()}
+			onkeyup={(event) => event.stopPropagation()}
 		>
-		<button
-			type="button"
-			data-game-button="emote"
-			onkeydown={keyboardButton}
-			onkeyup={keyboardButton}
-			onclick={(event) => activate(event, 'emote')}>Acenar</button
-		>
-		<button
-			type="button"
-			data-game-button="action"
-			onkeydown={keyboardButton}
-			onkeyup={keyboardButton}
-			onclick={(event) => activate(event, 'action')}>Explorar</button
-		>
-	</div>
-	<button
-		bind:this={jump}
-		class="jump"
-		type="button"
-		data-game-button="jump"
-		onkeydown={keyboardButton}
-		onkeyup={keyboardButton}
-		onclick={(event) => activate(event, 'jump')}>Pular</button
-	>
+			<div class="rotate-card">
+				<HudIcon name="rotate" />
+				<h2 id="rotate-title">Gire o celular para jogar como no Roblox</h2>
+				<button
+					class="continue"
+					type="button"
+					{@attach (node) => {
+						node.focus({ preventScroll: true });
+					}}
+					onclick={playPortrait}>Jogar assim mesmo</button
+				>
+				<button
+					type="button"
+					aria-label="Voltar à jornada"
+					title="Voltar à jornada"
+					onclick={() => bridge.exit()}><HudIcon name="back" /></button
+				>
+			</div>
+		</div>
+	{/if}
 	{#if hud.debug}
 		<output class="debug" aria-label="Desempenho do jogo"
 			>{hud.debug.fps.toFixed(0)} FPS · p95 {hud.debug.frameP95Ms.toFixed(1)} ms<br />{hud.debug.drawCalls} chamadas
@@ -153,7 +229,6 @@
 		width: 100%;
 		height: 100dvh;
 		overflow: hidden;
-		background: #adc6b5;
 		color: #f1f6ed;
 		font: 0.875rem var(--font-ui, system-ui);
 		touch-action: none;
@@ -161,30 +236,39 @@
 		-webkit-touch-callout: none;
 		outline-offset: -4px;
 	}
-	.world {
+	.world,
+	.hud {
 		position: absolute;
 		inset: 0;
 	}
+	.hud {
+		pointer-events: none;
+	}
 	.top-bar {
 		position: absolute;
-		top: max(0.75rem, env(safe-area-inset-top));
-		left: max(0.75rem, env(safe-area-inset-left));
-		right: max(0.75rem, env(safe-area-inset-right));
+		top: max(12px, env(safe-area-inset-top));
+		left: max(12px, env(safe-area-inset-left));
 		display: flex;
-		justify-content: space-between;
-		gap: 0.75rem;
+		gap: 8px;
 	}
 	button {
-		min-height: 3rem;
-		border: 1px solid #ffffff55;
-		border-radius: 1rem;
-		padding: 0.6rem 0.85rem;
-		background: #173a2bed;
+		display: grid;
+		place-items: center;
+		width: 48px;
+		height: 48px;
+		border: 1px solid #ffffff66;
+		border-radius: 50%;
+		padding: 0;
+		background: #163829b8;
 		color: #f1f6ed;
 		font: inherit;
-		font-weight: 700;
 		touch-action: none;
 		cursor: pointer;
+		pointer-events: auto;
+	}
+	button[aria-pressed='true'] {
+		background: #f1d364df;
+		color: #173a2b;
 	}
 	button:focus-visible,
 	.secret-game:focus-visible {
@@ -193,23 +277,23 @@
 	}
 	.notice {
 		position: absolute;
-		top: calc(max(0.75rem, env(safe-area-inset-top)) + 3.5rem);
-		left: 50%;
-		transform: translateX(-50%);
+		top: max(72px, calc(env(safe-area-inset-top) + 60px));
+		left: max(12px, env(safe-area-inset-left));
+		width: min(28vw, 17rem);
+		box-sizing: border-box;
 		margin: 0;
-		width: min(80%, 32rem);
-		text-align: center;
-		padding: 0.4rem 0.6rem;
-		border-radius: 0.6rem;
+		padding: 8px 10px;
+		border-radius: 12px;
 		background: #173a2bdc;
-		pointer-events: none;
+		font-size: 0.75rem;
+		line-height: 1.4;
 	}
 	.side-buttons {
 		position: absolute;
-		right: max(0.75rem, env(safe-area-inset-right));
-		bottom: 11rem;
+		right: max(12px, env(safe-area-inset-right));
+		bottom: 106px;
 		display: grid;
-		gap: 0.4rem;
+		gap: 8px;
 	}
 	.jump {
 		position: absolute;
@@ -217,18 +301,26 @@
 		bottom: 20px;
 		width: 70px;
 		height: 70px;
-		border-radius: 50%;
-		background: #f1d364ed;
+		background: #f1d364b8;
 		color: #173a2b;
+	}
+	.jump :global(svg) {
+		width: 36px;
+		height: 36px;
 	}
 	.stick-zone {
 		position: absolute;
-		left: 5%;
-		bottom: 5%;
-		max-width: 32%;
-		pointer-events: none;
-		color: #10271b;
-		text-shadow: 0 1px #ffffff90;
+		left: max(20px, env(safe-area-inset-left));
+		bottom: max(20px, env(safe-area-inset-bottom));
+		padding: 8px 12px;
+		border-radius: 999px;
+		background: #173a2be8;
+		color: #f1f6ed;
+		text-shadow: 0 1px 2px #10271b;
+		transition: opacity var(--hint-duration) ease;
+	}
+	.stick-zone.moved {
+		opacity: 0;
 	}
 	.stick-base,
 	.stick-thumb {
@@ -255,32 +347,65 @@
 		left: 50%;
 		top: 50%;
 		transform: translate(-50%, -50%);
-		font-size: 1.5rem;
 		color: #fff;
-		text-shadow: 0 1px 2px #000;
-		pointer-events: none;
+		filter: drop-shadow(0 1px 2px #10271b);
 	}
 	.debug {
 		position: absolute;
-		top: 8rem;
-		left: 0.75rem;
-		padding: 0.5rem;
+		top: max(72px, calc(env(safe-area-inset-top) + 60px));
+		left: max(12px, env(safe-area-inset-left));
+		padding: 6px;
 		background: #10271be8;
 		font:
-			0.7rem ui-monospace,
+			0.65rem ui-monospace,
 			monospace;
 		pointer-events: none;
 	}
-	@media (orientation: landscape) and (max-height: 500px) {
-		.side-buttons {
-			bottom: 6.5rem;
-			display: flex;
-		}
-		.notice {
-			max-width: 58%;
-		}
-		.debug {
-			top: 7rem;
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.rotate {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		display: grid;
+		place-items: center;
+		background: #10271bf0;
+		padding: 24px;
+	}
+	.rotate-card {
+		display: grid;
+		justify-items: center;
+		gap: 20px;
+		max-width: 22rem;
+		text-align: center;
+	}
+	.rotate-card > :global(svg) {
+		width: 56px;
+		height: 56px;
+	}
+	h2 {
+		margin: 0;
+		font: 1.7rem var(--font-story, system-ui);
+	}
+	.continue {
+		width: auto;
+		padding: 12px 20px;
+		min-height: 48px;
+		border-radius: 999px;
+		background: #f1d364;
+		color: #173a2b;
+		font-weight: 700;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.stick-zone {
+			transition: none;
 		}
 	}
 </style>
