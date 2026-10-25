@@ -381,6 +381,7 @@ function mergeStaticGlbs(items, outPath) {
 				primitives: (mesh.primitives || []).map((p) => {
 					const attrs = {};
 					for (const [k, v] of Object.entries(p.attributes)) {
+						if (!item.paletteBytes && k === 'TEXCOORD_0') continue;
 						attrs[k] = v + accOffset;
 					}
 					return {
