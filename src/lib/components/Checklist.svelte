@@ -290,8 +290,10 @@
 		border-radius: var(--radius-m);
 		background: var(--surface-solid);
 	}
+	/* With large text on a small phone the camera button drops below the item. */
 	.item-actions {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
 	}
@@ -299,7 +301,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		flex: 1;
+		flex: 1 1 8rem;
 		min-width: 0;
 		min-height: var(--tap);
 		padding: 0.5rem;

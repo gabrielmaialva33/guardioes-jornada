@@ -143,6 +143,12 @@
 	.controls .button {
 		flex: 1 1 8rem;
 	}
+	/* Large system text on a small phone: thinner side padding so each button fits the card. */
+	@media (max-width: 19.5em) {
+		.controls .button {
+			padding-inline: 0.5rem;
+		}
+	}
 	.status {
 		color: var(--text-soft);
 		font-size: var(--step--1);

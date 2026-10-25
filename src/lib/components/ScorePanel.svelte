@@ -209,8 +209,8 @@
 		}
 	}
 
-	/* Very narrow rows (large text on a small phone): mark and name, then the score,
-	   then both buttons, each on its own line. */
+	/* Very narrow rows (large text on a small phone): mark and score, then the name,
+	   then both buttons, each on its own line. Only the visual order changes. */
 	@container (width < 14rem) {
 		li,
 		.large li {
@@ -219,24 +219,24 @@
 			align-items: center;
 		}
 
-		.name {
-			flex: 1 1 calc(100% - 2.25rem - 0.5rem);
-		}
-
-		.large .name {
-			flex-basis: calc(100% - 2.75rem - 0.5rem);
-		}
-
 		.score {
-			flex: 1 0 100%;
+			flex: 1 1 auto;
+			order: 1;
+		}
+
+		.name {
+			flex: 1 1 100%;
+			order: 2;
 		}
 
 		.minus {
+			order: 3;
 			width: var(--tap);
 			margin-left: auto;
 		}
 
 		.plus {
+			order: 3;
 			min-width: var(--tap);
 		}
 	}

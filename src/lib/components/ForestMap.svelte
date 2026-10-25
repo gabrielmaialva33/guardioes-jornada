@@ -211,6 +211,23 @@
 		color: var(--gold);
 	}
 
+	/* Large system text on a phone: smaller area nodes leave the names room to wrap between words. */
+	@media (max-width: 19.5em) {
+		.node {
+			width: 3rem;
+			height: 3rem;
+		}
+
+		li + li::before {
+			left: 1.4rem;
+		}
+
+		li.right + li::before,
+		li.right::before {
+			right: 1.4rem;
+		}
+	}
+
 	@keyframes breathe {
 		50% {
 			transform: scale(1.05);

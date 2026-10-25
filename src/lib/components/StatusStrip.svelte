@@ -48,7 +48,6 @@
 </div>
 
 <style>
-	/* Pages reserve 2.75rem per row for this strip (5.5rem when large text wraps it). */
 	.strip {
 		display: flex;
 		flex-wrap: wrap;
@@ -58,12 +57,13 @@
 		line-height: 1;
 	}
 
-	/* The text stays small; the row is a full 2.75rem (44px) so the backup link is easy to tap. */
+	/* The text stays small; the row is a full 44px so the backup link is easy to tap.
+	   In px: a fingertip does not grow with the text size (pages reserve 44px per row). */
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		min-height: 2.75rem;
+		min-height: 44px;
 		color: var(--text-faint);
 		font-weight: 700;
 		text-decoration: none;

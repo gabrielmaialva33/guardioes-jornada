@@ -76,6 +76,12 @@
 		}
 	}
 
+	@container (width < 10rem) {
+		ul {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
 	li {
 		display: grid;
 		justify-items: center;
