@@ -31,7 +31,12 @@
 </script>
 
 <section class="calling" aria-labelledby="calling-title">
-	<ForestScene missions={grown} oath={grown >= 5} label="Uma floresta da Mata Atlântica ganhando vida" />
+	<ForestScene
+		missions={grown}
+		oath={grown >= 5}
+		label="Uma floresta da Mata Atlântica ganhando vida"
+		secret
+	/>
 
 	<div class="card story">
 		<div class="emblem" aria-hidden="true"><Icon name={opening.icon} weight="duotone" size={44} /></div>
