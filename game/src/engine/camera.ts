@@ -306,7 +306,8 @@ export function springStep(state: { x: number; v: number }, goal: number, freque
 /** Roblox TransparencyController: 0.5 at 1.25 studs to 1 at 0.5 studs, nothing below 0.5. */
 function fadeTarget(distance: number): number {
 	const transparency = 1 - (0.5 * (distance - FADE_END_DISTANCE)) / (FADE_START_DISTANCE - FADE_END_DISTANCE);
-	return transparency < 0.5 ? 0 : Math.min(1, transparency);
+	// Snap the float noise at 0.5 studs, so first person is exactly invisible.
+	return transparency < 0.5 ? 0 : transparency > 1 - 1e-9 ? 1 : transparency;
 }
 
 /** Writes a pose to a camera that sits directly in the scene (no transformed parent). */

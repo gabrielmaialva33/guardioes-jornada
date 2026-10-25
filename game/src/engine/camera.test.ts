@@ -109,8 +109,9 @@ it('keeps the camera in front of the thin wall, never at a negative distance', (
 	for (const z of [11, 10.6, face + 0.01]) {
 		const pose = settle(camera, { x: 32, y: 0, z });
 		expect(pose.distance).toBeGreaterThanOrEqual(0);
-		expect(pose.distance).toBeLessThanOrEqual(z - face + 1e-9);
-		expect(pose.position.z).toBeGreaterThanOrEqual(face - 1e-9);
+		// Collider vertices are float32: the face is at 10.0249996.
+		expect(pose.distance).toBeLessThanOrEqual(z - face + 1e-6);
+		expect(pose.position.z).toBeGreaterThanOrEqual(face - 1e-6);
 	}
 });
 
