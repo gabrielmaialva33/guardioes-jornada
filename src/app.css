@@ -63,18 +63,21 @@
 	--font-story: 'Alegreya Variable', Georgia, serif;
 	--font-ui: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
 
-	/* Type scale, ratio 1.25 on an 18px base: larger than usual for reading outdoors. */
+	/* Type scale, ratio 1.25 on an 18px base: larger than usual for reading outdoors.
+	   The two display steps stop at 14vw so a heading word still fits a phone when the
+	   system text size is doubled; at the default size the cap never applies (>= 320px). */
 	--step--1: 0.9rem;
 	--step-0: 1.125rem;
 	--step-1: 1.406rem;
 	--step-2: 1.758rem;
-	--step-3: 2.197rem;
-	--step-4: 2.747rem;
+	--step-3: min(2.197rem, 14vw);
+	--step-4: min(2.747rem, 14vw);
 
 	--radius-s: 0.75rem;
 	--radius-m: 1.125rem;
 	--radius-pill: 999px;
-	--tap: 3.25rem;
+	/* A fingertip does not grow with the text size: 52px by default, kept within 44-64px. */
+	--tap: clamp(44px, 3.25rem, 64px);
 	--gutter: 1rem;
 	--measure: 36rem;
 
@@ -167,6 +170,9 @@ body {
 	font-family: var(--font-ui);
 	font-size: var(--step-0);
 	line-height: 1.5;
+	/* A word longer than its box (a 40-letter name, a heading at 200% text) breaks
+	   instead of widening the page. Words that fit are never broken. */
+	overflow-wrap: anywhere;
 	-webkit-tap-highlight-color: transparent;
 }
 
@@ -185,6 +191,17 @@ p {
 	text-wrap: pretty;
 }
 
+/* Large system text on a phone (the viewport is under 19.5em of the user's default font
+   size; at the default size that is narrower than any phone): hyphenate headings where
+   the browser knows Portuguese, instead of cutting words at an arbitrary letter. */
+@media (max-width: 19.5em) {
+	h1,
+	h2,
+	h3 {
+		hyphens: auto;
+	}
+}
+
 button,
 input,
 select {
@@ -200,7 +217,9 @@ select {
 .page {
 	width: min(100%, var(--measure));
 	margin-inline: auto;
-	padding-inline: max(var(--gutter), env(safe-area-inset-left));
+	/* Each side clears its own notch or camera cutout (they differ in landscape). */
+	padding-left: max(var(--gutter), env(safe-area-inset-left));
+	padding-right: max(var(--gutter), env(safe-area-inset-right));
 }
 
 /* Glass card, the prototype's signature surface. */
