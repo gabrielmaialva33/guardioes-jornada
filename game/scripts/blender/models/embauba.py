@@ -57,12 +57,12 @@ def palmate_leaf(m: C.Mesh, centre: Vector, normal: Vector, radius: float, lobes
 def build():
     m = C.Mesh("embauba")
     # Ringed, slender grey trunk.
-    zs = [0, 0.45, 2.35, 2.5, 4.35, 4.5, 6.2]
+    zs = [0, 0.45, 2.6, 2.75, 4.9, 5.05, 6.95]
     radii = [0.4, 0.29, 0.27, 0.27, 0.25, 0.25, 0.23]
     cols = [BARK, BARK, RING, BARK, RING, BARK]
     m.tube([(0, 0, z) for z in zs], radii, 5, BARK, cap_end=False, colours=cols + [BARK], twist=0.2)
 
-    fork = Vector((0, 0, 6.15))
+    fork = Vector((0, 0, 6.9))
     # Candelabrum: four arms out and up, plus a short leader on the trunk axis.
     arms = [(0.3, 1.7, 2.2), (1.85, 1.5, 2.6), (3.45, 1.75, 2.0), (5.0, 1.45, 2.45)]
     for i, (a, reach, rise) in enumerate(arms):

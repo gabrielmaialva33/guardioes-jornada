@@ -38,15 +38,15 @@ RACHIS = C.ramp("wood", 2)
 FRUIT = C.SPECIES["jucaraFruto"]
 FRUIT_LIGHT = C.SPECIES["jucaraFrutoLuz"]
 
-SHAFT_BOTTOM = 5.55
-SHAFT_TOP = 6.75
+SHAFT_BOTTOM = 5.15
+SHAFT_TOP = 6.3
 
 
 def palm() -> C.Mesh:
     m = C.Mesh("palmeira-jucara")
-    m.tube([(0, 0, 0), (0, 0, 0.35), (0.04, 0, 3.0), (0.06, 0, SHAFT_BOTTOM)], [0.25, 0.16, 0.145, 0.13], 5, STEM,
+    m.tube([(0, 0, 0), (0, 0, 0.35), (0.04, 0, 2.8), (0.06, 0, SHAFT_BOTTOM)], [0.25, 0.16, 0.145, 0.13], 5, STEM,
            cap_end=False, twist=0.3)
-    m.tube([(0.06, 0, SHAFT_BOTTOM), (0.06, 0, 6.15), (0.06, 0, SHAFT_TOP)], [0.17, 0.205, 0.15], 5, SHAFT,
+    m.tube([(0.06, 0, SHAFT_BOTTOM), (0.06, 0, 5.75), (0.06, 0, SHAFT_TOP)], [0.17, 0.205, 0.15], 5, SHAFT,
            cap_end=True, twist=0.3)
     top = Vector((0.06, 0, SHAFT_TOP - 0.05))
     golden = math.radians(137.5)
