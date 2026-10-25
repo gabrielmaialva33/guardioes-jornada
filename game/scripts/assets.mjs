@@ -605,10 +605,15 @@ function remapPetUvsForSpecies(petName, json, bin) {
 			const uvBase = (uvBv.byteOffset || 0) + (uvAcc.byteOffset || 0);
 			const uvStride = uvBv.byteStride || 8;
 			const idxBase = (idxBv.byteOffset || 0) + (idxAcc.byteOffset || 0);
-			const idxBytes = idxAcc.componentType === 5123 ? 2 : 4;
+			const idxBytes =
+				idxAcc.componentType === 5121 ? 1 : idxAcc.componentType === 5123 ? 2 : 4;
 
 			const readIdx = (i) =>
-				idxBytes === 2 ? bin.readUInt16LE(idxBase + i * 2) : bin.readUInt32LE(idxBase + i * 4);
+				idxBytes === 1
+					? bin.readUInt8(idxBase + i)
+					: idxBytes === 2
+						? bin.readUInt16LE(idxBase + i * 2)
+						: bin.readUInt32LE(idxBase + i * 4);
 			const readPos = (vi) => [
 				bin.readFloatLE(posBase + vi * posStride),
 				bin.readFloatLE(posBase + vi * posStride + 4),
@@ -679,6 +684,8 @@ function remapPetUvsForSpecies(petName, json, bin) {
 		}
 	}
 }
+/**
+ * Paint an 8x16 swatch cell (col = 0..7, band = 0..3) in a 64x64 RGBA buffer.
  * Supports either [topHex, bottomHex] or a custom rowStops function(row 0..15) => [r, g, b].
  */
 function paintSwatch(rgba, col, band, spec) {
