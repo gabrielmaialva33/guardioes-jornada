@@ -153,3 +153,9 @@ node game/golden/sheet.ts --before wave1-before --after wave1-light
 The mask hook hides only the rendered sky/serra/sea, preserving opaque world geometry. A sky-heavy upward pose
 naturally has a high `Void↓ %`; P4 is the meaningful world-edge gate. Baselines need owner review; do not run
 `--approve` automatically after a deliberate art change.
+
+Captures isolate the page from Vite's HMR WebSocket. `--assets <directory>` serves a frozen local snapshot of
+binary assets instead of files another agent may be exporting. Every frame records that snapshot's SHA-256
+`assetHash`; technique comparisons must use the same one. The default snapshot is the live assets directory,
+read once when the command starts. `--append --poses P6,P9` replaces selected frames without deleting the other
+poses in the set. This also allows correcting a framing fixture and regenerating its comparisons.

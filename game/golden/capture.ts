@@ -26,7 +26,7 @@
 
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { type Browser, type BrowserContext, chromium, type Page } from '@playwright/test';
@@ -79,13 +79,12 @@ if (mode === 'swiftshader' && !serve)
 		'swiftshader: the game refuses software GPUs unless its server runs with GAME_ALLOW_SOFTWARE_TEST=1; use --serve <port>'
 	);
 
+const legacyIds = new Set(['P1', 'P3', 'P4', 'P7', 'X1']);
 const poses = config.poses.filter(
-	(p) =>
-		(hooked || (p.status !== 'needs-runtime' && p.runtimePose)) &&
-		(wanted.length === 0 || wanted.includes(p.id))
+	(p) => (hooked || legacyIds.has(p.id)) && (wanted.length === 0 || wanted.includes(p.id))
 );
 const skipped = config.poses.filter(
-	(p) => !hooked && p.status === 'needs-runtime' && (wanted.length === 0 || wanted.includes(p.id))
+	(p) => !hooked && !legacyIds.has(p.id) && (wanted.length === 0 || wanted.includes(p.id))
 );
 
 /** Everything but the canvas's own subtree is hidden; the root keeps its CSS sky gradient. */
@@ -309,7 +308,7 @@ try {
 	browser = await chromium.launch({ channel: 'chrome', headless: true, args: launchArgs() });
 	for (const tier of tiers) {
 		const dir = runDir(set, tier, mode);
-		await rm(dir, { recursive: true, force: true });
+		if (!args.has('append')) await rm(dir, { recursive: true, force: true });
 		await mkdir(dir, { recursive: true });
 		for (const pose of poses) {
 			// A fresh context per pose: the fake clock belongs to the context and is installed before any script.
@@ -351,7 +350,8 @@ try {
 					origin,
 					capturedAt: new Date().toISOString(),
 					browser: browser.version(),
-					captured: poses.map((p) => p.id),
+					captured: config.poses.filter((p) => existsSync(join(dir, `${p.id}.png`))).map((p) => p.id),
+					assetHash,
 					needsRuntime: skipped.map((p) => p.id)
 				},
 				null,
