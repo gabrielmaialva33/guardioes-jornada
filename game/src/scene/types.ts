@@ -1,7 +1,11 @@
+import type { LifeDebug } from '../life/index.ts';
 export interface GameDebug {
+	life?: LifeDebug;
 	goldenReady?: boolean;
 	visualTime?: number;
 	worldKind: string;
+	testing?: boolean;
+	simulationTime?: number;
 	cameraYaw: number;
 	cameraMode?: string;
 	cameraDistance?: number;

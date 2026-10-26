@@ -89,6 +89,21 @@ try {
 		assert.deepEqual(errors, []);
 		await context.close();
 	}
+	const context = await browser.newContext({
+		viewport: { width: 915, height: 412 },
+		isMobile: true,
+		hasTouch: true
+	});
+	await context.routeWebSocket('**', (s) => s.onMessage(() => {}));
+	const page = await context.newPage();
+	await page.goto('http://localhost:5196/?debug&pose=mirante');
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	await page.waitForTimeout(400);
+	const canopy = await page.evaluate(() => globalThis.__gameDebug?.());
+	assert.ok(canopy && (canopy.canopiesFading ?? 0) > 0);
+	await page.screenshot({ path: join(output, '915-mirante-canopy.png') });
+	results.push({ canopy });
+	await context.close();
 	await writeFile(join(output, 'results.json'), JSON.stringify(results, null, 2));
 	console.info(
 		'Portrait/landscape touch controls, pressed feedback, Follow mode and persisted settings passed'

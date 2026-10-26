@@ -1,6 +1,7 @@
 import type { Group, PerspectiveCamera } from 'three';
 import type { Checkpoint } from '../engine/checkpoints.ts';
 import type { CollisionWorld } from '../engine/world.ts';
+import type { HowlEvent, LifeBlobs, LivingWorld } from '../life/index.ts';
 import type { StoryGame } from '../missions/story.ts';
 import type { CanopyVisibility } from '../render/canopy-visibility.ts';
 import type { BlockGrid, PoolSet, Quality } from '../render/index.ts';
@@ -14,6 +15,12 @@ export interface SceneVisual {
 }
 export interface SceneEnvironment {
 	kind: 'graybox' | 'map';
+	loadLife?: (
+		quality: Quality,
+		signal: AbortSignal,
+		blobs?: LifeBlobs,
+		onHowl?: (event: HowlEvent) => void
+	) => Promise<LivingWorld>;
 	story?: StoryGame;
 	loadStoryAssets?: (
 		signal: AbortSignal

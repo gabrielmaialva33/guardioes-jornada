@@ -598,6 +598,36 @@ try {
 		[]
 	);
 	result.defaultStoryWorldOfflineAtC = true;
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().life?.animals), 13);
+	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
+	await page.waitForTimeout(100);
+	const storyBaseline = await metrics(),
+		storyCycles = [];
+	for (let cycle = 0; cycle < 20; cycle++) {
+		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
+		await page.waitForFunction(
+			() => globalThis.__gameDebug?.().ready === true && globalThis.__gameDebug?.().life?.animals === 13
+		);
+		if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
+			await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
+		await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
+		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
+		await page.waitForTimeout(50);
+		const current = await metrics();
+		storyCycles.push(current);
+		assert.equal(current.contexts, 0);
+		assert.equal(current.raf, storyBaseline.raf);
+		assert.equal(current.listeners, storyBaseline.listeners);
+		assert.ok(current.maxContexts <= 1);
+	}
+	result.storyLifeCycles = { baseline: storyBaseline, after: storyCycles.at(-1), count: storyCycles.length };
+	console.info('20 full story/life lifecycle cycles passed');
+	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
+		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
+
 	// The map preloads its sounds behind the loading screen; nature (the forest bed) follows after the first frame.
 	for (const deadline = Date.now() + 15000; !audioRequests.some((path) => path.includes('forest-day')); ) {
 		assert.ok(Date.now() < deadline, 'the forest bed was never requested');

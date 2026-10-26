@@ -2,7 +2,9 @@
 	import { T, useStage, useTask, useThrelte } from '@threlte/core';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { Group, PerspectiveCamera, Ray, Vector3 } from 'three';
+	import { testing } from './testing.ts';
 	import { golden } from './golden.ts';
+	import type { LifeFrame, LivingWorld } from '../life/index.ts';
 	import { lighting } from '../render/stylized.ts';
 	import { LIGHT } from '../style/palette.ts';
 	import { ATLAS_SOURCE } from '../avatar/catalog.ts';
@@ -73,7 +75,8 @@
 		),
 		{ mobileMedium: false }
 	);
-	let quality: Quality = golden.enabled ? golden.tier : choice.quality;
+	let quality: Quality = testing ? 'low' : golden.enabled ? golden.tier : choice.quality;
+	let simulationTime = 0;
 	let goldenReady = false;
 	let goldenFrames = 0;
 	let goldenPlaced = false;
@@ -97,6 +100,16 @@
 	const avatarBlob = shadows.blobs.add('actor');
 	const grid = untrack(() => environment.grid);
 	let storyAssets: Awaited<ReturnType<NonNullable<SceneEnvironment['loadStoryAssets']>>> | undefined;
+	let life: LivingWorld | undefined;
+	let lifeRevision = -1;
+	const lifeFrame: LifeFrame = {
+		dt: 0,
+		camera,
+		time: 0,
+		reducedMotion: false,
+		playerPosition: untrack(() => controller.character.position),
+		playerVelocity: untrack(() => controller.character.velocity)
+	};
 	let forest: Awaited<ReturnType<SceneEnvironment['loadPlacements']>> | undefined;
 	const budget = new FrameBudget(renderer, { quality });
 	const preset = QUALITY[quality];
@@ -166,6 +179,7 @@
 			lighting.uHemisphereSky.value.set(LIGHT.night.hemisphereSky);
 			lighting.uHemisphereGround.value.set(LIGHT.night.hemisphereGround);
 		}
+		life?.setQuality(next);
 		if (forest?.setQuality) forest.setQuality(next);
 		else if (forest) for (const pool of forest.pools.pools.values()) pool.lod = lodProfilesFor(next).tree;
 		governor.reset();
@@ -179,6 +193,9 @@
 			goldenReady,
 			visualTime,
 			worldKind: environment.kind,
+			testing,
+			simulationTime,
+			life: life?.debug(),
 			cameraYaw: controller.camera.yaw,
 			storyProgress: environment.story?.level.missions.map((m) => environment.story?.progress(m.id)) ?? [],
 			storyFinished: environment.story?.finished ?? false,
@@ -285,6 +302,24 @@
 				shadows.addReceiver(actor);
 			}),
 			sound?.preloadEssential(abort.signal),
+			environment
+				.loadLife?.(quality, abort.signal, shadows.blobs, (event) => {
+					sound?.audio.play('howler', { x: event.x, y: event.y, z: event.z, gain: event.chorus ? 1.1 : 1 });
+				})
+				.then((value) => {
+					if (abort.signal.aborted) {
+						value.dispose();
+						return;
+					}
+					life = value;
+					visual.add(value.object3d);
+					if (golden.enabled && golden.lifeScenario)
+						value.onStory({
+							completed: (id) => id === 1 || (golden.lifeScenario === 'butterflies' && id === 4),
+							progress: (id) => (id === 4 && golden.lifeScenario === 'butterflies' ? 6 : 0)
+						});
+					else if (environment.story) value.onStory(environment.story);
+				}),
 			environment.loadPlacements(quality, abort.signal).then((value) => {
 				if (abort.signal.aborted) {
 					value.dispose();
@@ -300,6 +335,7 @@
 			.then(async () => {
 				if (abort.signal.aborted) return;
 				if (golden.enabled) {
+					placeGolden();
 					visualTime = golden.time;
 					animationInput.x = controller.character.position.x;
 					animationInput.y = controller.character.position.y;
@@ -309,6 +345,10 @@
 					for (let i = 0; i < Math.round(golden.time * 60); i++) {
 						if (rig) applyToRig(animator.update(1 / 60, animationInput), rig);
 						storyAssets?.update(1 / 60);
+						lifeFrame.dt = 1 / 60;
+						lifeFrame.time = (i + 1) / 60;
+						lifeFrame.reducedMotion = motion.matches;
+						life?.update(lifeFrame);
 					}
 				}
 				await renderer.compileAsync(scene, camera);
@@ -342,6 +382,41 @@
 		if (hit === null) shadows.blobs.hide(avatarBlob);
 		else shadows.blobs.set(avatarBlob, p.x, shadowRay.origin.y - hit, p.z, 0.68, Math.max(0, hit - 0.1));
 	}
+	function updateLife(delta: number, grounded: boolean, jumped: boolean) {
+		if (life) {
+			const story = environment.story;
+			if (story && story.revision !== lifeRevision) {
+				lifeRevision = story.revision;
+				life.onStory(story);
+			}
+			lifeFrame.dt = delta;
+			lifeFrame.time = visualTime;
+			lifeFrame.reducedMotion = motion.matches;
+			lifeFrame.playerGrounded = grounded;
+			lifeFrame.playerJumped = jumped;
+			life.update(lifeFrame);
+		}
+	}
+	function placeGolden() {
+		if (goldenPlaced) return;
+		const p = controller.character.position;
+		placeObject(actor, p, golden.avatar?.[2] ?? controller.frame.yaw);
+		actor.visible = true;
+		const c = golden.lineup ? [35, 15, 60, 35, 5, 20, 70] : golden.camera;
+		if (c) {
+			camera.position.set(c[0], c[1], c[2]);
+			camera.lookAt(c[3], c[4], c[5]);
+			camera.fov = c[6] ?? 70;
+			camera.updateProjectionMatrix();
+		} else {
+			let frame = controller.frame;
+			for (let i = 0; i < 60; i++) frame = controller.update(1 / 60, input.sample(0), lens);
+			placeObject(actor, frame.position, frame.yaw);
+			applyCameraPose(camera, frame.pose);
+		}
+		camera.updateMatrixWorld(true);
+		goldenPlaced = true;
+	}
 	const initialYaw = () => controller.frame.yaw;
 	const budgetStage = useStage(Symbol('game-budget'), { before: mainStage });
 	useTask(
@@ -353,37 +428,25 @@
 				void renderer.compileAsync(scene, camera);
 			}
 		},
-		{ stage: budgetStage, autoInvalidate: false, running: () => ready && !hidden && !paused && !contextLost }
+		{
+			stage: budgetStage,
+			autoInvalidate: false,
+			running: () => ready && !hidden && (!paused || !!environment.story?.dialogue) && !contextLost
+		}
 	);
 	useTask(
 		(delta) => {
 			if (golden.enabled) {
-				const p = controller.character.position;
-				placeObject(actor, p, golden.avatar?.[2] ?? initialYaw());
-				actor.visible = true;
-				const c = golden.lineup ? [35, 15, 60, 35, 5, 20, 70] : golden.camera;
-				if (c) {
-					camera.position.set(c[0], c[1], c[2]);
-					camera.lookAt(c[3], c[4], c[5]);
-					camera.fov = c[6] ?? 70;
-					camera.updateProjectionMatrix();
-				} else if (!goldenPlaced) {
-					let frame = controller.frame;
-					for (let i = 0; i < 60; i++) frame = controller.update(1 / 60, input.sample(0), lens);
-					placeObject(actor, frame.position, frame.yaw);
-					applyCameraPose(camera, frame.pose);
-					canopyHead.set(
-						frame.position.x,
-						frame.position.y + controller.camera.focusHeight,
-						frame.position.z
-					);
-					forest?.canopies?.update(camera.position, canopyHead, delta, motion.matches);
-					goldenPlaced = true;
-				}
+				placeGolden();
 				present(controller.character.position);
 				return;
 			}
 			visualTime += delta;
+			if (paused) {
+				storyAssets?.update(delta);
+				updateLife(delta, controller.frame.grounded, false);
+				return;
+			}
 			const frameInput = input.sample(delta);
 			lens.aspect = camera.aspect;
 			const fov = verticalFov(camera.aspect);
@@ -393,9 +456,13 @@
 			}
 			lens.fov = fov;
 			const frame = controller.update(delta, frameInput, lens);
+			simulationTime += frame.ticks / 60;
 			placeObject(actor, frame.position, frame.yaw);
 			applyCameraPose(camera, frame.pose);
+			canopyHead.set(frame.position.x, frame.position.y + controller.camera.focusHeight, frame.position.z);
+			forest?.canopies?.update(camera.position, canopyHead, delta, motion.matches);
 			actor.visible = frame.pose.avatarOpacity > 0.05;
+			updateLife(delta, frame.grounded, frame.jumped);
 			readCharacter(animationInput, controller.character, delta);
 			animationInput.jumped = frame.jumped;
 			animationInput.yaw = frame.yaw;
@@ -445,7 +512,7 @@
 			present(controller.frame.position);
 			onFrame();
 		},
-		{ running: () => ready && !hidden && !paused && !contextLost }
+		{ running: () => ready && !hidden && (!paused || !!environment.story?.dialogue) && !contextLost }
 	);
 	const cullStage = useStage(Symbol('game-cull'), { after: mainStage, before: renderStage });
 	useTask(
@@ -488,6 +555,7 @@
 		{ stage: hudStage, autoInvalidate: false }
 	);
 	onDestroy(() => {
+		life?.dispose();
 		storyAssets?.dispose();
 		controller.camera.extraOcclusion = undefined;
 		forest?.dispose();

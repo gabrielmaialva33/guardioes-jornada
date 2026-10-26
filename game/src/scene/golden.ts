@@ -22,7 +22,9 @@ export function readGolden(search: string, allowed: boolean) {
 		camera: numbers(q.get('cam'), [6, 7]),
 		avatar: numbers(q.get('avatar'), [3]),
 		night: q.get('time') === 'night',
-		lineup: q.get('scene') === 'lineup'
+		lineup: q.get('scene') === 'lineup',
+		lifeScenario:
+			q.get('life') === 'companion' ? 'companion' : q.get('life') === 'butterflies' ? 'butterflies' : null
 	};
 }
 export const golden = readGolden(

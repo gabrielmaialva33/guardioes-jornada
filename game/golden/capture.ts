@@ -197,6 +197,8 @@ async function settle(page: Page, pose: Pose, tier: Tier) {
 		if (pose.avatar)
 			url.searchParams.set('avatar', [pose.avatar.x, pose.avatar.z, pose.avatar.yaw].join(','));
 		if (pose.id === 'P10') url.searchParams.set('scene', 'lineup');
+		if (pose.id === 'P12') url.searchParams.set('life', 'companion');
+		if (pose.id === 'P13') url.searchParams.set('life', 'butterflies');
 	}
 	if (clockMode === 'fake') {
 		// A fixed start time, paused: the game only sees time move when runFor moves it.

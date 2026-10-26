@@ -216,6 +216,46 @@
 			},
 			"references": ["20-a-short-hike-floresta-paleta.jpg"],
 			"notes": "Owner void regression: elevated camera above the mirante ledges looking down across the lowland. Low far=70 clips the floor; far field must cover the lower frame."
+		},
+		{
+			"id": "P12",
+			"name": "Mico companheiro depois do corredor",
+			"covers": "living-world companion, ground height and shadow",
+			"status": "exists",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": {
+				"position": [67, 6.5, 50],
+				"target": [59, 3.4, 43],
+				"fov": 55
+			},
+			"avatar": {
+				"x": 60,
+				"z": 43,
+				"yaw": 0
+			},
+			"references": [],
+			"notes": "Gated golden fixture: mission 1 complete, 10 s seeded life simulation; no save is written."
+		},
+		{
+			"id": "P13",
+			"name": "Borboletas na clareira restaurada",
+			"covers": "living-world butterflies after 6 seedlings",
+			"status": "exists",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": {
+				"position": [100, 7.5, 129],
+				"target": [111, 3.8, 118],
+				"fov": 55
+			},
+			"avatar": {
+				"x": 108,
+				"z": 122,
+				"yaw": 0
+			},
+			"references": [],
+			"notes": "Gated golden fixture: missions 1 and 4 complete, 15 butterflies, no save writes."
 		}
 	]
 }
