@@ -2,22 +2,30 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
-import { decodeGameManifest, GAME_ABI, type GameManifest } from './protocol.ts';
+import { type AudioCodec, decodeGameManifest, GAME_ABI, type GameManifest } from './protocol.ts';
 
 export function makeManifest(files: Map<string, Uint8Array>): GameManifest {
 	const list = [...files]
 		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-		.map(([path, bytes]) => ({
+		.map(([path, bytes]) => ({ path, bytes, codec: audioCodec(path) }))
+		.map(({ path, bytes, codec }) => ({
 			path,
 			bytes: bytes.byteLength,
 			sha256: createHash('sha256').update(bytes).digest('hex'),
 			...(/\.(js|css|json|svg|wasm|txt|glb)$/.test(path)
 				? { gzipBytes: gzipSync(bytes, { level: 9 }).length }
-				: {})
+				: {}),
+			...(codec ? { codec } : {})
 		}));
 	const content = { abi: GAME_ABI, entry: 'entry.js', files: list };
 	const packId = createHash('sha256').update(JSON.stringify(content)).digest('hex');
 	return decodeGameManifest({ packId, ...content });
+}
+/** Sounds ship in both codecs; each device downloads one (protocol.ts `requiredFiles`). */
+function audioCodec(path: string): AudioCodec | undefined {
+	if (path.endsWith('.webm')) return 'webm';
+	if (path.endsWith('.m4a')) return 'm4a';
+	return undefined;
 }
 export async function walk(directory: string): Promise<string[]> {
 	const files: string[] = [];

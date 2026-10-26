@@ -1,9 +1,16 @@
-import { decodeGameManifest, type GameManifest } from '../../../game/protocol.ts';
+import {
+	type AudioCodec,
+	chooseAudioCodec,
+	decodeGameManifest,
+	type GameManifest,
+	requiredFiles
+} from '../../../game/protocol.ts';
 import {
 	completeGameManifest,
 	gameCacheName,
 	gameCachePrefix,
 	gameFileUrl,
+	gameMarker,
 	gameMarkerUrl
 } from './game-pack-cache.ts';
 
@@ -15,23 +22,46 @@ export interface DownloadProgress {
 export interface GamePackInfo {
 	complete: boolean;
 	packId: string | null;
-	/** Missing transfer bytes, estimated from the generated gzip files; null without a manifest. */
+	/** Missing transfer bytes for this device's audio codec, estimated from the generated gzip files; null without a manifest. */
 	missingBytes: number | null;
 	sizeKB: number | null;
+	/** The audio codec this device downloads (null: none it can play). */
+	audioCodec: AudioCodec | null;
 }
 /** Call when the discovery sheet opens, never eagerly on the home page. */
-export async function getGamePackInfo(root: URL, signal?: AbortSignal): Promise<GamePackInfo> {
-	const manager = new GamePacks({ root });
+export async function getGamePackInfo(
+	root: URL,
+	signal?: AbortSignal,
+	audioCodec?: AudioCodec | null
+): Promise<GamePackInfo> {
+	const manager = new GamePacks({ root, audioCodec });
+	const codec = manager.audioCodec;
 	const saved = await manager.current();
-	if (saved) return { complete: true, packId: saved.packId, missingBytes: 0, sizeKB: 0 };
+	if (saved) return { complete: true, packId: saved.packId, missingBytes: 0, sizeKB: 0, audioCodec: codec };
 	try {
 		const latest = await manager.latest(signal);
-		const missingBytes = latest.files.reduce((sum, file) => sum + (file.gzipBytes ?? file.bytes), 0);
-		return { complete: false, packId: latest.packId, missingBytes, sizeKB: Math.ceil(missingBytes / 1024) };
+		const missingBytes = requiredFiles(latest, codec).reduce(
+			(sum, file) => sum + (file.gzipBytes ?? file.bytes),
+			0
+		);
+		return {
+			complete: false,
+			packId: latest.packId,
+			missingBytes,
+			sizeKB: Math.ceil(missingBytes / 1024),
+			audioCodec: codec
+		};
 	} catch (error) {
 		if (signal?.aborted) throw error;
-		return { complete: false, packId: null, missingBytes: null, sizeKB: null };
+		return { complete: false, packId: null, missingBytes: null, sizeKB: null, audioCodec: codec };
 	}
+}
+/** What an <audio> element answers; nothing outside a document (no audio is downloaded there). */
+function defaultCanPlayType(): (type: string) => string {
+	const doc = (globalThis as { document?: Document }).document;
+	if (!doc) return () => '';
+	const element = doc.createElement('audio');
+	return (type) => element.canPlayType(type);
 }
 interface DownloadOptions {
 	signal?: AbortSignal;
@@ -45,13 +75,29 @@ export class GamePacks {
 	#fetch: typeof fetch;
 	#registry: string;
 	#pointer: string;
-	constructor(options: { root: URL; storage?: CacheStorage; fetch?: typeof fetch }) {
+	#audioCodec: AudioCodec | null | undefined;
+	constructor(options: {
+		root: URL;
+		storage?: CacheStorage;
+		fetch?: typeof fetch;
+		/** The device's audio codec; by default the one its browser plays best (`chooseAudioCodec`). */
+		audioCodec?: AudioCodec | null;
+	}) {
 		this.root = new URL(options.root);
 		if (!this.root.pathname.endsWith('/')) throw new Error('invalid-game-base');
 		this.#storage = options.storage ?? globalThis.caches;
 		this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
 		this.#registry = `${gameCachePrefix(this.root)}registry`;
 		this.#pointer = new URL('game-packs/__active__', this.root).href;
+		this.#audioCodec = options.audioCodec;
+	}
+	/**
+	 * Chosen once per manager. The game's audio bank asks the same question of the
+	 * same browser, so it only ever fetches this codec, which the pack holds offline.
+	 */
+	get audioCodec(): AudioCodec | null {
+		if (this.#audioCodec === undefined) this.#audioCodec = chooseAudioCodec(defaultCanPlayType());
+		return this.#audioCodec;
 	}
 	async current(): Promise<GameManifest | null> {
 		try {
@@ -99,20 +145,23 @@ export class GamePacks {
 	}
 	async #download(manifest: GameManifest, { signal, progress }: DownloadOptions): Promise<GameManifest> {
 		signal?.throwIfAborted();
-		const total = manifest.files.reduce((sum, file) => sum + file.bytes, 0);
+		const audioCodec = this.audioCodec;
+		const files = requiredFiles(manifest, audioCodec);
+		const total = files.reduce((sum, file) => sum + file.bytes, 0);
 		let loaded = 0;
 		progress?.({ loaded, total });
 		const name = gameCacheName(this.root, manifest.packId);
 		const final = await this.#storage.open(name);
-		if (await completeGameManifest(final, this.root, manifest.packId)) {
+		const saved = await completeGameManifest(final, this.root, manifest.packId);
+		if (saved) {
 			await this.#publish(manifest, signal);
 			progress?.({ loaded: total, total });
-			return manifest;
+			return saved;
 		}
 		const stagingName = `${name}:staging:${crypto.randomUUID()}`;
 		try {
 			const staging = await this.#storage.open(stagingName);
-			for (const file of manifest.files) {
+			for (const file of files) {
 				const url = gameFileUrl(this.root, manifest.packId, file.path);
 				const bytes = await this.#read(
 					url,
@@ -131,7 +180,7 @@ export class GamePacks {
 				signal?.throwIfAborted();
 				await staging.put(url, new Response(bytes, { headers: { 'Content-Type': contentType(file.path) } }));
 			}
-			for (const file of manifest.files) {
+			for (const file of files) {
 				signal?.throwIfAborted();
 				const url = gameFileUrl(this.root, manifest.packId, file.path);
 				const response = await staging.match(url);
@@ -139,9 +188,9 @@ export class GamePacks {
 				await final.put(url, response);
 			}
 			signal?.throwIfAborted();
-			await final.put(gameMarkerUrl(this.root, manifest.packId), Response.json(manifest));
+			await final.put(gameMarkerUrl(this.root, manifest.packId), gameMarker(manifest, audioCodec));
 			await this.#publish(manifest, signal);
-			return manifest;
+			return { ...manifest, files };
 		} finally {
 			await this.#storage.delete(stagingName).catch(() => {});
 		}
@@ -211,5 +260,7 @@ function contentType(path: string): string {
 	if (path.endsWith('.png')) return 'image/png';
 	if (path.endsWith('.svg')) return 'image/svg+xml';
 	if (path.endsWith('.wasm')) return 'application/wasm';
+	if (path.endsWith('.webm')) return 'audio/webm';
+	if (path.endsWith('.m4a')) return 'audio/mp4';
 	return 'application/octet-stream';
 }

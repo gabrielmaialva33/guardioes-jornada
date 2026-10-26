@@ -1,4 +1,10 @@
-import { decodeGameManifest, type GameManifest } from '../../../game/protocol.ts';
+import {
+	AUDIO_CODECS,
+	type AudioCodec,
+	decodeGameManifest,
+	type GameManifest,
+	requiredFiles
+} from '../../../game/protocol.ts';
 
 export function gameCachePrefix(root: URL): string {
 	return `guardioes-game:${encodeURIComponent(root.pathname)}:`;
@@ -12,6 +18,20 @@ export function gameFileUrl(root: URL, packId: string, path: string): string {
 export function gameMarkerUrl(root: URL, packId: string): string {
 	return gameFileUrl(root, packId, '__complete__.json');
 }
+/**
+ * The completion marker: the full manifest plus the audio codec this device
+ * downloaded (null: none). Markers written before codecs have no `audioCodec`
+ * and mean every file was downloaded.
+ */
+export function gameMarker(manifest: GameManifest, audioCodec: AudioCodec | null): Response {
+	return Response.json({ ...manifest, audioCodec });
+}
+function markerCodec(value: unknown): AudioCodec | null | undefined {
+	if (value === undefined || value === null) return value;
+	if (AUDIO_CODECS.includes(value as AudioCodec)) return value as AudioCodec;
+	throw new Error('invalid-game-marker');
+}
+/** The pack as this device holds it: only the files its marker requires, all present. */
 export async function completeGameManifest(
 	cache: Cache,
 	root: URL,
@@ -20,11 +40,12 @@ export async function completeGameManifest(
 	try {
 		const marker = await cache.match(gameMarkerUrl(root, packId));
 		if (!marker) return null;
-		const manifest = decodeGameManifest(await marker.json());
+		const record = await marker.json();
+		const manifest = decodeGameManifest(record);
 		if (manifest.packId !== packId) return null;
-		for (const file of manifest.files)
-			if (!(await cache.match(gameFileUrl(root, packId, file.path)))) return null;
-		return manifest;
+		const files = requiredFiles(manifest, markerCodec(record.audioCodec));
+		for (const file of files) if (!(await cache.match(gameFileUrl(root, packId, file.path)))) return null;
+		return { ...manifest, files };
 	} catch {
 		return null;
 	}

@@ -32,6 +32,24 @@ it('pins a pack identity to all runtime bytes and is independent of file order',
 	).not.toBe(a.packId);
 });
 
+it('tags each audio export with its codec and leaves every other file required', () => {
+	const bytes = new Uint8Array([1]);
+	const manifest = makeManifest(
+		new Map([
+			['entry.js', bytes],
+			['assets/step-1.webm', bytes],
+			['assets/step-1.m4a', bytes],
+			['assets/tree.glb', bytes]
+		])
+	);
+	expect(Object.fromEntries(manifest.files.map((file) => [file.path, file.codec]))).toEqual({
+		'assets/step-1.m4a': 'm4a',
+		'assets/step-1.webm': 'webm',
+		'assets/tree.glb': undefined,
+		'entry.js': undefined
+	});
+});
+
 it('publishes all files and creates real gzip/Brotli encodings for GLB and runtime', async () => {
 	const root = process.env.TMPDIR ?? join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/tests');
 	await mkdir(root, { recursive: true });

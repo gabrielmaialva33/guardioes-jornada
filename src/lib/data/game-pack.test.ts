@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GAME_ABI, type GameManifest } from '../../../game/protocol.ts';
+import {
+	type AudioCodec,
+	decodeGameManifest,
+	GAME_ABI,
+	type GameManifest,
+	requiredFiles
+} from '../../../game/protocol.ts';
 import { GamePacks, getGamePackInfo } from './game-pack.ts';
-import { gameCacheName, gameFileUrl, matchGamePack } from './game-pack-cache.ts';
+import { gameCacheName, gameFileUrl, gameMarkerUrl, matchGamePack } from './game-pack-cache.ts';
 import { cachePrefix, obsoleteCaches } from './worker-cache.ts';
 
 afterEach(() => {
@@ -43,6 +49,43 @@ async function pack(text: string): Promise<GameManifest> {
 		files: [{ path: 'entry.js', bytes: bytes.length, sha256: digest }]
 	};
 }
+const sha256 = async (bytes: Uint8Array<ArrayBuffer>) =>
+	Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (v) =>
+		v.toString(16).padStart(2, '0')
+	).join('');
+/** A pack whose files hold their own path as bytes; audio is tagged like pack-build.ts does. */
+async function audioPack(paths: string[]): Promise<GameManifest> {
+	const files = await Promise.all(
+		paths.map(async (path) => {
+			const bytes = new TextEncoder().encode(path);
+			const codec: AudioCodec | undefined = path.endsWith('.webm')
+				? 'webm'
+				: path.endsWith('.m4a')
+					? 'm4a'
+					: undefined;
+			return { path, bytes: bytes.length, sha256: await sha256(bytes), ...(codec ? { codec } : {}) };
+		})
+	);
+	const packId = await sha256(new TextEncoder().encode(JSON.stringify(files)));
+	return decodeGameManifest({ abi: GAME_ABI, packId, entry: 'entry.js', files });
+}
+/** Serves each pack file's path as its body and records what was asked for. */
+function pathFetch(requested: string[]) {
+	return vi.fn(async (url: string | URL | Request) => {
+		const path = String(url).replace(/^.*\/game-packs\/[a-f0-9]{64}\//, '');
+		requested.push(path);
+		return new Response(path);
+	});
+}
+const AUDIO_PATHS = [
+	'entry.js',
+	'assets/style.css',
+	'assets/step-1.webm',
+	'assets/step-1.m4a',
+	'assets/river-1.webm',
+	'assets/river-1.m4a'
+];
+
 describe('optional independent packs', () => {
 	it('persists a verified pack and serves it without the server after A, B and C app cleanups', async () => {
 		const storage = memoryCaches();
@@ -128,7 +171,8 @@ describe('optional independent packs', () => {
 			complete: false,
 			packId: manifest.packId,
 			missingBytes: 1025,
-			sizeKB: 2
+			sizeKB: 2,
+			audioCodec: null
 		});
 		await new GamePacks({ root, storage, fetch: vi.fn(async () => new Response('A')) }).download(manifest);
 		request.mockClear();
@@ -136,7 +180,8 @@ describe('optional independent packs', () => {
 			complete: true,
 			packId: manifest.packId,
 			missingBytes: 0,
-			sizeKB: 0
+			sizeKB: 0,
+			audioCodec: null
 		});
 		expect(request).not.toHaveBeenCalled();
 	});
@@ -157,5 +202,81 @@ describe('optional independent packs', () => {
 		expect(
 			await matchGamePack(storage, root, new URL(gameFileUrl(root, manifest.packId, manifest.entry)))
 		).toBeUndefined();
+	});
+});
+
+describe('one audio codec per device', () => {
+	it('downloads, verifies and serves only the chosen codec, offline', async () => {
+		for (const [codec, other] of [
+			['webm', 'm4a'],
+			['m4a', 'webm']
+		] as const) {
+			const storage = memoryCaches(),
+				manifest = await audioPack(AUDIO_PATHS),
+				requested: string[] = [],
+				progress = vi.fn();
+			const manager = new GamePacks({ root, storage, fetch: pathFetch(requested), audioCodec: codec });
+			const saved = await manager.download(manifest, { progress });
+			const wanted = AUDIO_PATHS.filter((path) => !path.endsWith(`.${other}`));
+			expect(requested).toEqual(wanted);
+			expect(saved.files.map((file) => file.path)).toEqual(wanted);
+			expect(progress).toHaveBeenLastCalledWith({
+				loaded: wanted.join('').length,
+				total: wanted.join('').length
+			});
+			const marker = await (await storage.open(gameCacheName(root, manifest.packId))).match(
+				gameMarkerUrl(root, manifest.packId)
+			);
+			expect(await marker?.json()).toMatchObject({ audioCodec: codec });
+			// A later manager (any codec answer) reads the pack as its marker says, without network.
+			const offline = new GamePacks({ root, storage, audioCodec: other });
+			expect((await offline.current())?.files.map((file) => file.path)).toEqual(wanted);
+			const url = (path: string) => new URL(gameFileUrl(root, manifest.packId, path));
+			expect(await (await matchGamePack(storage, root, url(`assets/step-1.${codec}`)))?.text()).toBe(
+				`assets/step-1.${codec}`
+			);
+			expect(await matchGamePack(storage, root, url(`assets/step-1.${other}`))).toBeUndefined();
+		}
+	});
+
+	it('keeps packs completed before codecs: their marker requires every file', async () => {
+		const storage = memoryCaches(),
+			manifest = await audioPack(AUDIO_PATHS),
+			cache = await storage.open(gameCacheName(root, manifest.packId));
+		for (const path of AUDIO_PATHS.slice(0, -1))
+			await cache.put(gameFileUrl(root, manifest.packId, path), new Response(path));
+		await cache.put(gameMarkerUrl(root, manifest.packId), Response.json(manifest));
+		const registry = await storage.open(`guardioes-game:${encodeURIComponent(root.pathname)}:registry`);
+		await registry.put(
+			new URL('game-packs/__active__', root).href,
+			Response.json({ active: manifest, previous: null })
+		);
+		const manager = new GamePacks({ root, storage, audioCodec: 'webm' });
+		expect(await manager.current()).toBeNull();
+		const last = AUDIO_PATHS.at(-1) ?? '';
+		await cache.put(gameFileUrl(root, manifest.packId, last), new Response(last));
+		expect(await manager.current()).toEqual(manifest);
+		await cache.put(gameMarkerUrl(root, manifest.packId), Response.json({ ...manifest, audioCodec: 'ogg' }));
+		expect(await manager.current()).toBeNull();
+	});
+
+	it('sizes the download for the chosen codec only', async () => {
+		const storage = memoryCaches(),
+			manifest = await audioPack(AUDIO_PATHS);
+		vi.stubGlobal('caches', storage);
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(manifest));
+		for (const codec of ['webm', 'm4a', null] as const) {
+			const bytes = requiredFiles(manifest, codec).reduce((sum, file) => sum + file.bytes, 0);
+			expect(await getGamePackInfo(root, undefined, codec)).toMatchObject({
+				complete: false,
+				missingBytes: bytes,
+				audioCodec: codec
+			});
+		}
+		expect(requiredFiles(manifest, null).map((file) => file.path)).toEqual(['entry.js', 'assets/style.css']);
+		expect(requiredFiles(manifest, undefined)).toEqual(manifest.files);
+		expect(() =>
+			decodeGameManifest({ ...manifest, files: [{ ...manifest.files[0], codec: 'ogg' }] })
+		).toThrow();
 	});
 });
