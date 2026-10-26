@@ -112,7 +112,7 @@ export const CONTEXT = {
 	wobbleArms: 6 * DEG,
 	/** Wading: stride × waterStride (a slower cycle), forward leg swing × (1 + waterKnees). */
 	waterStride: 1.3,
-	waterKnees: 0.7,
+	waterKnees: 0.5,
 	waterArms: 18 * DEG,
 	waterArmsUp: 15 * DEG,
 	waterLean: 4 * DEG,
@@ -637,13 +637,13 @@ export class AvatarAnimator {
 		const shoulderX = left ? -GESTURE.shoulder[0] : GESTURE.shoulder[0];
 		const shoulderY = GESTURE.shoulder[1];
 		const shoulderZ = GESTURE.shoulder[2];
-		// Bow until the shoulder sits about an arm above the point; pet only adds to its crouch.
+		// Bow until the shoulder sits about an arm above the point (never less than the keys' bow).
 		const wanted = (ly + 0.8 * GESTURE.armReach - waistY) / shoulderY;
 		const needed = Math.min(
 			GESTURE.maxBow,
 			Math.max(GESTURE.minBow, Math.acos(Math.min(1, Math.max(-1, wanted))))
 		);
-		out[TORSO] += (pickup ? needed : Math.max(0, needed - out[TORSO])) * envelope;
+		out[TORSO] += Math.max(0, needed - out[TORSO]) * envelope;
 		const bow = out[TORSO];
 		const cos = Math.cos(bow);
 		const sin = Math.sin(bow);

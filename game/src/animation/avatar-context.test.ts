@@ -78,7 +78,7 @@ describe('contextual locomotion', () => {
 		expect(water.cadence).toBeCloseTo(ground.cadence / CONTEXT.waterStride, 2);
 		const knee = range(water, 2, walk({ surface: 'water' }), at('legL', 0)).min;
 		const groundKnee = range(ground, 2, walk(), at('legL', 0)).min;
-		expect(knee).toBeLessThan(groundKnee * 1.5);
+		expect(knee).toBeLessThan(groundKnee * (1 + CONTEXT.waterKnees * 0.7));
 		// The back swing does not grow.
 		expect(range(water, 2, walk({ surface: 'water' }), at('legL', 0)).max).toBeCloseTo(
 			range(ground, 2, walk(), at('legL', 0)).max,
