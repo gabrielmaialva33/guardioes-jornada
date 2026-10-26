@@ -113,7 +113,7 @@ export function recordedFiles(
 
 const STEP_SPATIAL: Spatial = { ref: 2, rolloff: 1.5, max: 25 };
 /** Common animals (c-audio.md §3.3): full level within 4 u, out of reach past 70 u. */
-const ANIMAL_SPATIAL: Spatial = { ref: 4, rolloff: 1.5, max: 70 };
+export const ANIMAL_SPATIAL: Spatial = { ref: 4, rolloff: 1.5, max: 70 };
 
 /** A footstep: the steps are normalised per surface, so these gains even the surfaces out. */
 function step(gain: number, files: readonly SoundFiles[]): SoundDef {

@@ -20,6 +20,7 @@
 import type { CheckpointEvent } from '../engine/checkpoints.ts';
 import { JUMP_SPEED } from '../engine/constants.ts';
 import type { StoryLevel } from '../level/types.ts';
+import type { StudyAudioRuntime } from '../study/audio.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { riverSurfaceAt } from '../world-runtime/navigation.ts';
 import type { SoundId } from './bank.ts';
@@ -100,6 +101,8 @@ export class Soundscape {
 	#river: LoopHandle | null = null;
 	#fall: LoopHandle | null = null;
 	#chainsaw: LoopHandle | null = null;
+	/** DEV-only Green Hell study sounds (game/src/study/audio.ts); never set in a build. */
+	#study: StudyAudioRuntime | null = null;
 	#releaseDuck: (() => void) | null = null;
 	#combo = 0;
 	#lastCollect = Number.NEGATIVE_INFINITY;
@@ -149,6 +152,16 @@ export class Soundscape {
 				if (this.#disposed || signal?.aborted || this.#natureReady) return;
 				this.#natureReady = true;
 				this.#bed = this.audio.loop('forest-day', { fadeIn: 3 });
+				// DEV + ?estudo=greenhell only: local study sounds (tmp/, git-ignored). A build drops this branch.
+				if (import.meta.env.DEV)
+					void import('../study/audio.ts').then(({ startStudyAudio }) => {
+						if (!this.#disposed)
+							this.#study = startStudyAudio({
+								audio: this.audio,
+								world: this.#map?.world,
+								ownBed: this.#bed
+							});
+					});
 				const river = this.#map?.world.river.points[0];
 				if (river)
 					this.#river = this.audio.loop('river', { x: river.x, y: river.water, z: river.z, fadeIn: 2 });
@@ -198,7 +211,11 @@ export class Soundscape {
 			)
 				this.#play('splash', 1, 1);
 		}
-		if (this.#natureReady) this.#ambience(dt, listener.matrixWorld.elements);
+		if (this.#natureReady) {
+			const e = listener.matrixWorld.elements;
+			this.#ambience(dt, e);
+			this.#study?.update(dt, e[12], e[13], e[14]);
+		}
 		const spent = this.#now() - started;
 		this.#timings[this.#timingCount % TIMING_SAMPLES] = spent;
 		this.#timingCount++;
@@ -260,6 +277,8 @@ export class Soundscape {
 		this.#disposed = true;
 		this.#releaseDuck?.();
 		this.#releaseDuck = null;
+		this.#study?.dispose();
+		this.#study = null;
 		for (const loop of [this.#bed, this.#river, this.#fall, this.#chainsaw]) loop?.stop(0.1);
 		this.#bed = this.#river = this.#fall = this.#chainsaw = null;
 		return this.audio.dispose();

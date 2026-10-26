@@ -554,6 +554,8 @@ describe('extra sounds (buffers outside the bank)', () => {
 
 	it('plays one-shots and loops on the chosen bus, placed when asked, as voice "extra"', async () => {
 		const { audio, context } = await unlocked();
+		audio.play('toucan', { x: 0, y: 0, z: 2 });
+		const animalsDuck = [...([...gainOf(lastSource(context)).outputs][0] as FakePanner).outputs][0];
 		const buffer = context.createBuffer(2, 4800, 48000) as unknown as AudioBuffer;
 		const spatial = { ref: 4, rolloff: 1.5, max: 70 };
 		const voice = audio.playBuffer(buffer, { bus: 'animals', gain: 0.5, spatial }, { x: 3, y: 0, z: 0 });
@@ -563,7 +565,9 @@ describe('extra sounds (buffers outside the bank)', () => {
 		expect(gainOf(source).gain.value).toBe(0.5);
 		const panner = [...gainOf(source).outputs][0] as FakePanner;
 		expect(panner.kind).toBe('panner');
+		expect(panner.refDistance).toBe(4);
 		expect(panner.positionX.value).toBe(3);
+		expect([...panner.outputs][0]).toBe(animalsDuck);
 		// Past its max distance nothing starts.
 		expect(audio.playBuffer(buffer, { bus: 'animals', spatial }, { x: 500, y: 0, z: 0 })).toBeNull();
 		const bed = audio.loopBuffer(buffer, { bus: 'ambience', gain: 0.8, priority: 9 }, { fadeIn: 0 });
