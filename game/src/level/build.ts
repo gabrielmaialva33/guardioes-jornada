@@ -818,7 +818,7 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 			6,
 			LEDGES.size
 		),
-		checkpoint('mirante', mirante, CHECKPOINT_FACING.mirante, 6)
+		checkpoint('mirante-topo', mirante, CHECKPOINT_FACING.mirante, 6)
 	];
 	const start = checkpoint('inicio', spawn, CHECKPOINT_FACING.start, 0);
 
@@ -832,7 +832,10 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		zone('mirante', 'mirante', mirante, MIRANTE_RADIUS, 6)
 	];
 
-	const targets: Point[] = [planting[2], hide, stones.padB, at(CLAREIRA.centre), at(TRAPS[0]), mirante];
+	// Plain points: a target taken from a planting spot must not carry its id into the mission leaf.
+	const targets: Point[] = [planting[2], hide, stones.padB, at(CLAREIRA.centre), at(TRAPS[0]), mirante].map(
+		({ x, y, z }) => ({ x, y, z })
+	);
 	const missions: Mission[] = [
 		{
 			id: 1,
@@ -937,7 +940,9 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 			mission: m.id,
 			radius: COLLECT_RADIUS,
 			on: '',
-			...m.target
+			x: m.target.x,
+			y: m.target.y,
+			z: m.target.z
 		}))
 	];
 

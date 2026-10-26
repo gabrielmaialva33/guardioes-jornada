@@ -29,7 +29,7 @@ import {
  * meant (a control point moved), bump STORY_VERSION and re-pin.
  */
 const GOLDEN_WORLD = 0x58158de7;
-const GOLDEN_LEVEL = 0x77023a99;
+const GOLDEN_LEVEL = 0x4e8295c1;
 
 const { world, level } = buildStoryWorld();
 
@@ -102,6 +102,24 @@ describe('story map build', () => {
 			...level.checkpoints.map((c) => c.id)
 		]);
 		for (const m of level.missions) for (const id of m.triggers) expect(triggers, id).toContain(id);
+	});
+
+	it('gives every planting cell, collectible, trigger and checkpoint its own id', () => {
+		// Mission.triggers mixes these kinds, so an id must name one thing. The one
+		// sharing is a planting zone, which is the trigger of the cell it is named after.
+		const cells = new Map(level.planting.map((p) => [p.id, p]));
+		const zones = level.triggers.filter((t) => t.kind === 'planting');
+		expect(zones.map((t) => t.id).sort()).toEqual([...cells.keys()].sort());
+		for (const t of zones) expect(t).toMatchObject({ x: cells.get(t.id)?.x, z: cells.get(t.id)?.z });
+		const ids = [
+			...level.planting.map((p) => p.id),
+			...level.collectibles.map((c) => c.id),
+			...level.triggers.filter((t) => t.kind !== 'planting').map((t) => t.id),
+			...[level.start, ...level.checkpoints].map((c) => c.id)
+		];
+		expect(ids.filter((id, k) => ids.indexOf(id) !== k)).toEqual([]);
+		const prefix = { 'jucara-fruit': 'jucara-', trash: 'lixo-', 'gold-leaf': 'folha-' };
+		for (const c of level.collectibles) expect(c.id.startsWith(prefix[c.kind]), c.id).toBe(true);
 	});
 
 	it('places the collectibles: 5 fruits, 10 trash, a gold leaf on stone 4 and one per mission', () => {
