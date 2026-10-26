@@ -10,6 +10,7 @@ export interface GameDebug {
 		lastGesture: string | null;
 		hairPitch: number;
 		hairRoll: number;
+		hairAppliedPitch: number;
 	};
 	life?: LifeDebug;
 	goldenReady?: boolean;

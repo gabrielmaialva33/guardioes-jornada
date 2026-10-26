@@ -231,7 +231,8 @@
 				gesture: animator.states.emote,
 				lastGesture: avatarWiring.lastGesture,
 				hairPitch: animator.hair.pitch,
-				hairRoll: animator.hair.roll
+				hairRoll: animator.hair.roll,
+				hairAppliedPitch: avatarInstance?.hair?.dangles.find((d) => d.visible)?.rotation.x ?? 0
 			},
 			avatarStyle: currentProfile?.style ?? avatarProfile.style,
 			avatarHair: currentProfile?.hairStyle ?? avatarProfile.hairStyle ?? 'curto',
