@@ -300,11 +300,16 @@ def make_flat_color_material(name: str, hex_color: str) -> bpy.types.Material:
     return mat
 
 
-def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | None = None) -> None:
+def convert_to_flat_lambert(
+    obj: bpy.types.Object,
+    override_image_path: Path | None = None,
+    preserve_normals: bool = False,
+) -> None:
     """
-    Force flat polygon shading and convert all materials on `obj` and its hierarchy
-    to flat Lambert (`ShaderNodeBsdfDiffuse`, roughness=0) multiplying `COLOR_0 * texture`
-    with `Closest` (`NEAREST`) texture filtering.
+    Convert all materials on `obj` and its hierarchy to Lambert (`ShaderNodeBsdfDiffuse`,
+    roughness=0) multiplying `COLOR_0 * texture` with `Closest` (`NEAREST`) texture filtering.
+    When `preserve_normals=True` (v2 trees & ground cover), smooth shading and custom split
+    normals stored in the GLB are preserved.
     """
     queue = [obj]
     img_loaded = None
@@ -319,7 +324,7 @@ def convert_to_flat_lambert(obj: bpy.types.Object, override_image_path: Path | N
             continue
         mesh = cur.data
         for poly in mesh.polygons:
-            poly.use_smooth = False
+            poly.use_smooth = preserve_normals
 
         has_vc = len(mesh.color_attributes) > 0
         vc_attr_name = mesh.color_attributes[0].name if has_vc else "COLOR_0"
@@ -644,34 +649,47 @@ def main() -> None:
             if obj:
                 place_and_scale_root(obj, xy, target_height=th, target_length=tl, yaw_deg=12.0)
 
-        # 6. Custom Atlantic Forest Trees (back row y = -8.5) & Story Map Custom Assets
+        # 6. Custom Atlantic Forest Trees v2 (back row y = -8.5) & Story Map Custom Assets
         custom_tree_layout = [
-            ("custom-xaxim.glb", (-13.5, -8.5)),
-            ("custom-palmeira-jucara.glb", (-9.2, -8.5)),
-            ("custom-embauba.glb", (-4.6, -8.5)),
-            ("custom-ipe-amarelo.glb", (0.2, -8.5)),
-            ("custom-ipe-rosa.glb", (5.4, -8.5)),
-            ("custom-araucaria.glb", (11.0, -8.5)),
-            ("custom-jequitiba-rosa.glb", (17.2, -8.5)),
+            ("custom-xaxim.glb", (-19.5, -8.5)),
+            ("custom-palmeira-jucara.glb", (-15.5, -8.5)),
+            ("custom-mangue-vermelho.glb", (-11.2, -8.5)),
+            ("custom-embauba.glb", (-6.8, -8.5)),
+            ("custom-jeriva.glb", (-2.2, -8.5)),
+            ("custom-ipe-amarelo.glb", (2.4, -8.5)),
+            ("custom-ipe-rosa.glb", (7.2, -8.5)),
+            ("custom-pau-brasil.glb", (12.2, -8.5)),
+            ("custom-araucaria.glb", (17.5, -8.5)),
+            ("custom-jequitiba-rosa.glb", (24.0, -8.5)),
         ]
         for c_name, xy in custom_tree_layout:
             if (MODELS_DIR / c_name).exists():
                 for cr in import_single_glb(MODELS_DIR / c_name, tmp_dir):
-                    convert_to_flat_lambert(cr)
+                    convert_to_flat_lambert(cr, preserve_normals=True)
                     place_and_scale_root(cr, xy, uniform_scale=1.0, yaw_deg=15.0)
 
+        v2_cover_names = {
+            "custom-bromelia.glb",
+            "custom-bromelia-centro-vermelho.glb",
+            "custom-samambaia.glb",
+            "custom-flores-mata.glb",
+            "custom-serapilheira.glb",
+        }
         custom_prop_layout = [
-            # Front-right row (y = 5.5): bromeliads, traps, radio, juçara bunch, seedlings, trash, marker flag
+            # Front-right row (y = 5.5): ground cover v2, traps, radio, juçara bunch, seedlings, marker flag
             ("custom-bromelia.glb", (11.2, 5.5)),
             ("custom-bromelia-centro-vermelho.glb", (12.6, 5.5)),
-            ("custom-arapuca.glb", (14.1, 5.5)),
-            ("custom-laco.glb", (15.5, 5.5)),
-            ("custom-bandeira-marcacao.glb", (16.8, 5.5)),
-            ("custom-radio.glb", (17.8, 5.5)),
-            ("custom-cacho-jucara.glb", (18.8, 5.5)),
-            ("custom-muda-etapa-1.glb", (19.9, 5.5)),
-            ("custom-muda-etapa-2.glb", (20.9, 5.5)),
-            ("custom-muda-etapa-3.glb", (22.2, 5.5)),
+            ("custom-samambaia.glb", (14.0, 5.5)),
+            ("custom-flores-mata.glb", (15.4, 5.5)),
+            ("custom-serapilheira.glb", (17.2, 5.5)),
+            ("custom-arapuca.glb", (19.0, 5.5)),
+            ("custom-laco.glb", (20.4, 5.5)),
+            ("custom-bandeira-marcacao.glb", (21.6, 5.5)),
+            ("custom-radio.glb", (22.6, 5.5)),
+            ("custom-cacho-jucara.glb", (23.6, 5.5)),
+            ("custom-muda-etapa-1.glb", (24.6, 5.5)),
+            ("custom-muda-etapa-2.glb", (25.6, 5.5)),
+            ("custom-muda-etapa-3.glb", (26.8, 5.5)),
             # Signs on the left of understorey row (y = -2.8)
             ("custom-placa-trilha-da-reserva.glb", (-13.8, -2.8)),
             ("custom-placa-nao-jogue-lixo.glb", (-15.6, -2.8)),
@@ -687,12 +705,12 @@ def main() -> None:
             ("custom-degrau-rocha.glb", (18.8, 1.8)),
             ("custom-degrau-raiz.glb", (21.6, 1.8)),
             ("custom-degrau-tronco.glb", (24.4, 1.8)),
-            ("custom-ponte-madeira.glb", (-22.5, -7.5)),
+            ("custom-ponte-madeira.glb", (-24.5, -7.5)),
         ]
         for c_name, xy in custom_prop_layout:
             if (MODELS_DIR / c_name).exists():
                 for cr in import_single_glb(MODELS_DIR / c_name, tmp_dir):
-                    convert_to_flat_lambert(cr)
+                    convert_to_flat_lambert(cr, preserve_normals=(c_name in v2_cover_names))
                     place_and_scale_root(cr, xy, uniform_scale=1.0, yaw_deg=165.0)
 
         # Render 1: Master Lineup Overview (2560x1440)
