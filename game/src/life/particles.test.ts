@@ -5,7 +5,7 @@ import { LIFE_TIERS } from './fauna.ts';
 import { cameraAt, storyMap } from './fixtures.test-helper.ts';
 import { BUTTERFLY_MAX } from './flocks.ts';
 import { LIFE_SEED, planLife } from './homes.ts';
-import { AmbientParticles, ParticleState } from './particles.ts';
+import { AmbientParticles, leafGeometry, ParticleState } from './particles.ts';
 
 const { world, level } = storyMap();
 const plan = planLife(world, level);
@@ -159,5 +159,36 @@ describe('ambient particles: determinism', () => {
 		expect(a.length).toBeGreaterThan(0);
 		expect(replay(LIFE_SEED)).toEqual(a);
 		expect(replay(LIFE_SEED + 1)).not.toEqual(a);
+	});
+});
+
+describe('leafGeometry', () => {
+	it('is a pointed leaf inside the unit square, not a card', () => {
+		const geometry = leafGeometry();
+		const position = geometry.getAttribute('position');
+		const index = geometry.getIndex();
+		expect(position.count).toBe(13);
+		expect(index?.count).toBe(36);
+		geometry.computeBoundingBox();
+		const box = geometry.boundingBox;
+		expect(box?.min.x).toBeCloseTo(-0.5);
+		expect(box?.max.x).toBeCloseTo(0.5);
+		expect(box?.max.y).toBeLessThanOrEqual(0.5);
+		// Area of the fan: well under the card's 1, so the corners are gone.
+		let area = 0;
+		for (let k = 1; k < position.count; k++) {
+			const next = k === position.count - 1 ? 1 : k + 1;
+			area += (position.getX(k) * position.getY(next) - position.getX(next) * position.getY(k)) / 2;
+		}
+		expect(area).toBeGreaterThan(0.5);
+		expect(area).toBeLessThan(0.75);
+		// Narrower half a unit from the tip than from the stalk.
+		const width = (x: number) => {
+			let w = 0;
+			for (let k = 1; k < position.count; k++)
+				if (Math.abs(position.getX(k) - x) < 0.13) w = Math.max(w, Math.abs(position.getY(k)));
+			return w;
+		};
+		expect(width(0.35)).toBeLessThan(width(-0.35));
 	});
 });

@@ -2,9 +2,10 @@
  * Ambient particles of ART.md §8: one pooled system, ONE draw call (an
  * InstancedMesh of alpha-blended quads in palette colours), for
  * - falling leaves, spawned in the crowns near the player (the canopy grid of
- *   homes.ts), fluttering and tumbling down in the wind, then lying flat and
- *   fading on the ground;
- * - pollen in the clearings (FLAG.cleared, no crown above), tiny squares facing
+ *   homes.ts): a pointed leaf outline, not a card, that falls face down and
+ *   rocks like a pendulum while it spins in the wind, then lies flat and fades
+ *   on the ground;
+ * - pollen in the clearings (FLAG.cleared, no crown above), tiny motes facing
  *   the camera, drifting with the wind.
  *
  * The live count never exceeds the tier limit (LIFE_TIERS.particles: 80 on low,
@@ -14,14 +15,15 @@
  * generator, so a seed replays the same particles.
  */
 import {
+	BufferAttribute,
+	BufferGeometry,
 	type Camera,
 	Color,
 	DoubleSide,
 	DynamicDrawUsage,
 	InstancedBufferAttribute,
 	InstancedMesh,
-	MeshBasicMaterial,
-	PlaneGeometry
+	MeshBasicMaterial
 } from 'three';
 import { REDUCED_MOTION_DURATION } from '../style/motion.ts';
 import { RAMPS } from '../style/palette.ts';
@@ -52,7 +54,10 @@ export const PARTICLES = {
 	/** Fade-in, s, and the largest opacity per kind. */
 	fadeIn: 0.4,
 	leafAlpha: 0.95,
-	pollenAlpha: 0.8
+	pollenAlpha: 0.8,
+	/** Pendulum rock of a falling leaf around lying flat, rad, and its rate, rad/s. */
+	rock: 0.7,
+	rockRate: 3.1
 } as const;
 
 /** Palette colours (ART.md §2): live and dry leaves; pale seeds and pollen. */
@@ -115,6 +120,29 @@ export function patchParticleShader(shader: { vertexShader: string; fragmentShad
 		'#include <color_fragment>',
 		'diffuseColor.a *= vLifeAlpha;'
 	);
+}
+
+/**
+ * A pointed leaf in the unit square, long axis along x (tip at +x, stalk at -x),
+ * as a triangle fan: 12 triangles, so a tumbling leaf never reads as a card.
+ */
+export function leafGeometry(): BufferGeometry {
+	const ring = 12;
+	const positions = new Float32Array((ring + 1) * 3);
+	for (let k = 0; k < ring; k++) {
+		const a = (k / ring) * Math.PI * 2;
+		const x = 0.5 * Math.cos(a);
+		// Narrower towards the tip than at the stalk, like most broad leaves.
+		const taper = x > 0 ? 1 - 0.55 * (2 * x) ** 2 : 1 - 0.2 * (2 * x) ** 2;
+		positions[(k + 1) * 3] = x;
+		positions[(k + 1) * 3 + 1] = 0.5 * Math.sin(a) * taper;
+	}
+	const index: number[] = [];
+	for (let k = 0; k < ring; k++) index.push(0, k + 1, ((k + 1) % ring) + 1);
+	const geometry = new BufferGeometry();
+	geometry.setAttribute('position', new BufferAttribute(positions, 3));
+	geometry.setIndex(index);
+	return geometry;
 }
 
 export class AmbientParticles {
@@ -208,9 +236,7 @@ export class AmbientParticles {
 			this.#palette[i * 3 + 1] = color.g;
 			this.#palette[i * 3 + 2] = color.b;
 		});
-		const geometry = new PlaneGeometry(1, 1);
-		geometry.deleteAttribute('normal');
-		geometry.deleteAttribute('uv');
+		const geometry = leafGeometry();
 		this.#alpha = new Float32Array(capacity);
 		this.#alphaAttribute = new InstancedBufferAttribute(this.#alpha, 1);
 		this.#alphaAttribute.setUsage(DynamicDrawUsage);
@@ -458,10 +484,13 @@ export class AmbientParticles {
 			const o = i * 16;
 			if (this.#kind[i] === LEAF) {
 				leaves++;
-				// R = Ry(spin) · Rx(tilt) on a quad in the xy plane; landed leaves lie flat.
+				// R = Ry(spin) · Rx(tilt) on a leaf in the xy plane: a falling leaf rocks around
+				// lying flat (tilt -π/2), so it shows its face to the camera; landed leaves lie flat.
 				const spin = this.#spin[i];
 				const tilt =
-					this.#landed[i] === 1 ? -Math.PI / 2 : 0.9 * Math.sin(this.#phase[i] + this.#age[i] * 3.1);
+					this.#landed[i] === 1
+						? -Math.PI / 2
+						: -Math.PI / 2 + PARTICLES.rock * Math.sin(this.#phase[i] + this.#age[i] * PARTICLES.rockRate);
 				const cy = Math.cos(spin);
 				const sy = Math.sin(spin);
 				const cx = Math.cos(tilt);
