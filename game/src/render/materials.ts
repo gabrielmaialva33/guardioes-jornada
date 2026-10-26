@@ -49,7 +49,16 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 	};
 	const lit = source as Partial<MeshStandardMaterial & MeshBasicMaterial>;
 	const map = lit.map ? preparePaletteMap(lit.map) : null;
-	if (map && options.vegetation && map.image && map.image.width > 64) {
+	const image: unknown = map?.image;
+	if (
+		map &&
+		options.vegetation &&
+		image !== null &&
+		typeof image === 'object' &&
+		'width' in image &&
+		typeof image.width === 'number' &&
+		image.width > 64
+	) {
 		map.magFilter = LinearFilter;
 		map.minFilter = LinearMipmapLinearFilter;
 		map.generateMipmaps = true;
