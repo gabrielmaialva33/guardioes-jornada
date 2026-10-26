@@ -1,10 +1,10 @@
 /**
- * Browser half of avatar-sheet.ts: loads avatar.glb (and the ponytail of
+ * Browser half of avatar-sheet.ts: loads avatar.glb (and the v3 hair nodes of
  * avatar-hair.glb), drives an AvatarAnimator through every P10 state and
  * gesture, and draws 4 phases of each into one labelled 2D canvas.
  *
- * The hair GLB has no separate tail node (p10-avatar-anim.md), so the hair
- * row draws a proxy tail at HAIR_PIVOTS.rabo, rotated by HairSway's angles.
+ * The hair rows use avatar-hair.glb's v3 dangling nodes (tail, braids, bun
+ * knot), rotated by HairSway's angles as the runtime would after applyToRig.
  */
 import {
 	AmbientLight,
@@ -13,7 +13,7 @@ import {
 	type Group,
 	Mesh,
 	MeshLambertMaterial,
-	Object3D,
+	type Object3D,
 	PerspectiveCamera,
 	Scene,
 	WebGLRenderer
@@ -27,7 +27,6 @@ import {
 	createAvatarInput
 } from '../src/animation/avatar-animator.ts';
 import { EMOTES, type EmoteId } from '../src/animation/avatar-poses.ts';
-import { HAIR_PIVOTS } from '../src/animation/hair-sway.ts';
 import { AVATAR_LAYOUT, BLOCKY_RIG } from '../src/animation/joints.ts';
 import { applyToRig, bindRig } from '../src/animation/rig.ts';
 import { AVATAR_HEIGHT, WALK_SPEED } from '../src/engine/constants.ts';
@@ -45,11 +44,20 @@ const HEADER_H = 30;
 const DT = 1 / 240;
 const DEG = Math.PI / 180;
 
+type HairRow = 'rabo' | 'trancas' | 'coque';
+const HAIR_NODES: Record<HairRow, string> = {
+	rabo: 'hair-ponytail',
+	trancas: 'hair-braids',
+	coque: 'hair-bun'
+};
+
 interface Row {
 	label: string;
 	note: string;
 	/** Camera yaw around the avatar (0: in front). */
 	view: number;
+	/** The hair style shown (its real GLB node and dangling children), if any. */
+	hair?: HairRow;
 	/** Sets up the animator and returns the 4 captures as functions that advance it. */
 	run(animator: AvatarAnimator, capture: (caption: string) => void): void;
 }
@@ -75,10 +83,11 @@ function cycle(input: AvatarInput) {
 function gesture(
 	id: EmoteId,
 	times: readonly number[],
-	point: { x: number; y: number; z: number } | null = null
+	point: { x: number; y: number; z: number } | null = null,
+	overrides: Partial<AvatarInput> = {}
 ) {
 	return (animator: AvatarAnimator, capture: (caption: string) => void) => {
-		const input = createAvatarInput();
+		const input = Object.assign(createAvatarInput(), overrides);
 		advance(animator, input, 1);
 		animator.playGesture(id, point);
 		let elapsed = 0;
@@ -133,15 +142,15 @@ const ROWS: Row[] = [
 	},
 	{
 		label: 'pickup',
-		note: 'pega o item em (0,4; 0,2; 0,8)',
-		view: 1.1,
+		note: 'pega o item em (0,4; 0,2; 0,8): afundo R6, vista de lado',
+		view: 1.57,
 		run: gesture('pickup', [0.12, 0.22, 0.4, 0.55], { x: 0.4, y: 0.2, z: 0.8 })
 	},
 	{
 		label: 'talk',
-		note: 'diálogo aberto com a Iara',
+		note: 'diálogo aberto com a Iara (talking): um gesto a cada 1,2 s, mãos alternadas',
 		view: 0.4,
-		run: gesture('talk', [0.4, 1.1, 2.0, 2.9])
+		run: gesture('talk', [0.3, 0.75, 1.5, 1.95], null, { talking: true })
 	},
 	{ label: 'binoculars', note: 'mirante', view: 0.5, run: gesture('binoculars', [0.45, 1.3, 2.4, 3.0]) },
 	{
@@ -156,21 +165,28 @@ const ROWS: Row[] = [
 		view: 0.3,
 		run: gesture('cheer', [0.15, 0.4, 0.7, EMOTES.cheer.period - 0.3])
 	},
-	{
-		label: 'hair: rabo',
-		note: 'para de correr: o rabo balança (cauda proxy)',
-		view: 1.5,
-		run: (animator, capture) => {
-			animator.hairStyle = 'rabo';
-			const running = walk({ speed: WALK_SPEED * 2.2 });
-			advance(animator, running, 2);
-			const stop = createAvatarInput();
-			for (const time of [0, 0.12, 0.3, 0.55]) {
-				advance(animator, stop, time === 0 ? 0 : 0.12);
-				capture(`parada +${time.toFixed(2)} s · ${(animator.hair.pitch / DEG).toFixed(0)}°`);
+	...(['rabo', 'trancas', 'coque'] as const).map(
+		(style): Row => ({
+			label: `hair: ${style}`,
+			note: 'para de correr: a parte solta balança (nós v3 reais)',
+			view: 1.5,
+			hair: style,
+			run: (animator, capture) => {
+				animator.hairStyle = style;
+				// Really moving (the head's acceleration comes from the feet too), then a sudden stop.
+				const running = walk({ speed: WALK_SPEED * 2.2 });
+				for (let t = 0; t < 2; t += DT) {
+					running.z += running.speed * DT;
+					animator.update(DT, running);
+				}
+				const stop = Object.assign(createAvatarInput(), { z: running.z });
+				for (const time of [0, 0.12, 0.3, 0.55]) {
+					advance(animator, stop, time === 0 ? 0 : time === 0.12 ? 0.12 : time === 0.3 ? 0.18 : 0.25);
+					capture(`parada +${time.toFixed(2)} s · ${(animator.hair.pitch / DEG).toFixed(0)}°`);
+				}
 			}
-		}
-	}
+		})
+	)
 ];
 
 async function main() {
@@ -197,25 +213,22 @@ async function main() {
 	scene.add(model);
 	const rig = bindRig(model, AVATAR_LAYOUT, BLOCKY_RIG);
 	const head = model.getObjectByName('head');
-	const ponytail = hair.scene.getObjectByName('hair-ponytail');
-	// The proxy tail: a thin box hanging from the ponytail's pivot.
-	const tailPivot = new Object3D();
-	const tail = new Mesh(new BoxGeometry(0.22, 0.9, 0.22), new MeshLambertMaterial({ color: 0xe0a030 }));
-	tail.position.y = -0.45;
-	tailPivot.add(tail);
-	const [px, py, pz] = HAIR_PIVOTS.rabo[0];
-	tailPivot.position.set(px, py, pz);
-	tailPivot.rotation.order = 'YXZ';
-	if (head && ponytail) {
-		head.add(ponytail);
-		ponytail.position.set(0, 0, 0);
-		ponytail.traverse((node) => {
-			if (node instanceof Mesh) node.material = new MeshLambertMaterial({ color: 0x3a2618 });
+	// The v3 hair nodes on the head, tinted like the runtime does; the dangles are their children.
+	const hairMaterial = new MeshLambertMaterial({ color: 0x5e4330, vertexColors: true, flatShading: true });
+	const hairNodes = new Map<HairRow, { node: Object3D; dangles: Object3D[] }>();
+	for (const [style, name] of Object.entries(HAIR_NODES) as [HairRow, string][]) {
+		const node = hair.scene.getObjectByName(name);
+		if (!node || !head) throw new Error(`missing ${name} or head`);
+		head.add(node);
+		node.position.set(0, 0, 0);
+		node.traverse((child) => {
+			if (child instanceof Mesh) child.material = hairMaterial;
 		});
-		ponytail.visible = false;
+		node.visible = false;
+		const dangles = node.children.filter((child) => child instanceof Mesh);
+		for (const dangle of dangles) dangle.rotation.order = 'YXZ';
+		hairNodes.set(style, { node, dangles });
 	}
-	if (head) head.add(tailPivot);
-	tailPivot.visible = false;
 
 	const camera = new PerspectiveCamera(30, TILE_W / TILE_H, 0.1, 50);
 	const sheet = document.createElement('canvas');
@@ -227,13 +240,12 @@ async function main() {
 	ink.fillRect(0, 0, sheet.width, sheet.height);
 	ink.fillStyle = '#e8f2ea';
 	ink.font = '600 15px sans-serif';
-	ink.fillText('P10 avatar animation v2: every new state/gesture at 4 phases', 10, 20);
+	ink.fillText('P10b avatar animation: every new state/gesture at 4 phases', 10, 20);
 
 	ROWS.forEach((row, index) => {
 		const animator = new AvatarAnimator({ seed: 7 });
-		const hairRow = row.label.startsWith('hair');
-		if (ponytail) ponytail.visible = hairRow;
-		tailPivot.visible = hairRow;
+		for (const [style, { node }] of hairNodes) node.visible = style === row.hair;
+		const dangles = row.hair ? (hairNodes.get(row.hair)?.dangles ?? []) : [];
 		const distance = 8.6;
 		camera.position.set(Math.sin(row.view) * distance, 2.4, Math.cos(row.view) * distance);
 		camera.lookAt(0, 1.25, 0);
@@ -249,7 +261,7 @@ async function main() {
 			applyToRig(animator.pose, rig);
 			model.position.set(0, 0, 0);
 			model.rotation.set(0, 0, 0);
-			tailPivot.rotation.set(animator.hair.pitch, 0, animator.hair.roll);
+			for (const dangle of dangles) dangle.rotation.set(animator.hair.pitch, 0, animator.hair.roll, 'YXZ');
 			renderer.render(scene, camera);
 			const left = LABEL_W + column * TILE_W;
 			ink.drawImage(renderer.domElement, left, top);

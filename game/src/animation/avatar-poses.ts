@@ -10,7 +10,7 @@
  * Idle, fall and swim-idle loop on time; emotes are one-shot.
  */
 import { ANIMATE } from './animate-timings.ts';
-import { AVATAR_LAYOUT, type AvatarJoint } from './joints.ts';
+import { AVATAR_LAYOUT, type AvatarJoint, BLOCKY_RIG } from './joints.ts';
 import { compileKey, type KeyPose, mirrorKey } from './skeleton.ts';
 import { type Interpolation, Track } from './track.ts';
 
@@ -252,13 +252,22 @@ const POINTING = key({
 // the body; avatar-animator.ts adds what depends on the scene: the bow and the
 // hand aimed at the picked item or the petted animal.
 
-/** Pick up: lunge on the left leg, left arm back for balance; the bow and the right hand are procedural. */
+/** Legs split this far (R6 lunge); rigid legs of 1 rig unit drop the hip by 1 − cos. */
+const LUNGE_SPLIT = 38;
+const LUNGE_DROP = (1 - Math.cos((LUNGE_SPLIT * Math.PI) / 180)) / (BLOCKY_RIG.height ?? 2.7);
+
+/**
+ * Pick up, Roblox R6 style: the legs split so the hip drops (both feet stay on the
+ * ground), the free arm swings back for balance; the bow (at most 40°), a lean to the
+ * item's side and the reaching hand are procedural (avatar-animator.ts).
+ */
 const LUNGE = key({
-	root: { p: [0, -0.04, 0] },
+	root: { p: [0, -LUNGE_DROP, 0] },
 	head: { r: [10, 0, 0] },
-	armL: { r: [18, 0, 10] },
-	legL: { r: [-35, 0, 0] },
-	legR: { r: [28, 0, 0] }
+	armL: { r: [22, 0, 10] },
+	armR: { r: [22, 0, -10] },
+	legL: { r: [-LUNGE_SPLIT, 0, 0] },
+	legR: { r: [LUNGE_SPLIT, 0, 0] }
 });
 
 /** Pet: down on the heels next to the animal (rigid legs cannot kneel); the right hand is procedural. */
@@ -280,23 +289,25 @@ const GLASSES = (yaw: number) =>
 		armR: { r: [-138, 0, 26] }
 	});
 
-const TALK = [
-	key({ head: { r: [2, 4, 0] }, armL: { r: [0, 0, 4] }, armR: { r: [0, 0, -4] } }),
-	key({
-		torso: { r: [0, -6, 0] },
-		head: { r: [4, -2, 2] },
-		armL: { r: [0, 0, 5] },
-		armR: { r: [-50, -10, -22] }
-	}),
-	key({ head: { r: [-3, 2, 0] }, armL: { r: [0, 0, 4] }, armR: { r: [-20, 0, -8] } }),
-	key({
-		torso: { r: [0, 6, 0] },
-		head: { r: [5, 3, -2] },
-		armL: { r: [-45, 8, 24] },
-		armR: { r: [0, 0, -4] }
-	}),
-	key({ head: { r: [-2, 0, 0] }, armL: { r: [-15, 0, 8] }, armR: { r: [-15, 0, -8] } })
-];
+/**
+ * Talk: one calm beat every 1.2 s, alternating hands. The hand comes up open to
+ * chest height in front of the body (arm forward and turned in), the torso turns a
+ * little toward it and the head nods; then both arms settle before the other beat.
+ */
+const TALK_REST = key({ head: { r: [0, 0, 0] }, armL: { r: [-4, 0, 5] }, armR: { r: [-4, 0, -5] } });
+const TALK_BEAT_R = key({
+	torso: { r: [2, -5, 0] },
+	head: { r: [7, -3, 0] },
+	armL: { r: [-4, 0, 5] },
+	armR: { r: [-68, 22, -10] }
+});
+const TALK_HOLD_R = key({
+	torso: { r: [1, -4, 0] },
+	head: { r: [1, -2, 0] },
+	armL: { r: [-4, 0, 5] },
+	armR: { r: [-58, 18, -12] }
+});
+const TALK = [TALK_REST, TALK_BEAT_R, TALK_HOLD_R, TALK_REST, mirror(TALK_BEAT_R), mirror(TALK_HOLD_R)];
 
 export const EMOTE_IDS = ['wave', 'cheer', 'point', 'pickup', 'talk', 'binoculars', 'pet'] as const;
 
@@ -355,7 +366,7 @@ export const EMOTES: Readonly<Record<EmoteId, Track>> = {
 		[0.4, LUNGE],
 		[0.6, REST]
 	]),
-	talk: cycle(TALK, 3.6, 'smooth', [0, 0.2, 0.4, 0.62, 0.82]),
+	talk: cycle(TALK, 2.4, 'smooth', [0, 0.13, 0.3, 0.5, 0.63, 0.8]),
 	binoculars: gesture([
 		[0, REST],
 		[0.45, GLASSES(0)],

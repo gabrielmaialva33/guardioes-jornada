@@ -76,6 +76,10 @@ describe('contextual locomotion', () => {
 		run(ground, 2, walk());
 		run(water, 2, walk({ surface: 'water' }));
 		expect(water.cadence).toBeCloseTo(ground.cadence / CONTEXT.waterStride, 2);
+		// The trunk stays nearly upright; the knees come from the legs.
+		expect(range(water, 2, walk({ surface: 'water' }), at('torso', 0)).max).toBeLessThanOrEqual(
+			CONTEXT.waterMaxLean + 1e-6
+		);
 		const knee = range(water, 2, walk({ surface: 'water' }), at('legL', 0)).min;
 		const groundKnee = range(ground, 2, walk(), at('legL', 0)).min;
 		expect(knee).toBeLessThan(groundKnee * (1 + CONTEXT.waterKnees * 0.7));
@@ -95,9 +99,15 @@ describe('contextual locomotion', () => {
 		const flat = torso(0);
 		const up = torso(20 * DEG);
 		const down = torso(-20 * DEG);
-		expect(up.torso - flat.torso).toBeCloseTo(20 * DEG * CONTEXT.slopeLean, 2);
+		// The uphill lean replaces the walk's speed lean (the larger wins), it does not stack.
+		const flatLean = (() => {
+			const animator = new AvatarAnimator();
+			run(animator, 1.5, walk());
+			return animator.lean.value;
+		})();
+		expect(up.torso - flat.torso).toBeCloseTo(20 * DEG * CONTEXT.slopeLean - flatLean, 2);
 		expect(down.torso - flat.torso).toBeCloseTo(-20 * DEG * CONTEXT.slopeBrace, 2);
-		expect(torso(80 * DEG).torso - flat.torso).toBeCloseTo(CONTEXT.slopeMax, 2);
+		expect(torso(80 * DEG).torso - flat.torso).toBeCloseTo(CONTEXT.slopeMax - flatLean, 2);
 		expect(down.arm).toBeLessThan(flat.arm - 5 * DEG);
 	});
 
@@ -210,9 +220,16 @@ describe('gestures', () => {
 		expect(animator.playGesture('pickup')).toBe(true);
 		const rig = rigAt(0, 0, 0, 0);
 		let closest = Number.POSITIVE_INFINITY;
+		let bow = 0;
+		let split = 0;
 		run(animator, 0.6, input(), 1 / 60, () => {
 			closest = Math.min(closest, rig.reach(animator, { x: 0, y: GESTURE.pickupUp, z: GESTURE.pickupAhead }));
+			bow = Math.max(bow, animator.pose.data[at('torso', 0)]);
+			split = Math.max(split, animator.pose.data[at('legR', 0)] - animator.pose.data[at('legL', 0)]);
 		});
+		// An R6 lunge, not a fall: legs split ~±38°, the bow stays within pickupBow.
+		expect(bow).toBeLessThanOrEqual(GESTURE.pickupBow + 1e-6);
+		expect(split).toBeGreaterThan(70 * DEG);
 		expect(closest).toBeLessThan(0.25);
 		expect(EMOTES.pickup.period).toBeCloseTo(0.6, 9);
 	});
@@ -253,8 +270,24 @@ describe('gestures', () => {
 		run(animator, 10, input({ talking: true, lookTarget: iara }));
 		expect(animator.state).toBe('emote');
 		expect(animator.states.emote).toBe('talk');
-		const gesture = range(animator, 3.6, input({ talking: true, lookTarget: iara }), at('armR', 0));
-		expect(gesture.swing).toBeGreaterThan(30 * DEG);
+		const gesture = range(animator, 2.4, input({ talking: true, lookTarget: iara }), at('armR', 0));
+		expect(gesture.swing).toBeGreaterThan(45 * DEG);
+		// One beat every ~1.2 s, alternating hands: each hand rises once per 2.4 s loop.
+		const peaks: Record<'armL' | 'armR', number[]> = { armL: [], armR: [] };
+		const was = { armL: true, armR: true };
+		let time = 0;
+		run(animator, 4.8, input({ talking: true, lookTarget: iara }), 1 / 60, () => {
+			time += 1 / 60;
+			for (const arm of ['armL', 'armR'] as const) {
+				const raised = animator.pose.data[at(arm, 0)] < -45 * DEG;
+				if (raised && !was[arm]) peaks[arm].push(time);
+				was[arm] = raised;
+			}
+		});
+		expect(peaks.armR).toHaveLength(2);
+		expect(peaks.armL).toHaveLength(2);
+		expect(peaks.armR[1] - peaks.armR[0]).toBeCloseTo(2.4, 1);
+		expect(Math.abs(peaks.armL[0] - peaks.armR[0])).toBeCloseTo(1.2, 1);
 		expect(animator.lookYaw.value).toBeGreaterThan(10 * DEG);
 		run(animator, 0.5, input({ talking: false }));
 		expect(animator.state).toBe('idle');

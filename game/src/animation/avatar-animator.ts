@@ -112,12 +112,13 @@ export const CONTEXT = {
 	wobbleArms: 6 * DEG,
 	/** Wading: stride × waterStride (a slower cycle), forward leg swing × (1 + waterKnees). */
 	waterStride: 1.3,
-	waterKnees: 0.5,
+	waterKnees: 0.4,
 	waterArms: 18 * DEG,
 	waterArmsUp: 15 * DEG,
-	waterLean: 4 * DEG,
+	/** Wading keeps the trunk this upright at most: the high knees come from the legs alone. */
+	waterMaxLean: 10 * DEG,
 	/** Torso pitch per radian of slope: into an uphill, back against a downhill (bracing). */
-	slopeLean: 0.6,
+	slopeLean: 0.5,
 	slopeBrace: 0.4,
 	slopeMax: 14 * DEG,
 	/** Downhill bracing also bends the arms forward and out, per radian of slope. */
@@ -141,9 +142,15 @@ export const GESTURE = {
 	/** Shoulder pivot in the torso's frame and the torso's pivot above the feet, rig units (joints.ts). */
 	shoulder: [-0.4, 1.1, -0.1],
 	waist: 0.7,
-	/** Pick-up bow limits, radians. */
+	/** Bow limits, radians; a pickup bows at most pickupBow and leans sideways at most pickupLean. */
 	minBow: 0.2,
 	maxBow: 1.15,
+	pickupBow: 40 * DEG,
+	pickupLean: 18 * DEG,
+	/** Shoulder height above the arm's reach (rig units) at which the pickup lean is full. */
+	leanRange: 0.15,
+	/** How far (rig units) a pickup steps the body toward an item beyond the arm. */
+	pickupStep: 0.45,
 	/** Where the hand goes without a target: ahead of the feet (u) and up from them (u). */
 	pickupAhead: 0.85,
 	pickupUp: 0.25,
@@ -550,7 +557,6 @@ export class AvatarAnimator {
 			out[ARM_R + 2] -= water * posture * CONTEXT.waterArms;
 			out[ARM_L] -= water * posture * CONTEXT.waterArmsUp;
 			out[ARM_R] -= water * posture * CONTEXT.waterArmsUp;
-			out[TORSO] += water * posture * CONTEXT.waterLean;
 		}
 
 		// Slope: lean into an uphill, brace (lean back, arms forward and out) going down.
@@ -570,7 +576,8 @@ export class AvatarAnimator {
 		slopeLean.dt = dt;
 		slopeLean.update();
 		const lean = slopeLean.value;
-		out[TORSO] += lean;
+		// The uphill lean replaces the speed lean in #applyLayers (the larger wins), never adds to it.
+		if (lean < 0) out[TORSO] += lean;
 		if (lean < 0) brace = (-lean / CONTEXT.slopeBrace) * CONTEXT.braceArms;
 		if (brace > 0) {
 			out[ARM_L] -= brace;
@@ -637,29 +644,65 @@ export class AvatarAnimator {
 		const shoulderX = left ? -GESTURE.shoulder[0] : GESTURE.shoulder[0];
 		const shoulderY = GESTURE.shoulder[1];
 		const shoulderZ = GESTURE.shoulder[2];
-		// Bow until the shoulder sits about an arm above the point (never less than the keys' bow).
+		// Bow until the shoulder sits about an arm above the point (never less than the
+		// keys' bow); a pickup bows at most pickupBow and lets the lunge and the arm do the rest.
 		const wanted = (ly + 0.8 * GESTURE.armReach - waistY) / shoulderY;
 		const needed = Math.min(
-			GESTURE.maxBow,
+			pickup ? GESTURE.pickupBow : GESTURE.maxBow,
 			Math.max(GESTURE.minBow, Math.acos(Math.min(1, Math.max(-1, wanted))))
 		);
 		out[TORSO] += Math.max(0, needed - out[TORSO]) * envelope;
 		const bow = out[TORSO];
 		const cos = Math.cos(bow);
 		const sin = Math.sin(bow);
+		// A pickup the bow cannot reach leans the torso to the hand's side (lowering that
+		// shoulder; YXZ: roll, then the bow) and steps the body toward the item: the root
+		// slides over the lunge, so the hand stays under the shoulder.
+		let roll0 = out[TORSO + 2];
+		let waistX = out[ROOT + 3] * RIG_HEIGHT;
+		let waistZStep = waistZ;
+		if (pickup) {
+			const side = left ? -1 : 1;
+			const plainY = waistY + shoulderY * cos - shoulderZ * sin;
+			const shortfall = plainY - ly - GESTURE.armReach;
+			const share = Math.min(1, Math.max(0, shortfall / GESTURE.leanRange));
+			out[TORSO + 2] += side * GESTURE.pickupLean * share * envelope;
+			roll0 = out[TORSO + 2];
+			const rc = Math.cos(roll0);
+			const rs = Math.sin(roll0);
+			const y1 = shoulderX * rs + shoulderY * rc;
+			const hx = lx - (waistX + shoulderX * rc - shoulderY * rs);
+			const hz = lz - (waistZ + y1 * sin + shoulderZ * cos);
+			const gap = waistY + y1 * cos - shoulderZ * sin - ly;
+			const horizontal = Math.sqrt(hx * hx + hz * hz);
+			const allowed = Math.sqrt(Math.max(0, GESTURE.armReach * GESTURE.armReach - gap * gap));
+			if (horizontal > allowed && horizontal > 1e-6) {
+				const step = (Math.min(GESTURE.pickupStep, horizontal - allowed) / horizontal) * envelope;
+				out[ROOT + 3] += (hx * step) / RIG_HEIGHT;
+				out[ROOT + 5] += (hz * step) / RIG_HEIGHT;
+				waistX += hx * step;
+				waistZStep += hz * step;
+			}
+		}
+		const rollCos = Math.cos(roll0);
+		const rollSin = Math.sin(roll0);
 		// Shoulder in the body's frame, then the point relative to it in the torso's frame.
-		const sy = waistY + shoulderY * cos - shoulderZ * sin;
-		const sz = waistZ + shoulderY * sin + shoulderZ * cos;
-		const vx = lx - shoulderX;
+		const s1y = shoulderX * rollSin + shoulderY * rollCos;
+		const sx = waistX + shoulderX * rollCos - shoulderY * rollSin;
+		const sy = waistY + s1y * cos - shoulderZ * sin;
+		const sz = waistZStep + s1y * sin + shoulderZ * cos;
+		const vx = lx - sx;
 		const vy = ly - sy;
 		const vz = lz - sz;
-		const ty = vy * cos + vz * sin;
+		const by = vy * cos + vz * sin;
 		const tz = -vy * sin + vz * cos;
-		const length = Math.sqrt(vx * vx + ty * ty + tz * tz);
+		const tx = vx * rollCos + by * rollSin;
+		const ty = -vx * rollSin + by * rollCos;
+		const length = Math.sqrt(tx * tx + ty * ty + tz * tz);
 		if (!(length > 1e-6)) return;
-		// The arm hangs along −y; YXZ Euler (roll first, then pitch) takes it to (vx, ty, tz).
+		// The arm hangs along −y; YXZ Euler (roll first, then pitch) takes it to (tx, ty, tz).
 		let pitch = Math.atan2(-tz / length, -ty / length);
-		const roll = Math.asin(Math.min(1, Math.max(-1, vx / length)));
+		const roll = Math.asin(Math.min(1, Math.max(-1, tx / length)));
 		if (!pickup && !input.reducedMotion)
 			pitch += GESTURE.stroke * Math.sin((t - timing.hold) * GESTURE.strokeHz * TAU) * rise;
 		out[arm] += (pitch - out[arm]) * envelope;
@@ -733,7 +776,7 @@ export class AvatarAnimator {
 
 		// Lean and bank. Roblox accelerates instantly, so the lean comes from the gap
 		// between the speed and a lagging copy of it, then a spring smooths it.
-		this.#laggingSpeed += (speed - this.#laggingSpeed) * 1 - Math.exp(-LAYERS.accelRate * dt);
+		this.#laggingSpeed += (speed - this.#laggingSpeed) * (1 - Math.exp(-LAYERS.accelRate * dt));
 		let leanTarget = 0;
 		let bankTarget = 0;
 		if (!reduced && onFoot) {
@@ -752,7 +795,12 @@ export class AvatarAnimator {
 		lean.target = leanTarget;
 		lean.dt = dt;
 		lean.update();
-		out[TORSO] += lean.value;
+		const uphill = this.slopeLean.value;
+		out[TORSO] += Math.max(uphill, lean.value);
+		// Wading: the trunk stays nearly upright whatever the clip and the leans add.
+		const water = this.water;
+		if (water > 0.0005 && out[TORSO] > CONTEXT.waterMaxLean)
+			out[TORSO] -= (out[TORSO] - CONTEXT.waterMaxLean) * water;
 		const bank = this.bank;
 		bank.target = bankTarget;
 		bank.dt = dt;
