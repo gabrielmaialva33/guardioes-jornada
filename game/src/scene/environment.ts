@@ -5,6 +5,7 @@ import type { HowlEvent, LifeBlobs, LivingWorld } from '../life/index.ts';
 import type { StoryGame } from '../missions/story.ts';
 import type { CanopyVisibility } from '../render/canopy-visibility.ts';
 import type { BlockGrid, PoolSet, Quality } from '../render/index.ts';
+import type { AvatarGroundContext } from '../world-runtime/avatar-context.ts';
 
 export interface SceneVisual {
 	object: Group;
@@ -15,6 +16,7 @@ export interface SceneVisual {
 }
 export interface SceneEnvironment {
 	kind: 'graybox' | 'map';
+	avatarGround?: AvatarGroundContext;
 	loadLife?: (
 		quality: Quality,
 		signal: AbortSignal,

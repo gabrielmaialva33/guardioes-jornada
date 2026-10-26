@@ -9,6 +9,7 @@ import type { SceneEnvironment } from '../scene/environment.ts';
 import { testing } from '../scene/testing.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { buildMapCollision, prefabProxies } from './collision.ts';
+import { AvatarGroundContext } from './avatar-context.ts';
 import { MapCheckpoints } from './navigation.ts';
 import { loadWorldPlacements, withoutPlacement } from './placements.ts';
 import { createMapVisual } from './visual.ts';
@@ -57,8 +58,10 @@ export function createMapEnvironment(
 	const renderWorld =
 		replacedRock === undefined ? world : { ...world, rocks: withoutPlacement(world.rocks, replacedRock) };
 	const grid = BlockGrid.covering(0, 0, world.size, world.size);
+	const collision = buildMapCollision(world, prefabProxies(world, level));
 	const environment: SceneEnvironment = {
 		kind: 'map',
+		avatarGround: new AvatarGroundContext(collision, world, level),
 		loadLife: testing
 			? undefined
 			: (quality, signal, blobs, onHowl) =>
@@ -69,7 +72,7 @@ export function createMapEnvironment(
 		start,
 		checkpoints,
 		grid,
-		collision: buildMapCollision(world, prefabProxies(world, level)),
+		collision,
 		placements: renderWorld.trees.count + renderWorld.rocks.count + renderWorld.decorations.count,
 		createVisual: () => {
 			const visual = createMapVisual(world, level, [start, ...checkpoints], !!story);
