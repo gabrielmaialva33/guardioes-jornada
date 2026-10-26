@@ -18,6 +18,11 @@
 	let progress = $state<DownloadProgress>({ loaded: 0, total: 0 });
 	let message = $state('');
 	let sizeKB = $state<number | null>(null);
+	/** Whether latest.json names another pack than the saved one: unknown until a check succeeds. */
+	let update = $state<{ state: 'unknown' } | { state: 'none' } | { state: 'available'; bytes: number }>({
+		state: 'unknown'
+	});
+	let checkingUpdate: AbortController | undefined;
 	let element: HTMLDivElement;
 	let launcherRoot: HTMLElement;
 	let presentation: GamePresentation | undefined;
@@ -52,9 +57,30 @@
 		});
 		return () => {
 			destroyed = true;
+			checkingUpdate?.abort();
 			void stop();
 		};
 	});
+	// A saved pack plays offline as is; when online, one small latest.json read tells whether a newer
+	// version exists, so the player can choose to download it. Nothing else is fetched until they do.
+	$effect(() => {
+		if (!pack || !pwa.online || status !== 'ready' || update.state !== 'unknown') return;
+		void checkUpdate(pack);
+	});
+	async function checkUpdate(saved: GameManifest) {
+		checkingUpdate?.abort();
+		const check = new AbortController();
+		checkingUpdate = check;
+		try {
+			const newer = await manager.newer(saved, check.signal);
+			if (check.signal.aborted || destroyed || pack !== saved) return;
+			update = newer ? { state: 'available', bytes: newer.bytes } : { state: 'none' };
+		} catch {
+			/* Offline or a server hiccup: keep 'unknown', the update button stays as a fallback. */
+		} finally {
+			if (checkingUpdate === check) checkingUpdate = undefined;
+		}
+	}
 	function stop(): Promise<void> {
 		generation++;
 		controller?.abort();
@@ -131,6 +157,7 @@
 			});
 			if (token !== generation || destroyed) return;
 			pack = saved;
+			update = { state: 'none' };
 			controller = undefined;
 			await start(saved);
 		} catch (error) {
@@ -242,6 +269,11 @@
 					<p class="note"><Icon name="sparkle" size={20} /> Abrindo a clareira…</p>
 				{:else if status === 'error'}
 					<p class="note" data-tone="danger"><Icon name="warning" size={20} /> {message}</p>
+				{:else if pack && update.state === 'available' && pwa.online}
+					<p class="note" data-tone="info">
+						<Icon name="sparkle" size={20} /> Tem uma versão nova da trilha (cerca de {size(update.bytes)}). A
+						versão guardada continua funcionando sem internet.
+					</p>
 				{:else if pack}
 					<p class="note" data-tone="success">
 						<Icon name="check" size={20} /> A trilha está guardada neste celular e funciona sem internet.
@@ -266,8 +298,13 @@
 					<button class="button wide" type="button" onclick={enter}>
 						<Icon name="footprints" weight="duotone" size={22} /> Entrar na trilha
 					</button>
-					{#if pwa.online}
-						<button class="text-button" type="button" onclick={downloadFromGesture}>
+					{#if pwa.online && (update.state !== 'none' || status === 'error')}
+						<button
+							class="text-button"
+							data-tone={update.state === 'available' ? 'update' : undefined}
+							type="button"
+							onclick={downloadFromGesture}
+						>
 							<Icon name="download" size={18} />
 							{status === 'error' ? 'Tentar o download de novo' : 'Baixar versão mais recente'}
 						</button>
@@ -378,6 +415,10 @@
 		color: var(--danger);
 	}
 
+	.note[data-tone='info'] :global(.icon) {
+		color: var(--info);
+	}
+
 	.hint {
 		color: var(--text-faint);
 		font-size: var(--step--1);
@@ -428,5 +469,13 @@
 		text-underline-offset: 0.2em;
 		cursor: pointer;
 		touch-action: manipulation;
+	}
+
+	/* A known newer version: still second to "Entrar na trilha", but no longer easy to miss. */
+	.text-button[data-tone='update'] {
+		border-radius: var(--radius-pill);
+		background: var(--accent-soft);
+		font-size: var(--step-0);
+		text-decoration: none;
 	}
 </style>
