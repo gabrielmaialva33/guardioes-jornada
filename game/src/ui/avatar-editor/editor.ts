@@ -265,6 +265,8 @@ export const PART_LABELS: Readonly<Record<AvatarPart, string>> = {
 export interface EditorOption {
 	readonly id: string;
 	readonly label: string;
+	/** Short text over the thumbnail, if any. */
+	readonly caption?: string;
 	/** The draft after picking this option; its thumbnail shows exactly this profile. */
 	readonly profile: AvatarProfile;
 	readonly framing: FramingId;
@@ -280,21 +282,23 @@ export function presetOptions(draft: AvatarProfile, presets: readonly AvatarPres
 	return presets.map((preset) => ({
 		id: preset.id,
 		label: `Visual ${preset.name}`,
+		caption: preset.name,
 		profile: selectPreset(draft, preset),
 		framing: 'body',
 		selected: presetSelected(draft, preset)
 	}));
 }
 
-export const FACES: readonly { id: AvatarProfile['face']; label: string }[] = [
-	{ id: 'smile', label: 'Rosto com sorriso' },
-	{ id: 'neutral', label: 'Rosto neutro' }
+export const FACES: readonly { id: AvatarProfile['face']; label: string; caption: string }[] = [
+	{ id: 'smile', label: 'Rosto com sorriso', caption: 'Sorriso' },
+	{ id: 'neutral', label: 'Rosto neutro', caption: 'Neutro' }
 ];
 
 export function faceOptions(draft: AvatarProfile): EditorOption[] {
 	return FACES.map((face) => ({
 		id: face.id,
 		label: face.label,
+		caption: face.caption,
 		profile: setFace(draft, face.id),
 		framing: 'head',
 		selected: draft.style === 'classic' && draft.face === face.id
@@ -305,6 +309,7 @@ export function hairOptions(draft: AvatarProfile, styles: readonly HairStyle[]):
 	return styles.map((style) => ({
 		id: style.id,
 		label: `Cabelo ${style.name.toLowerCase()}`,
+		caption: style.name,
 		profile: setHairStyle(draft, style.id),
 		framing: 'head',
 		selected: draft.style === 'classic' && (draft.hairStyle ?? 'curto') === style.id
@@ -319,6 +324,7 @@ export function skinOptions(draft: AvatarProfile, skins: readonly string[]): Edi
 		{
 			id: CLASSIC_OPTION_ID,
 			label: 'Cores clássicas, sem skin',
+			caption: 'Clássico',
 			profile: useClassic(draft),
 			framing: 'body',
 			selected: draft.style === 'classic'

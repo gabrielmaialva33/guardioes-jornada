@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="data:," />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>Editor de personagem · prévia</title>
+		<style>
+			:root {
+				--font-story: 'Alegreya Variable', Georgia, serif;
+				--font-ui: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				overflow: hidden;
+				font-family: var(--font-ui);
+			}
+			/* Stands in for the paused game behind the editor. */
+			#game {
+				position: fixed;
+				inset: 0;
+				background:
+					radial-gradient(60% 40% at 20% 85%, #2d6a4f, transparent 70%),
+					radial-gradient(50% 35% at 80% 90%, #1e4d36, transparent 70%),
+					linear-gradient(#8fd0f0, #e9f4e4 62%, #5fa36a 63%, #3f7d4f);
+				color: #f1f6ed;
+				user-select: none;
+			}
+			#launcher {
+				position: absolute;
+				top: max(12px, env(safe-area-inset-top));
+				left: max(12px, env(safe-area-inset-left));
+				min-height: 44px;
+				padding: 8px 16px;
+				border: 1px solid #ffffff66;
+				border-radius: 999px;
+				background: #163829d0;
+				color: inherit;
+				font: inherit;
+				cursor: pointer;
+			}
+			#launcher[hidden] {
+				display: none;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="game"><button id="launcher" type="button" hidden>Personalizar personagem</button></div>
+		<script type="module" src="./preview.ts"></script>
+	</body>
+</html>

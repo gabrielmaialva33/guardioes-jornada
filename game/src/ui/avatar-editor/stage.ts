@@ -462,7 +462,10 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 		if (pending !== null) {
 			if (pending === 'cheer' && animator.states.emoting && animator.states.emote !== 'cheer')
 				animator.stopEmote();
-			if (animator.playGesture(pending)) pending = null;
+			if (animator.playGesture(pending)) {
+				pending = null;
+				settle = SETTLE_SECONDS;
+			}
 		}
 		if (animator.states.emoting) settle = SETTLE_SECONDS;
 		const moving = !reduced || animator.states.emoting || pending !== null || settle > 0;

@@ -32,7 +32,9 @@ describe('Spin', () => {
 			let last = before;
 			for (let t = 0; t < 8; t += dt) {
 				spin.step(dt);
-				travelled += spin.yaw - last;
+				// The yaw wraps once at rest: count the short way round.
+				const step = spin.yaw - last;
+				travelled += step - 2 * Math.PI * Math.round(step / (2 * Math.PI));
 				last = spin.yaw;
 			}
 			return { speed, travelled, spin };
