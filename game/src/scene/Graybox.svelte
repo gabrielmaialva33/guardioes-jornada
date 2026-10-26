@@ -598,13 +598,6 @@
 	const budgetStage = useStage(Symbol('game-budget'), { before: mainStage });
 	useTask(
 		(delta) => {
-			if (stressRunning) {
-				visualTime += delta;
-				updateLife(delta, controller.frame.grounded, false);
-				animateAvatar(delta);
-				sound?.update(delta, camera, controller.frame, animator.footstep, animator.states.runWeight);
-				return;
-			}
 			const phase =
 				golden.enabled && golden.night ? 'night' : (environment.streaming?.light(visualTime) ?? 'day');
 			if (phase !== lightPhase) {
@@ -632,6 +625,13 @@
 	);
 	useTask(
 		(delta) => {
+			if (stressRunning) {
+				visualTime += delta;
+				updateLife(delta, controller.frame.grounded, false);
+				animateAvatar(delta);
+				sound?.update(delta, camera, controller.frame, animator.footstep, animator.states.runWeight);
+				return;
+			}
 			if (
 				environment.streaming &&
 				!environment.streaming.update(controller.character.position, controller.character.yaw)
