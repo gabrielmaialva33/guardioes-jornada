@@ -219,6 +219,21 @@ export class Character {
 		this.planarSpeed = 0;
 	}
 
+	/** One constrained fixed tick, owned by a traversal driver; keeps interpolation and clears jump debt. */
+	constrain(feet: Vec3, yaw: number, grounded = false) {
+		this.previousPosition.copy(this.position);
+		this.previousYaw = this.yaw;
+		this.position.copy(feet);
+		this.yaw = yaw;
+		this.velocity.set(0, 0, 0);
+		this.grounded = grounded;
+		this.groundNormal.set(0, 1, 0);
+		this.#coyote = this.#jumpBuffer = 0;
+		this.events.jumped = this.events.landed = this.events.leftGround = false;
+		this.events.landingSpeed = 0;
+		this.planarSpeed = 0;
+	}
+
 	/** Advances one fixed tick. */
 	step(dt: number, input: CharacterInput) {
 		const options = this.options;

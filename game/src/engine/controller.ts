@@ -5,7 +5,7 @@
  * update() once per rendered frame, then copies `position`/`yaw` to the avatar
  * (placeObject) and `pose` to the three camera (applyCameraPose).
  */
-import type { Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { type CameraLens, type CameraPose, DEFAULT_LENS, OrbitCamera } from './camera.ts';
 import {
 	Character,
@@ -18,6 +18,7 @@ import type { Checkpoint, CheckpointEvent, CheckpointTracker } from './checkpoin
 import type { InputFrame } from './input.ts';
 import { wrapAngle } from './math.ts';
 import { FixedTimestep } from './timestep.ts';
+import type { TraversalDriver } from './traversal.ts';
 import type { CollisionWorld } from './world.ts';
 
 export interface PlayerFrame {
@@ -45,9 +46,12 @@ export interface PlayerControllerOptions {
 	camera?: OrbitCamera;
 	character?: Partial<CharacterOptions>;
 	clock?: FixedTimestep;
+	traversal?: TraversalDriver;
 }
 
 export class PlayerController {
+	readonly traversal: TraversalDriver | undefined;
+	readonly #cameraFeet = new Vector3();
 	readonly world: CollisionWorld;
 	readonly character: Character;
 	readonly camera: OrbitCamera;
@@ -60,6 +64,7 @@ export class PlayerController {
 	constructor(world: CollisionWorld, spawn: Vec3, options: PlayerControllerOptions = {}) {
 		const yaw = options.yaw ?? 0;
 		this.world = world;
+		this.traversal = options.traversal;
 		this.character = new Character(world, spawn, yaw, options.character);
 		this.camera = options.camera ?? new OrbitCamera();
 		this.clock = options.clock ?? new FixedTimestep();
@@ -82,6 +87,7 @@ export class PlayerController {
 
 	update(frameSeconds: number, input: InputFrame, lens: CameraLens = DEFAULT_LENS): PlayerFrame {
 		const { camera, character, frame } = this;
+		this.traversal?.capture(input);
 		camera.shiftLock = input.shiftLock;
 		camera.look(input.mouseLookX, input.mouseLookY, 'mouse');
 		camera.look(input.touchLookX, input.touchLookY, 'touch');
@@ -104,12 +110,17 @@ export class PlayerController {
 		frame.yaw = character.interpolateYaw(frame.alpha);
 		frame.grounded = character.grounded;
 		frame.speed = character.planarSpeed;
-		frame.pose = camera.update(frameSeconds, frame.position, this.world, lens);
+		this.#cameraFeet.copy(frame.position);
+		this.#cameraFeet.y += this.traversal?.cameraLift ?? 0;
+		const behind = this.traversal?.cameraBehind;
+		if (behind != null) camera.snapBehind(behind);
+		frame.pose = camera.update(frameSeconds, this.#cameraFeet, this.world, lens);
 		return frame;
 	}
 
 	/** Puts the character on a checkpoint at once, with the camera behind it. */
 	respawnAt(checkpoint: Checkpoint) {
+		this.traversal?.reset();
 		this.character.teleport(checkpoint.spawn, checkpoint.yaw);
 		this.camera.snapBehind(checkpoint.yaw);
 	}
@@ -121,7 +132,7 @@ export class PlayerController {
 
 	readonly #tick = (dt: number) => {
 		const { character, frame } = this;
-		character.step(dt, this.#input);
+		if (!this.traversal?.step(dt, character)) character.step(dt, this.#input);
 		const events = character.events;
 		if (events.jumped) frame.jumped = true;
 		if (events.landed) {
