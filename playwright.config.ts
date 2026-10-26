@@ -19,6 +19,7 @@ export default defineConfig({
 		? undefined
 		: {
 				command: 'pnpm build && pnpm preview --strictPort',
+				env: { GAME_ALLOW_SOFTWARE_TEST: '1' },
 				url: 'http://localhost:4180',
 				reuseExistingServer: !process.env.CI,
 				timeout: 120_000

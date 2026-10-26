@@ -1,20 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { drive, storyBuild, walk } from '../game/story-driver.ts';
 
-test.use({ viewport: { width: 915, height: 412 }, launchOptions: { args: ['--use-angle=gl'] } });
+test.use({
+	viewport: { width: 915, height: 412 },
+	launchOptions: {
+		args: process.env.CI ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=gl']
+	}
+});
 test('completes all six story missions through real keyboard movement and touch actions', async ({
 	page
 }, testInfo) => {
-	test.setTimeout(300000);
+	test.setTimeout(480000);
 	const errors: string[] = [];
 	page.on('pageerror', (e) => errors.push(e.message));
 	await page.addInitScript(() => {
 		Object.defineProperty(navigator, 'deviceMemory', { value: 4, configurable: true });
 	});
-	const standalone = process.env.GAME_E2E_URL;
-	await page.goto(standalone ?? '/secret-trail/?debug');
+	const standalone = process.env.GAME_E2E_URL ? `${process.env.GAME_E2E_URL}&e2e` : undefined;
+	await page.goto(standalone ?? '/secret-trail/?debug&e2e');
 	if (!standalone) await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true, { timeout: 45000 });
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true, null, { timeout: 90000 });
 	const { level } = storyBuild;
 	const at = (id: string) => {
 		const p = [...level.triggers, ...level.landmarks, ...level.collectibles].find((p) => p.id === id);
@@ -66,7 +71,7 @@ test('completes all six story missions through real keyboard movement and touch 
 	// A synchronous event save survives closing/reopening immediately.
 	await page.reload();
 	if (!standalone) await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true, null, { timeout: 90000 });
 	expect(await page.evaluate(() => globalThis.__gameDebug?.().storyProgress[0])).toBe(5);
 	console.info('logger');
 	await walk(page, at('observacao'), 0.8);
@@ -128,7 +133,7 @@ test('completes all six story missions through real keyboard movement and touch 
 				return s?.grounded === true && s.y >= y - 0.1;
 			},
 			top.y,
-			{ timeout: 3000 }
+			{ timeout: 15000 }
 		);
 	}
 	await drive(page, [obby.landing], 5000, false, true);
@@ -149,13 +154,16 @@ test('completes all six story missions through real keyboard movement and touch 
 	expect(errors).toEqual([]);
 });
 test('the real capsule climbs every mirante ledge using keyboard jump controls', async ({ page }) => {
-	test.setTimeout(60000);
-	const standalone = process.env.GAME_E2E_URL;
+	test.setTimeout(120000);
+	const standalone = process.env.GAME_E2E_URL ? `${process.env.GAME_E2E_URL}&e2e` : undefined;
 	const url = standalone ? new URL(standalone) : null;
-	if (url) url.searchParams.set('pose', 'ledges');
-	await page.goto(url?.href ?? '/secret-trail/?debug&pose=ledges');
+	if (url) {
+		url.searchParams.set('pose', 'ledges');
+		url.searchParams.set('e2e', '');
+	}
+	await page.goto(url?.href ?? '/secret-trail/?debug&e2e&pose=ledges');
 	if (!standalone) await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
-	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true, null, { timeout: 90000 });
 	const obby = storyBuild.level.obbies.find((o) => o.id === 'ledges');
 	if (!obby) throw new Error('ledges');
 	for (let i = 0; i < obby.pieces.length; i++) {
@@ -176,7 +184,7 @@ test('the real capsule climbs every mirante ledge using keyboard jump controls',
 				return s?.grounded === true && s.y >= y - 0.1;
 			},
 			top.y,
-			{ timeout: 3000 }
+			{ timeout: 15000 }
 		);
 	}
 });

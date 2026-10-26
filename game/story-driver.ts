@@ -144,6 +144,12 @@ export async function drive(
 				await new Promise<void>((resolve, reject) => {
 					let waypoint = 0;
 					const started = performance.now();
+					const startState = globalThis.__gameDebug?.();
+					const startedSim = startState?.simulationTime;
+					let lastProgress = started,
+						lastX = startState?.x ?? 0,
+						lastZ = startState?.z ?? 0;
+					const initialY = startState?.y ?? 0;
 					if (jump) key('Space', true);
 					const step = () => {
 						const state = globalThis.__gameDebug?.();
@@ -155,7 +161,20 @@ export async function drive(
 							reject(new Error('no-game'));
 							return;
 						}
-						if (performance.now() - started > timeout) {
+						if (Math.hypot(state.x - lastX, state.z - lastZ) > 0.03) {
+							lastProgress = performance.now();
+							lastX = state.x;
+							lastZ = state.z;
+						}
+						const simElapsed =
+							startedSim !== undefined && state.simulationTime !== undefined
+								? (state.simulationTime - startedSim) * 1000
+								: performance.now() - started;
+						if (
+							simElapsed > timeout ||
+							performance.now() - lastProgress > Math.max(15000, timeout) ||
+							performance.now() - started > Math.max(45000, timeout * 8)
+						) {
 							reject(
 								new Error(
 									`navigation-timeout ${state.x.toFixed(2)},${state.y.toFixed(2)},${state.z.toFixed(2)} -> ${JSON.stringify(path[waypoint])}`
@@ -185,7 +204,7 @@ export async function drive(
 						key('KeyA', x < -0.05);
 						key('KeyW', y > 0.05);
 						key('KeyS', y < -0.05);
-						if (jump && performance.now() - started > 120) key('Space', false);
+						if (jump && (!state.grounded || state.y > initialY + 0.15)) key('Space', false);
 						requestAnimationFrame(step);
 					};
 					requestAnimationFrame(step);
