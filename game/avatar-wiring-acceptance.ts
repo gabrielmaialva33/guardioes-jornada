@@ -48,7 +48,7 @@ try {
 	await page.screenshot({ path: join(output, 'mirante-binoculars.png') });
 	await open('spawn');
 	await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
-	await page.getByRole('button', { name: 'Rabo de cavalo', exact: true }).click();
+	await page.getByRole('button', { name: 'Cabelo rabo de cavalo', exact: true }).click();
 	await page.getByRole('button', { name: 'Usar este personagem', exact: true }).click();
 	await page.waitForFunction(() => globalThis.__gameDebug?.().avatarHair === 'rabo');
 	await page.keyboard.down('KeyW');
