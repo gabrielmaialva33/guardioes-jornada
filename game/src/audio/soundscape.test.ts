@@ -4,11 +4,15 @@ import type { CheckpointEvent } from '../engine/checkpoints.ts';
 import { JUMP_SPEED } from '../engine/constants.ts';
 import { buildStoryWorld } from '../level/build.ts';
 import { TRAILS } from '../level/layout.ts';
+import type { ManguezalContent } from '../level/zones/manguezal.ts';
+import { buildParkFresh } from '../level/zones/park.ts';
+import type { ZoneId } from '../level/zones/spec.ts';
 import { StoryGame } from '../missions/story.ts';
 import { heightAt } from '../survival/terrain.ts';
 import { BUSES, type SoundId, type Surface } from './bank.ts';
 import { DEFAULT_SETTINGS, type GameAudio, type LoopHandle } from './engine.ts';
 import { type FrameSounds, Soundscape } from './soundscape.ts';
+import { groundAt } from './zone-sounds.ts';
 
 const { world, level } = buildStoryWorld();
 
@@ -26,7 +30,7 @@ interface Call {
 /** A GameAudio that records what it is asked to do (option objects are copied: the soundscape reuses them). */
 function recorder() {
 	const calls: Call[] = [];
-	const loops = new Map<string, { playing: boolean; position: [number, number, number] }>();
+	const loops = new Map<string, { playing: boolean; position: [number, number, number]; gain: number }>();
 	let listener = 0;
 	const audio: GameAudio = {
 		state: 'running',
@@ -44,10 +48,11 @@ function recorder() {
 		playBuffer: () => null,
 		loopBuffer: () => null,
 		loop(id, options = {}) {
-			calls.push({ kind: 'loop', id, x: options.x, y: options.y, z: options.z });
+			calls.push({ kind: 'loop', id, x: options.x, y: options.y, z: options.z, gain: options.gain });
 			const state = {
 				playing: true,
-				position: [options.x ?? 0, options.y ?? 0, options.z ?? 0] as [number, number, number]
+				position: [options.x ?? 0, options.y ?? 0, options.z ?? 0] as [number, number, number],
+				gain: options.gain ?? 1
 			};
 			loops.set(id, state);
 			const handle: LoopHandle = {
@@ -59,7 +64,9 @@ function recorder() {
 					state.playing = false;
 					calls.push({ kind: 'stop', id });
 				},
-				setGain() {},
+				setGain(gain) {
+					state.gain = gain;
+				},
 				setPosition(x, y, z) {
 					state.position = [x, y, z];
 				}
@@ -247,6 +254,12 @@ describe('missions', () => {
 		story.choose('start', spot('iara'));
 		sound.syncStory();
 		expect(calls.filter((c) => c.kind === 'release')).toHaveLength(1);
+		const deck = level.act1?.treehouse.deck;
+		if (!deck) throw Error('treehouse');
+		story.visit({ x: (deck.x0 + deck.x1) / 2, y: deck.y, z: (deck.z0 + deck.z1) / 2 }, true);
+		sound.syncStory();
+		story.closeDialogue();
+		sound.syncStory();
 
 		for (const fruit of level.collectibles.filter((c) => c.kind === 'jucara-fruit')) {
 			story.act(fruit);
@@ -262,7 +275,7 @@ describe('missions', () => {
 			sound.syncStory();
 		}
 		expect(plays(calls, 'land')).toHaveLength(corridor.length - 1);
-		expect(plays(calls, 'mission-complete')).toHaveLength(1);
+		expect(plays(calls, 'mission-complete')).toHaveLength(2);
 		story.closeDialogue();
 		sound.syncStory();
 
@@ -273,7 +286,7 @@ describe('missions', () => {
 		expect(calls.some((c) => c.kind === 'stop' && c.id === 'chainsaw')).toBe(false);
 		story.choose('report-logger', hide);
 		sound.syncStory();
-		expect(plays(calls, 'mission-complete')).toHaveLength(2);
+		expect(plays(calls, 'mission-complete')).toHaveLength(3);
 		expect(calls.some((c) => c.kind === 'stop' && c.id === 'chainsaw')).toBe(true);
 
 		// A restart brings mission 2 back, and with it the chainsaw.
@@ -289,4 +302,87 @@ describe('missions', () => {
 
 it('saves the same buses the engine has', () => {
 	expect([...AUDIO_BUSES]).toEqual([...BUSES]);
+});
+
+describe('park zones', () => {
+	const park = buildParkFresh();
+	function zoneSetup(id: ZoneId) {
+		const zone = park.get(id);
+		if (!zone) throw new Error(id);
+		const rec = recorder();
+		const sound = new Soundscape({
+			audio: rec.audio,
+			map: { world: zone.world, level: zone.level, zone: id }
+		});
+		return { ...rec, sound, zone };
+	}
+	const loopIds = (calls: Call[]) => calls.filter((c) => c.kind === 'loop').map((c) => c.id);
+	const frame = (x: number, y: number, z: number): FrameSounds => ({
+		position: { x, y, z },
+		jumped: false,
+		landed: false,
+		landingSpeed: 0,
+		events: []
+	});
+
+	it('plays the default beds in the Reserva and the Vale’s far roar over them', async () => {
+		const vale = zoneSetup('vale');
+		await vale.sound.startNature();
+		expect(loopIds(vale.calls)).toEqual(['forest-day', 'river', 'waterfall', 'waterfall-far']);
+		const fall = vale.zone.level.landmarks.find((l) => l.kind === 'waterfall');
+		expect(vale.calls.find((c) => c.id === 'waterfall-far')).toMatchObject({ x: fall?.x, z: fall?.z });
+	});
+
+	it('moves each surf to the nearest stretch of its waterline at the Praia', async () => {
+		const { sound, calls, loops, zone } = zoneSetup('praia');
+		await sound.startNature();
+		expect(loopIds(calls)).toEqual(['forest-day', 'surf-rocks', 'surf-beach']);
+		expect(calls.find((c) => c.id === 'forest-day')?.gain).toBe(0.5);
+		const lookout = zone.level.landmarks.find((l) => l.kind === 'lookout');
+		if (!lookout) throw new Error('no costão lookout');
+		// On the costão's top, the rock surf is at its foot; far up the beach, the sand surf is a few units away.
+		sound.update(
+			1 / 60,
+			listenerAt(lookout.x, lookout.y + 2, lookout.z),
+			frame(lookout.x, lookout.y, lookout.z),
+			null,
+			0
+		);
+		const rocks = loops.get('surf-rocks')?.position ?? [0, 0, 0];
+		expect(Math.hypot(rocks[0] - lookout.x, rocks[2] - lookout.z)).toBeLessThan(16);
+		sound.update(1 / 60, listenerAt(lookout.x + 10, 4, 10), frame(lookout.x + 10, 2, 10), null, 0);
+		const sand = loops.get('surf-beach')?.position ?? [0, 0, 0];
+		expect(Math.abs(sand[2] - 10)).toBeLessThan(3);
+		expect(sand[1]).toBe(zone.world.waterLevel);
+	});
+
+	it('raises the canopy birds with the listener’s height over the Copa’s ground', async () => {
+		const { sound, calls, loops, zone } = zoneSetup('copa');
+		await sound.startNature();
+		expect(loopIds(calls)).toEqual(['forest-day', 'canopy-birds']);
+		const low = calls.find((c) => c.id === 'canopy-birds')?.gain ?? 0;
+		const [x, z] = [64, 120];
+		const ground = groundAt(zone.world, x, z);
+		sound.update(1 / 60, listenerAt(x, ground + 3, z), frame(x, ground, z), null, 0);
+		expect(loops.get('canopy-birds')?.gain).toBe(low);
+		sound.update(1 / 60, listenerAt(x, ground + 11, z), frame(x, ground + 8, z), null, 0);
+		expect(loops.get('canopy-birds')?.gain).toBe(1);
+		sound.update(1 / 60, listenerAt(x, ground + 6, z), frame(x, ground + 3, z), null, 0);
+		expect(loops.get('canopy-birds')?.gain).toBeCloseTo(low + (1 - low) / 2, 5);
+	});
+
+	it('floods the Manguezal with lapping and the clicks at the nearest crab bank, and stops them all', async () => {
+		const { sound, calls, loops, zone } = zoneSetup('manguezal');
+		await sound.startNature();
+		expect(loopIds(calls)).toEqual(['mangrove-water', 'mangrove-clicks']);
+		const bank = (zone.level.content as ManguezalContent).crabs[3];
+		sound.update(1 / 60, listenerAt(bank.x + 2, 3, bank.z + 1), frame(bank.x + 2, 1, bank.z + 1), null, 0);
+		const [x, , z] = loops.get('mangrove-clicks')?.position ?? [0, 0, 0];
+		expect([x, z]).toEqual([bank.x, Math.fround(bank.z)]);
+		await sound.dispose();
+		expect(calls.filter((c) => c.kind === 'stop').map((c) => c.id)).toEqual([
+			'mangrove-water',
+			'mangrove-clicks'
+		]);
+	});
 });

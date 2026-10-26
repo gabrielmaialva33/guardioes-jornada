@@ -526,6 +526,96 @@ const RECIPES: Readonly<Record<SoundId, Recipe>> = {
 			out[i] += Math.sin(phase) * 0.25 * envelope(local, 0, 0.03, 0.15);
 		}
 		return out;
+	},
+	'waterfall-far': (random) => {
+		const length = 8;
+		const overlap = 0.6;
+		const out = samples(length + overlap);
+		// The roar from across the valley: only its low end, swelling slowly.
+		const roar = new Biquad('lowpass', 260, 0.7);
+		const body = new Biquad('lowpass', 700, 0.6);
+		for (let i = 0; i < out.length; i++) {
+			const t = i / SYNTH_RATE;
+			const swell = 0.85 + 0.1 * Math.sin(TAU * 0.09 * t) + 0.05 * Math.sin(TAU * 0.23 * t + 1);
+			const white = random() * 2 - 1;
+			out[i] += (roar.run(white) * 1.6 + body.run(white) * 0.25) * swell;
+		}
+		return loopNormalise(seamless(out, overlap));
+	},
+	'canopy-birds': (random) => {
+		const length = 12;
+		const overlap = 0.6;
+		const out = samples(length + overlap);
+		// Leaves and insects high up: a thin hiss, then calls from many birds, denser and higher than the forest bed's.
+		addNoise(out, random, new Biquad('bandpass', 5000, 0.8), null, 0.8, 0.5, () => 1);
+		for (let g = 0; g < 16; g++) {
+			const start = 0.5 + random() * (length - 1.4);
+			const f0 = 2800 + random() * 2400;
+			const notes = 1 + Math.floor(random() * 4);
+			for (let c = 0; c < notes; c++)
+				addTone(out, start + c * 0.12, f0, f0 * (0.8 + random() * 0.5), 0.08, 0.15, 0.01, 0.04);
+		}
+		return loopNormalise(seamless(out, overlap));
+	},
+	'surf-rocks': (random) => {
+		const length = 12;
+		const overlap = 0.6;
+		const out = samples(length + overlap);
+		// Waves breaking on rock every 4 s: a sharp, low burst that sprays into hiss and drains away.
+		const thump = new Biquad('lowpass', 400, 0.7);
+		const spray = new Biquad('bandpass', 1800, 0.6);
+		for (let i = 0; i < out.length; i++) {
+			const t = i / SYNTH_RATE;
+			const phase = (t % 4) / 4;
+			const hit = Math.exp(-phase * 9);
+			const wash = Math.min(1, phase * 12) * Math.exp(-phase * 3);
+			const white = random() * 2 - 1;
+			out[i] += thump.run(white) * (0.25 + 1.4 * hit) + spray.run(white) * (0.1 + 0.6 * wash);
+		}
+		return loopNormalise(seamless(out, overlap));
+	},
+	'surf-beach': (random) => {
+		const length = 12;
+		const overlap = 0.6;
+		const out = samples(length + overlap);
+		// Gentle waves on sand every 6 s: a soft swell that breaks, then fizzes as it runs up and back. The loop's
+		// seam falls on a crest, not in the quiet between two waves.
+		const swell = new Biquad('lowpass', 500, 0.7);
+		const fizz = new Biquad('highpass', 2500, 0.7);
+		for (let i = 0; i < out.length; i++) {
+			const t = i / SYNTH_RATE;
+			const phase = ((t + 1.2) % 6) / 6;
+			const rise = Math.sin(Math.PI * Math.min(1, phase * 2.5)) ** 2;
+			const run = phase > 0.3 ? Math.exp(-(phase - 0.3) * 4) : 0;
+			const white = random() * 2 - 1;
+			out[i] += swell.run(white) * (0.3 + 0.9 * rise) + fizz.run(white) * 0.5 * run;
+		}
+		return loopNormalise(seamless(out, overlap));
+	},
+	'mangrove-water': (random) => {
+		const length = 10;
+		const overlap = 0.5;
+		const out = samples(length + overlap);
+		// Small water lapping at roots: soft, irregular sloshes over a quiet bed.
+		addNoise(out, random, new Biquad('lowpass', 600, 0.7), null, 0.7, 0.15, () => 1);
+		for (let s = 0; s < 14; s++) {
+			const start = 0.3 + random() * (length - 1);
+			const f0 = 300 + random() * 300;
+			addNoise(out, random, new Biquad('bandpass', 900 + random() * 600, 1.2), null, 1.2, 0.5, (t) =>
+				envelope(t, start, 0.03, 0.12)
+			);
+			addTone(out, start + 0.04, f0, f0 * 1.6, 0.05, 0.08, 0.004, 0.03);
+		}
+		return loopNormalise(seamless(out, overlap));
+	},
+	'mangrove-clicks': (random) => {
+		const length = 8;
+		const overlap = 0.5;
+		const out = samples(length + overlap);
+		// The mud's crackle: sparse sharp clicks, steady over the loop.
+		addCrackle(out, random, 3500, 60, 1e9, 1);
+		addNoise(out, random, new Biquad('highpass', 3000, 0.7), null, 0.7, 0.02, () => 1);
+		return loopNormalise(seamless(out, overlap));
 	}
 };
 
@@ -553,7 +643,13 @@ export const SYNTH_VARIANTS: Readonly<Record<SoundId, number>> = {
 	howler: 2,
 	muriqui: 2,
 	toucan: 2,
-	tamarin: 2
+	tamarin: 2,
+	'waterfall-far': 1,
+	'canopy-birds': 1,
+	'surf-rocks': 1,
+	'surf-beach': 1,
+	'mangrove-water': 1,
+	'mangrove-clicks': 1
 };
 
 /**
@@ -586,7 +682,13 @@ export const SYNTH_TRIM_DB: Readonly<Record<SoundId, number>> = {
 	howler: -1,
 	muriqui: -9,
 	toucan: -5,
-	tamarin: -11
+	tamarin: -11,
+	'waterfall-far': -8.5,
+	'canopy-birds': -14.5,
+	'surf-rocks': -9,
+	'surf-beach': -9,
+	'mangrove-water': -4,
+	'mangrove-clicks': -5
 };
 
 /** Ids that are loops: rendered seamless and normalised as a whole. */
@@ -594,7 +696,13 @@ export const SYNTH_LOOPS: ReadonlySet<SoundId> = new Set<SoundId>([
 	'forest-day',
 	'river',
 	'waterfall',
-	'chainsaw'
+	'chainsaw',
+	'waterfall-far',
+	'canopy-birds',
+	'surf-rocks',
+	'surf-beach',
+	'mangrove-water',
+	'mangrove-clicks'
 ]);
 
 function seedOf(id: SoundId, variant: number): number {

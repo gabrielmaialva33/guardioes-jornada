@@ -148,6 +148,21 @@ function animal(
 	};
 }
 
+/** A zone bed (ambience, loaded with the nature sounds): looped over its whole file, placed when `spatial` is given. */
+function bed(id: string, gain: number, seconds: number, spatial?: Spatial): SoundDef {
+	return {
+		bus: 'ambience',
+		category: 'nature',
+		files: recordedFiles(id, 1),
+		gain,
+		pitchJitter: 0,
+		gainJitter: 0,
+		priority: 9,
+		loop: { start: 0, end: seconds },
+		...(spatial ? { spatial } : {})
+	};
+}
+
 export const SOUNDS = {
 	// A1 SecureSubset (dirt, foley pit), A2 Kenney Impact Sounds, A3 iliana22, A4 congusbongus/Ali_6868 (gravel), A5 Kenney, A6 congusbongus/EminYILDIRIM.
 	'step-soil': step(0.8, recordedFiles('step-soil', 4)),
@@ -247,12 +262,12 @@ export const SOUNDS = {
 		gainJitter: 0.5,
 		priority: 7
 	},
-	// D1 MeliaRoger (Serrinha do Alambari, morning).
+	// D1 MeliaRoger (Serrinha do Alambari, morning). Beds sit near −31 LUFS after their gain (P15 §7), calls 7–10 dB over them.
 	'forest-day': {
 		bus: 'ambience',
 		category: 'nature',
 		files: recordedFiles('forest-day', 1),
-		gain: 0.8,
+		gain: 0.36,
 		pitchJitter: 0,
 		gainJitter: 0,
 		priority: 9,
@@ -263,7 +278,7 @@ export const SOUNDS = {
 		bus: 'ambience',
 		category: 'nature',
 		files: recordedFiles('river', 1),
-		gain: 0.8,
+		gain: 0.4,
 		pitchJitter: 0,
 		gainJitter: 0,
 		priority: 9,
@@ -299,7 +314,17 @@ export const SOUNDS = {
 	// E3 muriqui, E4 green-billed toucan, E2 black lion tamarin (stand-in for the golden lion tamarin, same genus).
 	muriqui: animal(0.8, recordedFiles('muriqui', 2)),
 	toucan: animal(0.8, recordedFiles('toucan', 2)),
-	tamarin: animal(0.8, recordedFiles('tamarin', 2))
+	tamarin: animal(0.8, recordedFiles('tamarin', 2)),
+	// Zone beds (zone-sounds.ts, P35). D3 again: the Vale's waterfall from afar, its low end only, heard across the valley.
+	'waterfall-far': bed('waterfall-far', 0.5, 11.9987, { ref: 25, rolloff: 1, max: 260 }),
+	// Copa: Fenodyrie (Mata Atlântica morning, birds and cicadas), louder up on the walkway.
+	'canopy-birds': bed('canopy-birds', 0.45, 16),
+	// Praia: teatov (calm waves on big rocks) and ralph.whitehead (waves on sand), each on the nearest stretch of waterline.
+	'surf-rocks': bed('surf-rocks', 0.6, 12, { ref: 8, rolloff: 1, max: 160 }),
+	'surf-beach': bed('surf-beach', 0.55, 12, { ref: 8, rolloff: 1, max: 160 }),
+	// Manguezal: Alex_hears_things (small waves lapping) everywhere, felix.blume (the mangrove's clicks, hydrophone) at the crab banks.
+	'mangrove-water': bed('mangrove-water', 0.45, 12),
+	'mangrove-clicks': bed('mangrove-clicks', 0.4, 9.9993, { ref: 3, rolloff: 1.2, max: 40 })
 } as const satisfies Record<string, SoundDef>;
 
 export type SoundId = keyof typeof SOUNDS;

@@ -23,7 +23,10 @@ export type SurfaceSampler = (x: number, y: number, z: number) => Surface;
 /** Without a map (the graybox fixture): its platforms are wood, its floor grass. */
 export const fixtureSurface: SurfaceSampler = (_x, y) => (y > ON_PIECE ? 'wood' : 'grass');
 
-export function createSurfaceSampler(world: SurvivalWorld, level?: StoryLevel): SurfaceSampler {
+export function createSurfaceSampler(
+	world: SurvivalWorld,
+	level?: Pick<StoryLevel, 'trails' | 'obbies' | 'pool'>
+): SurfaceSampler {
 	// Trail segments flattened once: [ax, az, bx, bz, halfWidth²] per segment.
 	const segments: number[] = [];
 	for (const trail of level?.trails ?? [])
