@@ -23,6 +23,7 @@ import { createAtmosphere } from './atmosphere.ts';
 import { boundaryTerrain } from './boundary.ts';
 import { bakeCanopy } from './canopy.ts';
 import { deckGeometry, prefabProxies, propGeometry } from './collision.ts';
+import { createFarTerrain, detailDistances } from './far-field.ts';
 import { createMapMaterials } from './materials.ts';
 import { terrainChunk } from './terrain.ts';
 
@@ -33,6 +34,9 @@ export function createMapVisual(
 	storyProps = false
 ) {
 	const object = new Group();
+	const farTerrain = createFarTerrain(world, level?.trails);
+	object.add(farTerrain.object);
+	const detailed: Mesh[] = [];
 	const ownedGeometries: BufferGeometry[] = [];
 	const materials = createMapMaterials();
 	const canopy = bakeCanopy(world);
@@ -40,7 +44,7 @@ export function createMapVisual(
 	lighting.uShadeSize.value = world.size;
 	lighting.uShadeEnabled.value = visualStep() >= 3 ? 1 : 0;
 	lighting.uHeightFog.value = visualStep() >= 4 ? 1 : 0;
-	const atmosphere = visualStep() >= 4 ? createAtmosphere(world.size) : undefined;
+	const atmosphere = visualStep() >= 4 ? createAtmosphere(world.size, world.waterLevel) : undefined;
 	if (atmosphere) object.add(atmosphere.object);
 	const { ground: groundMaterial, rock, wood, proxy: gray, checkpoint: gold } = materials;
 	const add = (geometry: BufferGeometry, m: MeshLambertMaterial) => {
@@ -61,10 +65,14 @@ export function createMapVisual(
 	for (const b of world.blocks) {
 		const mesh = add(terrainChunk(world, b, level?.trails, level?.pool), groundMaterial);
 		mesh.name = `terrain-${b.index}`;
+		mesh.geometry.computeBoundingBox();
+		detailed.push(mesh);
 	}
 	for (const geometry of boundaryTerrain(world)) {
 		const mesh = add(geometry, groundMaterial);
 		mesh.name = 'terrain-exterior';
+		mesh.geometry.computeBoundingBox();
+		detailed.push(mesh);
 	}
 	// Join the ribbon at shared control-point cross sections, with no independently overlapping segments.
 	const p: number[] = [],
@@ -186,6 +194,15 @@ export function createMapVisual(
 		},
 		prepareFrame(camera: PerspectiveCamera, time: number, quality: Quality, night: boolean) {
 			lighting.uVisualTime.value = time;
+			lighting.uTreeRange.value = detailDistances(quality).trees;
+			farTerrain.update(camera, quality, night);
+			for (const mesh of detailed) {
+				const b = mesh.geometry.boundingBox;
+				if (!b) continue;
+				const dx = Math.max(b.min.x - camera.position.x, 0, camera.position.x - b.max.x),
+					dz = Math.max(b.min.z - camera.position.z, 0, camera.position.z - b.max.z);
+				mesh.visible = Math.hypot(dx, dz) <= detailDistances(quality).terrain;
+			}
 			atmosphere?.update(camera, time, quality, night ? 'night' : 'day');
 		},
 		dispose() {
@@ -194,6 +211,7 @@ export function createMapVisual(
 				lighting.uShadeMap.value = null;
 			}
 			canopy.dispose();
+			farTerrain.dispose();
 			atmosphere?.dispose();
 			for (const g of ownedGeometries) g.dispose();
 			materials.dispose();

@@ -45,9 +45,9 @@ export const LIGHT = {
  * player sees, unrelated to how far the camera sits from the avatar.
  */
 export const VIEW = {
-	low: { fogNear: 30, far: 70 },
-	medium: { fogNear: 40, far: 90 },
-	high: { fogNear: 50, far: 120 }
+	low: { fogNear: 75, far: 140 },
+	medium: { fogNear: 105, far: 180 },
+	high: { fogNear: 155, far: 260 }
 } as const;
 
 export type Ramp = keyof typeof RAMPS;

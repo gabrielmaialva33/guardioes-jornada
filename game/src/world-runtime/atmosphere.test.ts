@@ -28,3 +28,19 @@ it('keeps its fog-free horizon inside each tier far plane without changing gamep
 	expect(dispose).toHaveBeenCalledOnce();
 	expect(cloudDispose).toHaveBeenCalledOnce();
 });
+it('keeps the western sea at world water height when the mirante camera rises, never over the lowland', () => {
+	const a = createAtmosphere(160, 1.5),
+		camera = new PerspectiveCamera();
+	camera.position.set(155, 44, 80);
+	a.update(camera, 10, 'low', 'day');
+	a.object.updateMatrixWorld(true);
+	const sea = a.object.getObjectByName('sea-west');
+	expect(sea).toBeInstanceOf(Mesh);
+	if (!(sea instanceof Mesh)) throw new Error('sea fixture');
+	sea.geometry.computeBoundingBox();
+	expect(sea.geometry.boundingBox?.max.x).toBe(0);
+	expect(sea.geometry.boundingBox?.min.y).toBe(1.5);
+	expect(sea.parent).toBe(a.object);
+	expect(sea.matrixWorld.elements[13]).toBe(0);
+	a.dispose();
+});

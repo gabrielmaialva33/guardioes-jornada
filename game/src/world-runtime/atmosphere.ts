@@ -135,7 +135,7 @@ function carpet(size: number) {
 	g.setIndex(ix);
 	return g;
 }
-export function createAtmosphere(size: number) {
+export function createAtmosphere(size: number, waterLevel = 0) {
 	const object = new Group(),
 		sky = new Group();
 	object.add(sky);
@@ -163,18 +163,36 @@ export function createAtmosphere(size: number) {
 			new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false })
 		)
 	);
-	dome.renderOrder = 1000;
+	dome.renderOrder = -3000;
+	dome.material.depthTest = false;
 	const mountains = own(
 		new Mesh(
 			bands(),
 			new MeshBasicMaterial({ vertexColors: true, side: DoubleSide, fog: false, depthWrite: false })
 		)
 	);
-	mountains.renderOrder = 1001;
+	mountains.renderOrder = -2999;
+	mountains.material.depthTest = false;
 	const seaGeo = new BufferGeometry();
 	seaGeo.setAttribute(
 		'position',
-		new Float32BufferAttribute([0, -0.16, -0.96, 0, -0.16, 0.96, -0.96, -0.16, -0.96, -0.96, -0.16, 0.96], 3)
+		new Float32BufferAttribute(
+			[
+				0,
+				waterLevel,
+				-size * 3,
+				0,
+				waterLevel,
+				size * 4,
+				-size * 3,
+				waterLevel,
+				-size * 3,
+				-size * 3,
+				waterLevel,
+				size * 4
+			],
+			3
+		)
 	);
 	seaGeo.setIndex([0, 1, 2, 2, 1, 3]);
 	const sea = own(
@@ -186,9 +204,11 @@ export function createAtmosphere(size: number) {
 				fog: false,
 				depthWrite: false
 			})
-		)
+		),
+		object
 	);
-	sea.renderOrder = 1002;
+	sea.name = 'sea-west';
+	sea.renderOrder = -1900;
 	const carpetMesh = own(
 		new Mesh(carpet(size), new MeshBasicMaterial({ vertexColors: true, fog: false, side: DoubleSide })),
 		object
@@ -243,7 +263,7 @@ export function createAtmosphere(size: number) {
 				far = f;
 				dome.scale.setScalar(f);
 				mountains.scale.setScalar(f);
-				sea.scale.setScalar(f);
+
 				sunMaterial.uniforms.uSize.value.set(f * 0.22, f * 0.22);
 				cloudMaterial.uniforms.uSize.value.set(f * 0.2, f * 0.075);
 			}

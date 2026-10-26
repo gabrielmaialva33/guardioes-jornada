@@ -6,10 +6,14 @@ import embauba from '../assets/models/custom-embauba.glb?url';
 import ipeAmarelo from '../assets/models/custom-ipe-amarelo.glb?url';
 import ipeRosa from '../assets/models/custom-ipe-rosa.glb?url';
 import jequitiba from '../assets/models/custom-jequitiba-rosa.glb?url';
+import jeriva from '../assets/models/custom-jeriva.glb?url';
+import mangueVermelho from '../assets/models/custom-mangue-vermelho.glb?url';
 import jucara from '../assets/models/custom-palmeira-jucara.glb?url';
+import pauBrasil from '../assets/models/custom-pau-brasil.glb?url';
 import xaxim from '../assets/models/custom-xaxim.glb?url';
 import flora from '../assets/models/kit-flora.glb?url';
 import type { Trail } from '../level/types.ts';
+import { CanopyVisibility, type CanopyVolume } from '../render/canopy-visibility.ts';
 import {
 	addPlacements,
 	type BlockGrid,
@@ -22,7 +26,9 @@ import { visualStep } from '../render/stylized.ts';
 import { disposeModel, loadModel } from '../scene/avatar.ts';
 import { RAMPS } from '../style/palette.ts';
 import type { Placements, SurvivalWorld } from '../survival/types.ts';
+import { detailDistances } from './far-field.ts';
 import { terrainTint } from './terrain.ts';
+import { createTreeImpostors, type TreePrototype } from './tree-impostors.ts';
 
 const treeFiles: Record<string, string> = {
 	araucaria,
@@ -30,7 +36,10 @@ const treeFiles: Record<string, string> = {
 	'ipe-amarelo': ipeAmarelo,
 	'ipe-rosa': ipeRosa,
 	jequitiba,
+	jeriva,
 	jucara,
+	'mangue-vermelho': mangueVermelho,
+	'pau-brasil': pauBrasil,
 	xaxim
 };
 const props: Record<string, string> = {
@@ -61,6 +70,8 @@ export async function loadWorldPlacements(
 		if (decorations.kinds[decorations.kind[i]] === 'bromelia' && i % 3 === 0)
 			decorations.kind[i] = decorations.kinds.length - 1;
 	const grassy = (kind: string) => ['grass', 'fern', 'beach-grass'].includes(kind);
+	const prototypes: TreePrototype[] = [];
+	const canopyBounds: Record<string, Box3> = {};
 	const source = new Group(),
 		categories: Record<string, LodCategory> = {},
 		scales: Record<string, number> = {},
@@ -100,6 +111,11 @@ export async function loadWorldPlacements(
 								: new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 						model = new Mesh(geometry, new MeshLambertMaterial({ color: RAMPS.rock[2] }));
 					}
+					const modelBounds = new Box3().setFromObject(model);
+					if (family === 'tree') {
+						canopyBounds[name] = modelBounds;
+						prototypes.push({ kind, model, bounds: modelBounds });
+					}
 					if (family !== 'rock')
 						model.traverse((node) => {
 							if (node instanceof Mesh) {
@@ -108,6 +124,10 @@ export async function loadWorldPlacements(
 									copy.userData = {
 										...copy.userData,
 										vegetation: true,
+										canopyBase:
+											family === 'tree'
+												? modelBounds.min.y + (modelBounds.max.y - modelBounds.min.y) * 0.45
+												: undefined,
 										cover: family === 'cover',
 										groundTint: family === 'cover' && grassy(kind)
 									};
@@ -143,38 +163,82 @@ export async function loadWorldPlacements(
 		}
 		signal.throwIfAborted();
 		// Hide the kit container only; cloned nodes are visible and use the house material.
-		const profiles = lodProfilesFor(quality);
+		const profilesFor = (q: Quality) => {
+			const r = detailDistances(q);
+			return {
+				tree: [{ until: r.trees + 8, keep: 1 }],
+				rock: [
+					{ until: r.terrain * 0.5, keep: 1 },
+					{ until: r.terrain, keep: 0.5 }
+				],
+				cover: [
+					{ until: q === 'low' ? 24 : 32, keep: 1 },
+					{ until: q === 'low' ? 36 : 48, keep: 0.5 }
+				],
+				gameplay: lodProfilesFor(q).gameplay
+			};
+		};
+		const profiles = profilesFor(quality);
 		const pools = createPoolsFromScene(source, names, {
 			grid,
 			capacity,
 			lod: Object.fromEntries(names.map((n) => [n, profiles[categories[n]]])),
 			colors: true,
+			fades: true,
 			material: 'house'
 		});
+		const crowns: CanopyVolume[] = [];
 		try {
 			for (const [family, placements] of [
 				['tree', world.trees],
 				['rock', world.rocks],
 				['cover', decorations]
-			] as const)
-				addPlacements(placements, (kind) => pools.get(`${family}:${kind}`), {
+			] as const) {
+				const ids = addPlacements(placements, (kind) => pools.get(`${family}:${kind}`), {
 					colorFor: (kind, i) =>
 						family === 'cover' && grassy(kind) && visualStep() >= 1
 							? terrainTint(world, placements.x[i], placements.z[i], trails)
 							: null,
 					scaleFor: (kind) => scales[`${family}:${kind}`]
 				});
+				if (family === 'tree')
+					for (let i = 0; i < placements.count; i++) {
+						const kind = placements.kinds[placements.kind[i]],
+							name = `tree:${kind}`,
+							bounds = canopyBounds[name],
+							pool = pools.get(name),
+							id = ids[i];
+						if (!bounds || !pool || id < 0) continue;
+						const k = placements.scale[i] * scales[name],
+							bottom = bounds.min.y + (bounds.max.y - bounds.min.y) * 0.45;
+						crowns.push({
+							x: placements.x[i],
+							z: placements.z[i],
+							y: placements.y[i] + (bottom + bounds.max.y) * 0.5 * k,
+							rx: Math.max(0.3, bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) * 0.5 * k,
+							rz: Math.max(0.3, bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) * 0.5 * k,
+							ry: Math.max(0.3, (bounds.max.y - bottom) * 0.5 * k),
+							id,
+							setFade: pool.setFade.bind(pool)
+						});
+					}
+			}
 		} catch (error) {
 			pools.dispose();
 			throw error;
 		}
+		const impostors = createTreeImpostors(prototypes, world.trees, quality);
+		pools.object.add(impostors.object);
 		return {
 			pools,
+			canopies: new CanopyVisibility(crowns),
 			setQuality(q: Quality) {
-				const p = lodProfilesFor(q);
+				const p = profilesFor(q);
+				impostors.setQuality(q);
 				for (const [name, pool] of pools.pools) pool.lod = p[categories[name]];
 			},
 			dispose() {
+				impostors.dispose();
 				pools.object.removeFromParent();
 				pools.dispose();
 				disposeModel(source);
