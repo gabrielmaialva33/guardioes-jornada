@@ -1,4 +1,5 @@
 import { type BufferGeometry, type Group, Mesh, MeshLambertMaterial, type Object3D } from 'three';
+import { stylize } from '../render/stylized.ts';
 import { ensureVertexColors } from '../scene/materials.ts';
 import type { HairStyle } from './atlas.ts';
 
@@ -18,7 +19,10 @@ export class HairAccessories {
 		}
 		const first = this.#geometries.values().next().value;
 		if (!first) throw new Error('avatar-hair-empty');
-		this.mesh = new Mesh(first, new MeshLambertMaterial({ flatShading: true, vertexColors: true }));
+		this.mesh = new Mesh(
+			first,
+			stylize(new MeshLambertMaterial({ flatShading: true, vertexColors: true }), { rim: true })
+		);
 		this.mesh.name = 'avatar-hair-accessory';
 		this.mesh.visible = false;
 		head.add(this.mesh);

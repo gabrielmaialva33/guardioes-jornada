@@ -1,4 +1,4 @@
-import { Box3, Group } from 'three';
+import { Box3, Group, Mesh } from 'three';
 import araucaria from '../assets/models/custom-araucaria.glb?url';
 import embauba from '../assets/models/custom-embauba.glb?url';
 import ipeAmarelo from '../assets/models/custom-ipe-amarelo.glb?url';
@@ -37,6 +37,11 @@ export async function loadForest(
 		const loads = await Promise.allSettled(
 			FOREST_KINDS.map(async (name) => {
 				const model = await loadModel(customFiles[name], signal);
+				model.traverse((node) => {
+					if (node instanceof Mesh)
+						for (const m of Array.isArray(node.material) ? node.material : [node.material])
+							m.userData.vegetation = true;
+				});
 				model.name = name;
 				source.add(model);
 			})

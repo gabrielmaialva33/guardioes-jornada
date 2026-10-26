@@ -6,6 +6,7 @@
  * static mesh compiles to the same few programs: Lambert + map + vertex colours
  * + fog, with or without instancing and instance colour.
  */
+
 import {
 	type Material,
 	type MeshBasicMaterial,
@@ -15,6 +16,7 @@ import {
 	SRGBColorSpace,
 	type Texture
 } from 'three';
+import { type StylizedOptions, stylize } from './stylized.ts';
 
 /** Palette textures: sRGB, nearest, no mipmaps (ART.md §6). Mutates and returns the texture. */
 export function preparePaletteMap(texture: Texture): Texture {
@@ -37,7 +39,12 @@ export function preparePaletteMap(texture: Texture): Texture {
  * GLTFLoader builds): same palette map, base colour, side and alpha settings,
  * nothing physically based. Always a new material; callers cache per source.
  */
-export function houseMaterial(source: Material): MeshLambertMaterial {
+export function houseMaterial(source: Material, options: StylizedOptions = {}): MeshLambertMaterial {
+	options = {
+		vegetation: source.userData.vegetation === true,
+		cover: source.userData.cover === true,
+		...options
+	};
 	const lit = source as Partial<MeshStandardMaterial & MeshBasicMaterial>;
 	const map = lit.map ? preparePaletteMap(lit.map) : null;
 	const material = new MeshLambertMaterial({
@@ -51,5 +58,9 @@ export function houseMaterial(source: Material): MeshLambertMaterial {
 		alphaTest: source.alphaTest
 	});
 	if (lit.color) material.color.copy(lit.color);
-	return material;
+	if (options.cover) {
+		material.map = null;
+		material.color.set('#ffffff');
+	}
+	return stylize(material, options);
 }

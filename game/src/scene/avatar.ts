@@ -7,6 +7,7 @@ import { AVATAR_ATLAS } from '../avatar/catalog.ts';
 import { HairAccessories } from '../avatar/hair.ts';
 import { createAvatarTexture } from '../avatar/texture.ts';
 import type { AvatarProfile } from '../data/local-save.ts';
+import { stylize } from '../render/stylized.ts';
 import { ensureVertexColors } from './materials.ts';
 
 /** Own every resource, including ImageBitmaps, so leaving during decoding is safe. */
@@ -63,7 +64,10 @@ export async function loadAvatar(signal: AbortSignal, profile: AvatarProfile): P
 		signal.addEventListener('abort', cancel, { once: true });
 		await skin.apply(profile);
 		signal.throwIfAborted();
-		const material = new MeshLambertMaterial({ map: skin.texture, flatShading: true, vertexColors: true });
+		const material = stylize(
+			new MeshLambertMaterial({ map: skin.texture, flatShading: true, vertexColors: true }),
+			{ rim: true }
+		);
 		const originals = new Set<Material>();
 		const originalTextures = new Set<Texture>();
 		model.traverse((object) => {

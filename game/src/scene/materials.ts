@@ -6,6 +6,7 @@ import {
 	NearestFilter,
 	SRGBColorSpace
 } from 'three';
+import { stylize } from '../render/stylized.ts';
 import { ACCENT, RAMPS } from '../style/palette.ts';
 
 /** Preserve COLOR_0 from the AO bake; proxies without a bake multiply by white. */
@@ -30,5 +31,5 @@ export function paletteMaterial(hex: string) {
 	map.magFilter = map.minFilter = NearestFilter;
 	map.generateMipmaps = false;
 	map.needsUpdate = true;
-	return new MeshLambertMaterial({ map, flatShading: true, vertexColors: true });
+	return stylize(new MeshLambertMaterial({ map, flatShading: true, vertexColors: true }));
 }

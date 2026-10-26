@@ -912,7 +912,7 @@ export interface PlacementArrays<K extends string = string> {
 
 export interface AddPlacementsOptions<K extends string> {
 	/** Per-instance colour for a kind (null for none); the pool needs `colors: true`. */
-	colorFor?: (kind: K) => Color | null;
+	colorFor?: (kind: K, index: number) => Color | null;
 	/**
 	 * Base scale of a kind, multiplied with the placement's own scale. Kenney kit
 	 * trees are about 1.2 u tall and ART.md §3 wants 6–18 u, so trees need ~5–15.
@@ -947,7 +947,7 @@ export function addPlacements<K extends string>(
 			placements.scale[i] * (scaleFor ? scaleFor(kind) : 1)
 		);
 		ids[i] = id;
-		const color = id >= 0 && colorFor ? colorFor(kind) : null;
+		const color = id >= 0 && colorFor ? colorFor(kind, i) : null;
 		if (color) pool.setColor(id, color);
 	}
 	return ids;
