@@ -23,9 +23,12 @@
  *        [--serve 5197]   (starts its own dev server; required for swiftshader)
  *        [--angle gl]     (ANGLE backend in gpu mode)
  */
+
 import { type ChildProcess, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { type Browser, type BrowserContext, chromium, type Page } from '@playwright/test';
 import {
 	ensureRoot,
@@ -47,6 +50,23 @@ const mode = (args.get('mode') ?? 'gpu') as Mode;
 const clockMode = args.get('clock') ?? 'runtime';
 const hooked = clockMode === 'runtime';
 const tiers = list(args.get('tiers'), config.tiers) as Tier[];
+const assetRoot = resolve(args.get('assets') ?? 'game/src/assets');
+const frozenAssets = new Map<string, Buffer>();
+function snapshotAssets(dir: string, prefix = '') {
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const key = prefix + entry.name;
+		if (entry.isDirectory()) snapshotAssets(join(dir, entry.name), `${key}/`);
+		else if (/\.(glb|png|webp|webm|m4a|ogg)$/.test(key))
+			frozenAssets.set(key, readFileSync(join(dir, entry.name)));
+	}
+}
+snapshotAssets(assetRoot);
+const hash = createHash('sha256');
+for (const [key, bytes] of [...frozenAssets].sort(([a], [b]) => a.localeCompare(b))) {
+	hash.update(key);
+	hash.update(bytes);
+}
+const assetHash = hash.digest('hex');
 const wanted = list(args.get('poses'), []);
 const serve = args.get('serve');
 let origin = args.get('url') ?? 'http://localhost:5196/';
@@ -117,6 +137,26 @@ async function newContext(browser: Browser, tier: Tier): Promise<BrowserContext>
 		isMobile: device.mobile,
 		hasTouch: device.mobile,
 		reducedMotion: 'no-preference'
+	});
+	// A capture is isolated from other agents' asset exports and Vite HMR.
+	await context.routeWebSocket('**', (socket) => {
+		socket.onMessage(() => {});
+	});
+	await context.route('**/src/assets/**', async (route) => {
+		const request = route.request(),
+			url = new URL(request.url());
+		const key = decodeURIComponent(url.pathname.split('/src/assets/')[1] ?? '');
+		const body = frozenAssets.get(key);
+		if (!body || request.resourceType() === 'script') return route.continue();
+		const types: Record<string, string> = {
+			'.glb': 'model/gltf-binary',
+			'.png': 'image/png',
+			'.webp': 'image/webp',
+			'.webm': 'audio/webm',
+			'.m4a': 'audio/mp4',
+			'.ogg': 'audio/ogg'
+		};
+		await route.fulfill({ body, contentType: types[extname(key)] ?? 'application/octet-stream' });
 	});
 	await context.addInitScript(
 		({ memory, cores, seed }) => {
@@ -222,6 +262,7 @@ async function capture(page: Page, pose: Pose, tier: Tier, dir: string, errors: 
 	const metrics = frameMetrics(await readRgba(png), await readRgba(maskPng));
 	const record = {
 		pose: pose.id,
+		assetHash,
 		name: pose.name,
 		status: pose.status,
 		runtimePose: pose.runtimePose,
