@@ -11,6 +11,27 @@ export interface AvatarProfile {
 	face: 'smile' | 'neutral';
 	kenneySkin: string;
 }
+/** Sound buses with a saved volume and mute (audio/bank.ts BUSES; kept here so the save does not load the bank). */
+export const AUDIO_BUSES = ['master', 'music', 'ambience', 'animals', 'sfx', 'ui'] as const;
+export type AudioBusKey = (typeof AUDIO_BUSES)[number];
+export interface AudioPreferences {
+	version: 1;
+	volume: Partial<Record<AudioBusKey, number>>;
+	muted: Partial<Record<AudioBusKey, boolean>>;
+}
+/** Keeps only known buses, volumes in 0–1 and boolean mutes; null when there is nothing usable. */
+export function decodeAudioPreferences(value: unknown): AudioPreferences | null {
+	if (!record(value) || value.version !== 1) return null;
+	const volume: AudioPreferences['volume'] = {};
+	const muted: AudioPreferences['muted'] = {};
+	for (const bus of AUDIO_BUSES) {
+		const level = record(value.volume) ? value.volume[bus] : undefined;
+		const off = record(value.muted) ? value.muted[bus] : undefined;
+		if (typeof level === 'number' && Number.isFinite(level)) volume[bus] = Math.min(1, Math.max(0, level));
+		if (typeof off === 'boolean') muted[bus] = off;
+	}
+	return { version: 1, volume, muted };
+}
 export interface SaveStorage {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
@@ -68,6 +89,41 @@ export function createLocalSave(
 		}
 	};
 	return {
+		story(): unknown {
+			return read().doc.story;
+		},
+		setStory(value: unknown): boolean {
+			const { doc, writable } = read();
+			if (!writable || !record(value) || value.version !== 1) return false;
+			if (
+				record(doc.story) &&
+				((typeof doc.story.version === 'number' && doc.story.version > 1) ||
+					(typeof doc.story.levelVersion === 'number' &&
+						typeof value.levelVersion === 'number' &&
+						doc.story.levelVersion > value.levelVersion))
+			)
+				return false;
+			try {
+				storage?.setItem(GAME_SAVE_KEY, JSON.stringify({ ...doc, story: value }));
+				return true;
+			} catch {
+				return false;
+			}
+		},
+		audio(): AudioPreferences | null {
+			return decodeAudioPreferences(read().doc.audio);
+		},
+		setAudio(value: Omit<AudioPreferences, 'version'>): boolean {
+			const clean = decodeAudioPreferences({ ...value, version: 1 });
+			const { doc, writable } = read();
+			if (!clean || !writable) return false;
+			try {
+				storage?.setItem(GAME_SAVE_KEY, JSON.stringify({ ...doc, audio: clean }));
+				return true;
+			} catch {
+				return false;
+			}
+		},
 		checkpoint(mapKey: string): string | null {
 			const checkpoints = read().doc.checkpoints;
 			const value = record(checkpoints) ? checkpoints[mapKey] : null;

@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest';
-import { type AvatarProfile, createLocalSave, decodeAvatarProfile, GAME_SAVE_KEY } from './local-save.ts';
+import {
+	type AvatarProfile,
+	createLocalSave,
+	decodeAudioPreferences,
+	decodeAvatarProfile,
+	GAME_SAVE_KEY
+} from './local-save.ts';
 
 const profile: AvatarProfile = {
 	hairStyle: 'curto',
@@ -78,4 +84,58 @@ it('v1 avatar saves acquire short painted hair, while v2 stores the accessory id
 		save = createLocalSave(profile, disk);
 	expect(save.setAvatar({ ...profile, hairStyle: 'black-power' })).toBe(true);
 	expect(createLocalSave(profile, disk).avatar().hairStyle).toBe('black-power');
+});
+it('persists story events beside avatar/checkpoints and protects future story formats', () => {
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	save.setAvatar(profile);
+	save.setCheckpoint('story:1:123', 'bank');
+	expect(save.setStory({ version: 1, levelVersion: 1, started: true, extra: { future: true } })).toBe(true);
+	expect(createLocalSave(profile, disk).story()).toEqual({
+		version: 1,
+		levelVersion: 1,
+		started: true,
+		extra: { future: true }
+	});
+	expect(save.avatar()).toEqual(profile);
+	expect(save.checkpoint('story:1:123')).toBe('bank');
+	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, story: { version: 2, valuable: true } }));
+	expect(save.setStory({ version: 1 })).toBe(false);
+	expect(save.story()).toEqual({ version: 2, valuable: true });
+});
+it('an older open pack cannot overwrite a newer level save written by another window', () => {
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	disk.setItem(
+		GAME_SAVE_KEY,
+		JSON.stringify({ format: 1, story: { version: 1, levelVersion: 2, valuable: true } })
+	);
+	expect(save.setStory({ version: 1, levelVersion: 1 })).toBe(false);
+	expect(save.story()).toEqual({ version: 1, levelVersion: 2, valuable: true });
+});
+it('keeps the sound settings in their own section, cleaned, next to the other sections', () => {
+	const disk = storage();
+	const save = createLocalSave(profile, disk);
+	expect(save.audio()).toBeNull();
+	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, story: { version: 1 }, future: { level: 2 } }));
+	expect(save.setAudio({ volume: { master: 0.4, ambience: 0 }, muted: { master: true } })).toBe(true);
+	expect(createLocalSave(profile, disk).audio()).toEqual({
+		version: 1,
+		volume: { master: 0.4, ambience: 0 },
+		muted: { master: true }
+	});
+	const doc = JSON.parse(disk.getItem(GAME_SAVE_KEY) ?? '{}');
+	expect(doc.story).toEqual({ version: 1 });
+	expect(doc.future).toEqual({ level: 2 });
+	// Unknown buses, out-of-range volumes and non-boolean mutes never reach the engine.
+	expect(
+		decodeAudioPreferences({
+			version: 1,
+			volume: { master: 3, sfx: -1, music: 'loud', radio: 0.5 },
+			muted: { ui: 'yes', music: false }
+		})
+	).toEqual({ version: 1, volume: { master: 1, sfx: 0 }, muted: { music: false } });
+	expect(decodeAudioPreferences({ version: 2, volume: { master: 0.5 } })).toBeNull();
+	disk.setItem(GAME_SAVE_KEY, '{broken');
+	expect(createLocalSave(profile, disk).setAudio({ volume: { master: 1 }, muted: {} })).toBe(false);
 });
