@@ -34,8 +34,7 @@ const result = await build({
 const outputs = Array.isArray(result) ? result : [result];
 let script = '';
 for (const output of outputs)
-	if ('output' in output)
-		for (const chunk of output.output) if (chunk.type === 'chunk') script += chunk.code;
+	if ('output' in output) for (const chunk of output.output) if (chunk.type === 'chunk') script += chunk.code;
 if (!script) throw new Error('the page bundle is empty');
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -44,10 +43,18 @@ try {
 	page.on('pageerror', (error) => console.error('page error:', error.message));
 	await page.route('http://avatar-sheet.local/**', async (route) => {
 		const path = new URL(route.request().url()).pathname;
-		if (path === '/') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><body></body>' });
-		if (path === '/sheet.js') return route.fulfill({ contentType: 'text/javascript', body: script });
+		if (path === '/')
+			return route.fulfill({
+				contentType: 'text/html',
+				body: '<!doctype html><meta charset="utf-8"><body></body>'
+			});
+		if (path === '/sheet.js')
+			return route.fulfill({ contentType: 'text/javascript; charset=utf-8', body: script });
 		if (path === '/avatar.glb' || path === '/avatar-hair.glb')
-			return route.fulfill({ contentType: 'model/gltf-binary', body: readFileSync(join(models, path.slice(1))) });
+			return route.fulfill({
+				contentType: 'model/gltf-binary',
+				body: readFileSync(join(models, path.slice(1)))
+			});
 		return route.fulfill({ status: 404, body: '' });
 	});
 	await page.goto('http://avatar-sheet.local/');

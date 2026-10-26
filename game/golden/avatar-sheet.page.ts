@@ -18,9 +18,14 @@ import {
 	Scene,
 	WebGLRenderer
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { AvatarAnimator, type AvatarInput, CONTEXT, createAvatarInput } from '../src/animation/avatar-animator.ts';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {
+	AvatarAnimator,
+	type AvatarInput,
+	CONTEXT,
+	createAvatarInput
+} from '../src/animation/avatar-animator.ts';
 import { EMOTES, type EmoteId } from '../src/animation/avatar-poses.ts';
 import { HAIR_PIVOTS } from '../src/animation/hair-sway.ts';
 import { AVATAR_LAYOUT, BLOCKY_RIG } from '../src/animation/joints.ts';
@@ -67,7 +72,11 @@ function cycle(input: AvatarInput) {
 }
 
 /** Captures at 4 moments of a gesture, from its start. */
-function gesture(id: EmoteId, times: readonly number[], point: { x: number; y: number; z: number } | null = null) {
+function gesture(
+	id: EmoteId,
+	times: readonly number[],
+	point: { x: number; y: number; z: number } | null = null
+) {
 	return (animator: AvatarAnimator, capture: (caption: string) => void) => {
 		const input = createAvatarInput();
 		advance(animator, input, 1);
@@ -109,7 +118,12 @@ const ROWS: Row[] = [
 		run: still(Object.assign(createAvatarInput(), { surface: 'narrow' }), 1 / (4 * CONTEXT.wobbleHz))
 	},
 	{ label: 'water: wade', note: 'água rasa: joelho alto', view: 1.4, run: cycle(walk({ surface: 'water' })) },
-	{ label: 'slope: uphill', note: 'subida 20°: inclina à frente', view: 1.5, run: cycle(walk({ slope: 20 * DEG })) },
+	{
+		label: 'slope: uphill',
+		note: 'subida 20°: inclina à frente',
+		view: 1.5,
+		run: cycle(walk({ slope: 20 * DEG }))
+	},
 	{ label: 'slope: downhill', note: 'descida 20°: freia', view: 1.5, run: cycle(walk({ slope: -20 * DEG })) },
 	{
 		label: 'teeter',
@@ -153,7 +167,7 @@ const ROWS: Row[] = [
 			const stop = createAvatarInput();
 			for (const time of [0, 0.12, 0.3, 0.55]) {
 				advance(animator, stop, time === 0 ? 0 : 0.12);
-				capture(`parada +${time.toFixed(2)} s`);
+				capture(`parada +${time.toFixed(2)} s · ${(animator.hair.pitch / DEG).toFixed(0)}°`);
 			}
 		}
 	}
@@ -186,8 +200,8 @@ async function main() {
 	const ponytail = hair.scene.getObjectByName('hair-ponytail');
 	// The proxy tail: a thin box hanging from the ponytail's pivot.
 	const tailPivot = new Object3D();
-	const tail = new Mesh(new BoxGeometry(0.16, 0.7, 0.16), new MeshLambertMaterial({ color: 0xe0a030 }));
-	tail.position.y = -0.35;
+	const tail = new Mesh(new BoxGeometry(0.22, 0.9, 0.22), new MeshLambertMaterial({ color: 0xe0a030 }));
+	tail.position.y = -0.45;
 	tailPivot.add(tail);
 	const [px, py, pz] = HAIR_PIVOTS.rabo[0];
 	tailPivot.position.set(px, py, pz);
@@ -195,6 +209,9 @@ async function main() {
 	if (head && ponytail) {
 		head.add(ponytail);
 		ponytail.position.set(0, 0, 0);
+		ponytail.traverse((node) => {
+			if (node instanceof Mesh) node.material = new MeshLambertMaterial({ color: 0x3a2618 });
+		});
 		ponytail.visible = false;
 	}
 	if (head) head.add(tailPivot);
@@ -217,9 +234,9 @@ async function main() {
 		const hairRow = row.label.startsWith('hair');
 		if (ponytail) ponytail.visible = hairRow;
 		tailPivot.visible = hairRow;
-		const distance = 7.2;
-		camera.position.set(Math.sin(row.view) * distance, 2.6, Math.cos(row.view) * distance);
-		camera.lookAt(0, 1.35, 0);
+		const distance = 8.6;
+		camera.position.set(Math.sin(row.view) * distance, 2.4, Math.cos(row.view) * distance);
+		camera.lookAt(0, 1.25, 0);
 		const top = HEADER_H + index * TILE_H;
 		ink.fillStyle = '#e8f2ea';
 		ink.font = '600 16px sans-serif';
