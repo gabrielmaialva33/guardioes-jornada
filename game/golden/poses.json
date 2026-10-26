@@ -265,9 +265,9 @@
 			"runtimePose": null,
 			"timeOfDay": "day",
 			"camera": {
-				"position": [125, 8, 22],
-				"target": [132, 7.5, 30],
-				"fov": 55
+				"position": [128, 7, 30],
+				"target": [132, 7, 30],
+				"fov": 90
 			},
 			"avatar": {
 				"x": 122,
