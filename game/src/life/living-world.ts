@@ -77,6 +77,8 @@ export interface LifeDebug {
 
 export interface LivingWorld {
 	readonly object3d: Group;
+	/** Stable read-only views of live animal positions; no scene graph traversal or snapshots per frame. */
+	readonly actors: readonly LifeActor[];
 	update(frame: LifeFrame): void;
 	/** Story state changed (call with the StoryGame after every revision; idempotent). */
 	onStory(state: LifeStoryState): void;
@@ -86,6 +88,14 @@ export interface LivingWorld {
 	howl(): void;
 	debug(): LifeDebug;
 	dispose(): void;
+}
+
+export interface LifeActor {
+	readonly id: number;
+	readonly position: Readonly<Vec3Like>;
+	readonly eyeHeight: number;
+	readonly companion: boolean;
+	readonly active: boolean;
 }
 
 export interface LivingWorldParts {
@@ -105,6 +115,7 @@ const CPU_WINDOW = 120;
 
 export class LivingWorldRuntime implements LivingWorld {
 	readonly object3d = new Group();
+	readonly actors: readonly LifeActor[];
 	readonly fauna: Fauna;
 	readonly flocks: LifeFlocks;
 	readonly particles: AmbientParticles;
@@ -126,6 +137,12 @@ export class LivingWorldRuntime implements LivingWorld {
 		this.#templates = parts.templates;
 		this.#textures = parts.textures ?? [];
 		this.fauna = new Fauna(plan, world.heights, parts.quality);
+		const fauna = this.fauna;
+		this.actors = fauna.animals.map((animal, id) => ({
+			id, position: animal.motion, eyeHeight: animal.species.eyeHeight,
+			get companion() { return id === fauna.companion && fauna.companionActive; },
+			get active() { return id === fauna.companion ? fauna.companionActive : true; }
+		}));
 		this.fauna.onHowl = parts.onHowl ?? null;
 		this.pets = this.fauna.animals.map((animal) => {
 			const template = parts.templates.get(animal.species.id);
