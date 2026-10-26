@@ -1,4 +1,5 @@
 /** One atlas and one instanced draw for every species outside the detailed tree band. */
+
 import {
 	type Box3,
 	type BufferGeometry,
@@ -13,8 +14,10 @@ import {
 	PlaneGeometry,
 	ShaderMaterial,
 	SRGBColorSpace,
+	type Texture,
 	Vector3
 } from 'three';
+import { LOOK_GLSL, lookUniforms } from '../render/look.ts';
 import type { Quality } from '../render/quality.ts';
 import { RAMPS } from '../style/palette.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
@@ -199,18 +202,21 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 export function createTreeImpostors(
 	prototypes: readonly TreePrototype[],
 	trees: SurvivalWorld['trees'],
-	quality: Quality
+	quality: Quality,
+	options: { capacity?: number; atlas?: Texture } = {}
 ) {
-	const texture = bakeTreeAtlas(prototypes),
+	const capacity = options.capacity ?? trees.count;
+	const texture = options.atlas ?? bakeTreeAtlas(prototypes),
 		geometry = new PlaneGeometry(1, 1),
-		tiles = new Float32Array(trees.count),
+		tiles = new Float32Array(capacity),
 		matrix = new Matrix4();
 	const material = new ShaderMaterial({
 		uniforms: {
 			uAtlas: { value: texture },
 			uGrid: { value: [COLS, Math.ceil(prototypes.length / COLS)] },
 			uTreeRange: { value: detailDistances(quality).trees },
-			...farUniforms
+			...farUniforms,
+			...lookUniforms
 		},
 		vertexShader: `attribute float tile;varying vec2 vUv;varying float vTile,vDistance;varying vec3 vWorld;void main(){
  vUv=uv;vTile=tile;vec4 center=instanceMatrix*vec4(0.,0.,0.,1.);
@@ -219,7 +225,8 @@ export function createTreeImpostors(
  vWorld=p;vDistance=length(center.xz-cameraPosition.xz);gl_Position=projectionMatrix*viewMatrix*vec4(p,1.);
  gl_Position.z=min(gl_Position.z,gl_Position.w*(1.-0.00001));
  }`,
-		fragmentShader: `uniform sampler2D uAtlas;uniform vec2 uGrid;uniform float uTreeRange,uFarEnd;uniform vec3 uFarMist;
+		fragmentShader: `${LOOK_GLSL}
+uniform sampler2D uAtlas;uniform vec2 uGrid;uniform float uTreeRange,uFarEnd;uniform vec3 uFarMist;
  varying vec2 vUv;varying float vTile,vDistance;varying vec3 vWorld;
  void main(){vec2 tileXY=vec2(mod(vTile,uGrid.x),floor(vTile/uGrid.x));
  vec2 uv=vec2((tileXY.x+vUv.x)/uGrid.x,1.-(tileXY.y+1.-vUv.y)/uGrid.y);
@@ -227,33 +234,66 @@ export function createTreeImpostors(
  vec2 pixel=mod(floor(gl_FragCoord.xy),4.);float threshold=(mod(pixel.x*2.+pixel.y*3.,4.)*4.+mod(pixel.x+pixel.y*2.,4.)+.5)/16.;
  if(smoothstep(uTreeRange-6.,uTreeRange+6.,vDistance)<=1.-threshold)discard;
  vec3 color=texel.rgb;float haze=smoothstep(uTreeRange,uFarEnd*1.3,vDistance)*.48;
- gl_FragColor=vec4(mix(color,uFarMist,haze),1.);
+ gl_FragColor=vec4(lookGrade(mix(color,uFarMist,haze)),1.);
  #include <colorspace_fragment>
  }`,
 		side: DoubleSide
 	});
-	const object = new InstancedMesh(geometry, material, trees.count);
+	const object = new InstancedMesh(geometry, material, capacity);
+	const tileAttribute = new InstancedBufferAttribute(tiles, 1);
+	geometry.setAttribute('tile', tileAttribute);
+	const free = new Int32Array(capacity),
+		dense = new Int32Array(capacity),
+		slots = new Int32Array(capacity).fill(-1);
+	for (let i = 0; i < capacity; i++) free[i] = capacity - i - 1;
+	let freeCount = capacity;
+	const byKind = new Map(prototypes.map((p, i) => [p.kind, i]));
 	let count = 0;
-	for (let i = 0; i < trees.count; i++) {
-		const kind = trees.kinds[trees.kind[i]],
-			tile = prototypes.findIndex((p) => p.kind === kind);
-		if (tile < 0) continue;
+	const add = (kind: string, x: number, y: number, z: number, k: number) => {
+		const tile = byKind.get(kind);
+		if (tile === undefined || !freeCount) return -1;
 		const b = prototypes[tile].bounds,
-			k = trees.scale[i],
 			width = (impostorFrame(b).radius * 2 * k * TILE_W) / (TILE_W - 4),
 			height = (impostorFrame(b).height * k * TILE_H) / (TILE_H - 4);
 		matrix.makeScale(width, height, 1);
-		matrix.setPosition(trees.x[i], trees.y[i] + (b.min.y + b.max.y) * 0.5 * k, trees.z[i]);
+		matrix.setPosition(x, y + (b.min.y + b.max.y) * 0.5 * k, z);
 		object.setMatrixAt(count, matrix);
+		const id = free[--freeCount];
+		slots[id] = count;
+		dense[count] = id;
 		tiles[count++] = tile;
-	}
+		object.count = count;
+		object.instanceMatrix.needsUpdate = true;
+		tileAttribute.needsUpdate = true;
+		return id;
+	};
+	const remove = (id: number) => {
+		if (id < 0 || id >= capacity || slots[id] < 0) return;
+		const at = slots[id],
+			last = --count;
+		if (at !== last) {
+			matrix.fromArray(object.instanceMatrix.array, last * 16);
+			object.setMatrixAt(at, matrix);
+			tiles[at] = tiles[last];
+			dense[at] = dense[last];
+			slots[dense[at]] = at;
+		}
+		slots[id] = -1;
+		free[freeCount++] = id;
+		object.count = count;
+		object.instanceMatrix.needsUpdate = true;
+		tileAttribute.needsUpdate = true;
+	};
+	for (let i = 0; i < trees.count; i++)
+		add(trees.kinds[trees.kind[i]], trees.x[i], trees.y[i], trees.z[i], trees.scale[i]);
 	object.count = count;
-	geometry.setAttribute('tile', new InstancedBufferAttribute(tiles, 1));
 	object.name = 'far-tree-impostors';
 	object.frustumCulled = false;
 	object.userData.noShadow = true;
 	return {
 		object,
+		add,
+		remove,
 		setQuality(q: Quality) {
 			material.uniforms.uTreeRange.value = detailDistances(q).trees;
 		},

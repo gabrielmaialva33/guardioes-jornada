@@ -17,9 +17,12 @@ import {
 	RGBAFormat,
 	ShaderMaterial,
 	SphereGeometry,
-	Vector2
+	Vector2,
+	Vector3
 } from 'three';
+import { LOOK_GLSL, lookUniforms, patchLook } from '../render/look.ts';
 import type { Quality } from '../render/quality.ts';
+import { SUN_AZIMUTH_DEG, sunDirection } from '../render/shadows.ts';
 import { LIGHT, RAMPS, VIEW } from '../style/palette.ts';
 
 const smooth = (a: number, b: number, v: number) => {
@@ -149,6 +152,25 @@ export function createAtmosphere(size: number, waterLevel = 0) {
 				| ShaderMaterial
 			)[])
 		);
+		for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+			if (material instanceof ShaderMaterial) {
+				Object.assign(material.uniforms, lookUniforms);
+				material.fragmentShader =
+					LOOK_GLSL +
+					material.fragmentShader.replace(
+						'#include <colorspace_fragment>',
+						'gl_FragColor.rgb=lookGrade(gl_FragColor.rgb);\n#include <colorspace_fragment>'
+					);
+			} else {
+				const previous = material.onBeforeCompile.bind(material),
+					key = material.customProgramCacheKey();
+				material.onBeforeCompile = (shader, renderer) => {
+					previous(shader, renderer);
+					patchLook(shader);
+				};
+				material.customProgramCacheKey = () => `${key}|look-p32`;
+			}
+		}
 		mesh.frustumCulled = false;
 		mesh.userData.noShadow = true;
 		parent.add(mesh);
@@ -238,13 +260,14 @@ export function createAtmosphere(size: number, waterLevel = 0) {
 			uTime: { value: 0 }
 		},
 		vertexShader: billboard,
-		fragmentShader: `varying vec2 vUv;uniform vec3 uSun;void main(){float r=length(vUv-.5);float disc=1.0-smoothstep(.11,.125,r);float halo=pow(max(0.,1.-r*2.),3.)*.24;gl_FragColor=vec4(uSun,max(disc,halo));\n#include <colorspace_fragment>\n}`,
+		fragmentShader: `varying vec2 vUv;uniform vec3 uSun;void main(){float r=length(vUv-.5);float disc=1.0-smoothstep(.11,.125,r);float halo=pow(max(0.,1.-r*2.),2.)*.48;gl_FragColor=vec4(uSun,max(disc,halo));\n#include <colorspace_fragment>\n}`,
 		transparent: true,
 		depthWrite: false,
 		fog: false
 	});
 	const sun = own(new Mesh(new PlaneGeometry(1, 1), sunMaterial));
 	sun.renderOrder = 1004;
+	const direction = sunDirection(LIGHT.daylight.sunElevationDeg, SUN_AZIMUTH_DEG, new Vector3());
 	const matrix = new Matrix4(),
 		top = new Color(),
 		horizon = new Color(),
@@ -289,7 +312,7 @@ export function createAtmosphere(size: number, waterLevel = 0) {
 						: new Color(RAMPS.water[1]).lerp(new Color(LIGHT.daylight.horizon), 0.65)
 				);
 			}
-			sun.position.set(0, f * 0.6, -f * 0.6);
+			sun.position.copy(direction).multiplyScalar(f * 0.86);
 			const count = quality === 'low' ? 6 : 12;
 			clouds.count = count;
 			for (let i = 0; i < count; i++) {

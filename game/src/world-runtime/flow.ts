@@ -15,7 +15,10 @@ export function patchFlow(shader: ShaderSource) {
 			`vec2 localFlow=(vMapUv-uFlowRect.xy)/uFlowRect.zw;
 localFlow.y=fract(localFlow.y+uFlowTime*.2);
 vec2 flowUv=uFlowRect.xy+localFlow*uFlowRect.zw;
-vec4 sampledDiffuseColor=texture2D(map,flowUv);`
+vec4 sampledDiffuseColor=texture2D(map,flowUv);
+float flowWarp=sin(localFlow.x*17.+uFlowTime*.9)*.6+sin(localFlow.x*31.-uFlowTime*.4)*.25;
+float flowFoam=pow(max(0.,sin(localFlow.y*24.+flowWarp)),10.)*.72;
+sampledDiffuseColor.rgb=mix(sampledDiffuseColor.rgb,vec3(.75,.92,.86),flowFoam);`
 		)
 	);
 }

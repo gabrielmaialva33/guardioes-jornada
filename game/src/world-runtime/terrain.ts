@@ -1,8 +1,9 @@
 import { BufferGeometry, Color, Float32BufferAttribute } from 'three';
-import type { Trail } from '../level/types.ts';
+import type { Pool, Trail } from '../level/types.ts';
 import { visualStep } from '../render/stylized.ts';
 import { RAMPS } from '../style/palette.ts';
 import { BLOCK_SIZE, type CollisionBlock, FLAG, type SurvivalWorld, ZONE } from '../survival/types.ts';
+import { waterField } from './shore.ts';
 
 export function segmentDistance(x: number, z: number, ax: number, az: number, bx: number, bz: number) {
 	const dx = bx - ax,
@@ -33,6 +34,10 @@ export function terrainColor(
 	if (zone === ZONE.highland) return RAMPS.rock[2];
 	return RAMPS.grass[2];
 }
+const groundWarm = new Color('#94ac52'),
+	groundCool = new Color('#438573'),
+	groundDry = new Color('#a6a660'),
+	groundLitter = new Color('#79583f');
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 export const smooth = (a: number, b: number, v: number) => {
 	const t = clamp((v - a) / (b - a));
@@ -89,10 +94,15 @@ export function terrainTint(
 				w * bilinear(world, x + dx, z + dz, (i) => +!!(world.flags[i] & (FLAG.cleared | FLAG.corridor)));
 			wet += w * bilinear(world, x + dx, z + dz, (i) => +!!(world.flags[i] & FLAG.river));
 		}
+	const macro = noise(x / 50 + 13, z / 50 + 13),
+		meso = noise(x / 8 + 71, z / 8 + 71),
+		shade = 1 - (forest / weight) * 0.6;
 	out
-		.copy(colors.grass[2])
-		.lerp(colors.grass[1], (forest / weight) * 0.65)
-		.lerp(colors.grass[3], (cleared / weight) * 0.55);
+		.copy(groundWarm)
+		.lerp(groundCool, smooth(0.22, 0.78, macro))
+		.lerp(groundDry, smooth(0.5, 0.85, meso) * 0.65 * shade)
+		.lerp(groundLitter, smooth(0.35, 0.7, meso) * (1 - shade) * 0.85);
+	out.lerp(colors.grass[3], (cleared / weight) * 0.12);
 	const h = (xx: number, zz: number) => bilinear(world, xx, zz, (i) => world.heights[i]);
 	const y = h(x, z),
 		slope = Math.hypot((h(x + 1, z) - h(x - 1, z)) * 0.5, (h(x, z + 1) - h(x, z - 1)) * 0.5);
@@ -120,51 +130,9 @@ export function terrainTint(
 	return out.multiplyScalar(0.95 + 0.07 * noise(x * 0.13, z * 0.13) + 0.03 * noise(x * 0.37, z * 0.37));
 }
 /** Shore distance is measured to the ribbon edge, with a per-vertex water height for sloping rivers. */
-export function shoreAt(
-	world: SurvivalWorld,
-	x: number,
-	z: number,
-	pool?: {
-		x: number;
-		z: number;
-		axisX: number;
-		axisZ: number;
-		halfLength: number;
-		halfWidth: number;
-		water: number;
-	}
-): [number, number] {
-	let distance = Infinity,
-		water = world.waterLevel;
-	for (let i = 1; i < world.river.points.length; i++) {
-		const a = world.river.points[i - 1],
-			b = world.river.points[i],
-			dx = b.x - a.x,
-			dz = b.z - a.z;
-		const t = clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1));
-		const d = Math.max(0, Math.hypot(x - a.x - t * dx, z - a.z - t * dz) - world.river.halfWidth);
-		if (d < distance) {
-			distance = d;
-			water = a.water + (b.water - a.water) * t;
-		}
-	}
-	if (pool) {
-		const dx = x - pool.x,
-			dz = z - pool.z;
-		const along = dx * pool.axisX + dz * pool.axisZ,
-			across = -dx * pool.axisZ + dz * pool.axisX;
-		const d = Math.max(
-			0,
-			(Math.hypot(along / pool.halfLength, across / pool.halfWidth) - 1) *
-				Math.min(pool.halfLength, pool.halfWidth)
-		);
-		if (d < distance) {
-			distance = d;
-			// The pool has its own irregular foam rim; the terrain must not draw the old ellipse.
-			water = -10000;
-		}
-	}
-	return [water, distance];
+export function shoreAt(world: SurvivalWorld, x: number, z: number, pool?: Pool): [number, number] {
+	const field = waterField(world, pool, x, z);
+	return [field.height, field.distance];
 }
 export function terrainChunk(
 	world: SurvivalWorld,

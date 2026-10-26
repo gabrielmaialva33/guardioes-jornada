@@ -1,6 +1,6 @@
 import type { Vector3 } from 'three';
 import type { AvatarInput } from '../animation/avatar-animator.ts';
-import type { CollisionWorld } from '../engine/world.ts';
+import type { CollisionQuery } from '../engine/world.ts';
 import type { StoryLevel } from '../level/types.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { DownProbe } from './down-probe.ts';
@@ -27,7 +27,7 @@ export class AvatarGroundContext {
 	readonly #probe: DownProbe;
 	readonly #footings: Footing[] = [];
 	constructor(
-		readonly collision: CollisionWorld,
+		readonly collision: CollisionQuery,
 		readonly world: SurvivalWorld,
 		readonly level?: StoryLevel
 	) {

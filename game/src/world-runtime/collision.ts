@@ -2,6 +2,7 @@ import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute }
 import { CollisionWorld } from '../engine/world.ts';
 import type { StoryLevel } from '../level/types.ts';
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
+import { overlookColliders } from './overlook.ts';
 
 /** Vertical thickness keeps the deck's top exactly on the authored endpoints. */
 export function deckGeometry(d: ArrayLike<number>): BufferGeometry {
@@ -34,30 +35,33 @@ export interface PropProxy {
 /** Step-one gray props. Obby/deck colliders already live in world.blocks; do not duplicate them. */
 export function prefabProxies(world: SurvivalWorld, level?: StoryLevel): PropProxy[] {
 	if (level)
-		return level.landmarks
-			.filter(
-				(l) =>
-					![
-						'bridge',
-						'waterfall',
-						'butterflies',
-						'observation-rock',
-						'mirante',
-						'ipe-amarelo',
-						'jequitiba',
-						'cutting-tree'
-					].includes(l.kind)
-			)
-			.map((l) => ({
-				name: l.kind,
-				x: l.x,
-				y: l.y,
-				z: l.z,
-				sx: l.kind === 'observation-rock' ? 5.8 : l.kind === 'viveiro' ? 4 : 1.4,
-				sy: l.height || (l.kind === 'npc-iara' ? 3 : 2),
-				sz: l.kind === 'observation-rock' ? 5.8 : l.kind === 'viveiro' ? 2 : 1.4,
-				yaw: Math.atan2(l.yawS, l.yawC)
-			}));
+		return [
+			...level.landmarks
+				.filter(
+					(l) =>
+						![
+							'bridge',
+							'waterfall',
+							'butterflies',
+							'observation-rock',
+							'mirante',
+							'ipe-amarelo',
+							'jequitiba',
+							'cutting-tree'
+						].includes(l.kind)
+				)
+				.map((l) => ({
+					name: l.kind,
+					x: l.x,
+					y: l.y,
+					z: l.z,
+					sx: l.kind === 'observation-rock' ? 5.8 : l.kind === 'viveiro' ? 4 : 1.4,
+					sy: l.height || (l.kind === 'npc-iara' ? 3 : 2),
+					sz: l.kind === 'observation-rock' ? 5.8 : l.kind === 'viveiro' ? 2 : 1.4,
+					yaw: Math.atan2(l.yawS, l.yawC)
+				})),
+			...(level.act1?.decks.some((d) => d.id === 'mirante-deck') ? [] : overlookColliders())
+		];
 	return [
 		...world.base.pieces.map((p) => ({
 			name: p.kind,

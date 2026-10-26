@@ -1,17 +1,26 @@
 import { DataTexture, LinearFilter, RedFormat, UnsignedByteType } from 'three';
+import { SUN_AZIMUTH_DEG } from '../render/shadows.ts';
+import { LIGHT } from '../style/palette.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
-/** Ground projection of the 45° sun at azimuth 180°. A tree's crown is distinct from trunk contact AO. */
+/** Afternoon sun projection. Crown shade stays distinct from trunk contact AO. */
 export function bakeCanopy(world: SurvivalWorld) {
 	const side = Math.min(320, world.size * 2),
 		scale = side / world.size;
+	const az = (SUN_AZIMUTH_DEG * Math.PI) / 180,
+		sunX = Math.sin(az),
+		sunZ = Math.cos(az);
 	const shade = new Float32Array(side * side).fill(1);
-	const stamp = (cx: number, cz: number, radius: number, strength: number) => {
-		const r = radius * scale,
+	const stamp = (cx: number, cz: number, radius: number, strength: number, stretch = 1) => {
+		const r = radius * scale * stretch,
 			x = cx * scale,
 			z = cz * scale;
 		for (let iz = Math.max(0, Math.floor(z - r)); iz <= Math.min(side - 1, Math.ceil(z + r)); iz++)
 			for (let ix = Math.max(0, Math.floor(x - r)); ix <= Math.min(side - 1, Math.ceil(x + r)); ix++) {
-				const d = Math.hypot(ix - x, iz - z) / r;
+				const dx = ix - x,
+					dz = iz - z;
+				const along = (dx * sunX + dz * sunZ) / stretch,
+					across = dx * sunZ - dz * sunX;
+				const d = Math.hypot(along, across) / (radius * scale);
 				if (d < 1) shade[iz * side + ix] *= 1 - strength * (1 - d * d) ** 2;
 			}
 	};
@@ -31,7 +40,8 @@ export function bakeCanopy(world: SurvivalWorld) {
 	for (let i = 0; i < trees.count; i++) {
 		const [radius, height] = crown[trees.kinds[trees.kind[i]]] ?? [3, 7],
 			k = trees.scale[i];
-		stamp(trees.x[i], trees.z[i] + height * k, radius * k, 0.55);
+		const reach = (height * k) / Math.tan((LIGHT.daylight.sunElevationDeg * Math.PI) / 180);
+		stamp(trees.x[i] - sunX * reach, trees.z[i] - sunZ * reach, radius * k, 0.62, 1.5);
 		stamp(trees.x[i], trees.z[i], 0.85 * k, 0.26);
 	}
 	for (let i = 0; i < world.rocks.count; i++)

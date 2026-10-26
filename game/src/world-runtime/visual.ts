@@ -1,8 +1,7 @@
 import type { PerspectiveCamera } from 'three';
 import {
 	BoxGeometry,
-	BufferGeometry,
-	Color,
+	type BufferGeometry,
 	CylinderGeometry,
 	Float32BufferAttribute,
 	Group,
@@ -13,35 +12,48 @@ import {
 	Shape,
 	ShapeGeometry
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Checkpoint } from '../engine/checkpoints.ts';
 import type { StoryLevel } from '../level/types.ts';
 import type { Quality } from '../render/index.ts';
 import { mergePieces } from '../render/index.ts';
+import { lookUniforms } from '../render/look.ts';
 import { lighting, visualStep } from '../render/stylized.ts';
 import { ensureVertexColors } from '../scene/materials.ts';
 import { testing } from '../scene/testing.ts';
+import { LIGHT, VIEW } from '../style/palette.ts';
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
 import { createAtmosphere } from './atmosphere.ts';
 import { boundaryTerrain } from './boundary.ts';
 import { bakeCanopy } from './canopy.ts';
+import { cliffDressing } from './cliff.ts';
 import { deckGeometry, prefabProxies, propGeometry } from './collision.ts';
-import { createFarTerrain, detailDistances } from './far-field.ts';
+import { createFarTerrain, detailDistances, farUniforms } from './far-field.ts';
+import { createGroundCover } from './ground-cover.ts';
 import { createMapMaterials } from './materials.ts';
-import { pathRibbon, poolShoreScale } from './paths.ts';
+import { overlookGeometry } from './overlook.ts';
+import { pathRibbon } from './paths.ts';
+import { waterSurface } from './shore.ts';
 import { terrainChunk } from './terrain.ts';
+import { createWaterfallFoam } from './waterfall-foam.ts';
 
 export function createMapVisual(
 	world: SurvivalWorld,
 	level?: StoryLevel,
 	pads: readonly Checkpoint[] = level ? [level.start, ...level.checkpoints] : [],
-	storyProps = false
+	storyProps = false,
+	options: { streaming?: boolean } = {}
 ) {
 	const object = new Group();
-	const farTerrain = testing ? undefined : createFarTerrain(world, level?.trails);
+	const farTerrain = testing || options.streaming ? undefined : createFarTerrain(world, level?.trails);
 	if (farTerrain) object.add(farTerrain.object);
 	const detailed: Mesh[] = [];
 	const ownedGeometries: BufferGeometry[] = [];
-	const materials = createMapMaterials();
+	const materials = createMapMaterials(world, level?.trails);
+	const floorCover = level && !testing ? createGroundCover(world, level, materials.field) : undefined;
+	if (floorCover) object.add(floorCover.object);
+	const waterfallFoam = level && !testing && !options.streaming ? createWaterfallFoam(level) : undefined;
+	if (waterfallFoam) object.add(waterfallFoam.object);
 	const canopy = bakeCanopy(world);
 	lighting.uShadeMap.value = canopy.texture;
 	lighting.uShadeSize.value = world.size;
@@ -66,77 +78,53 @@ export function createMapVisual(
 		return mesh;
 	};
 	for (const b of world.blocks) {
-		const mesh = add(terrainChunk(world, b, level?.trails, level?.pool), groundMaterial);
+		if (options.streaming) {
+			const dressing = cliffDressing(world, b, level);
+			if (dressing) {
+				const mesh = add(dressing, groundMaterial);
+				mesh.name = 'stream-cliff-dressing';
+				detailed.push(mesh);
+			}
+			continue;
+		}
+		const terrain = terrainChunk(world, b, level?.trails, level?.pool),
+			dressing = cliffDressing(world, b, level);
+		let geometry = terrain;
+		if (dressing) {
+			const merged = mergeGeometries([terrain, dressing], false);
+			dressing.dispose();
+			if (merged) {
+				terrain.dispose();
+				geometry = merged;
+			}
+		}
+		const mesh = add(geometry, groundMaterial);
 		mesh.name = `terrain-${b.index}`;
 		mesh.geometry.computeBoundingBox();
 		detailed.push(mesh);
 	}
-	for (const geometry of boundaryTerrain(world)) {
+	for (const geometry of options.streaming ? [] : boundaryTerrain(world)) {
 		const mesh = add(geometry, groundMaterial);
 		mesh.name = 'terrain-exterior';
 		mesh.geometry.computeBoundingBox();
 		detailed.push(mesh);
 	}
-	if (level && visualStep() >= 2) {
-		const paths = add(pathRibbon(world, level.trails), materials.path);
+	if (level && visualStep() >= 2 && !options.streaming) {
+		const ribbon = pathRibbon(world, level.trails);
+		// Act 1's mechanics owns the authored deck; the old batch is only a legacy fallback.
+		const deck = level.act1?.decks.some((d) => d.id === 'mirante-deck') ? undefined : overlookGeometry();
+		const geometry = deck ? mergeGeometries([ribbon, deck], false) : ribbon;
+		if (deck) {
+			ribbon.dispose();
+			deck.dispose();
+		}
+		if (!geometry) throw new Error('trail-deck-batch');
+		const paths = add(geometry, materials.path);
 		paths.name = 'trail-ribbons';
 	}
-	// Join the ribbon at shared control-point cross sections, with no independently overlapping segments.
-	const p: number[] = [],
-		indices: number[] = [];
-	world.river.points.forEach((point, i) => {
-		const a = world.river.points[Math.max(0, i - 1)],
-			b = world.river.points[Math.min(world.river.points.length - 1, i + 1)];
-		const dx = b.x - a.x,
-			dz = b.z - a.z,
-			k = world.river.halfWidth / (Math.hypot(dx, dz) || 1);
-		p.push(point.x - dz * k, point.water, point.z + dx * k, point.x + dz * k, point.water, point.z - dx * k);
-		if (i > 0) {
-			const n = 2 * i;
-			indices.push(n - 2, n, n - 1, n - 1, n, n + 1);
-		}
-	});
-	const water = new BufferGeometry();
-	water.setAttribute('position', new Float32BufferAttribute(p, 3));
-	water.setIndex(indices);
-	water.computeVertexNormals();
-	const waterMaterial = materials.water;
-	add(water, waterMaterial);
-	if (level?.pool) {
-		const pool = level.pool;
-		const points: number[] = [pool.x, pool.water + 0.005, pool.z],
-			faces: number[] = [],
-			colors: number[] = [];
-		const blue = new Color('#3e9ccf'),
-			foam = new Color('#b6e6f7');
-		colors.push(blue.r, blue.g, blue.b);
-		for (let i = 0; i <= 96; i++) {
-			const t = (i / 96) * Math.PI * 2,
-				r = poolShoreScale(t);
-			for (const edge of [false, true]) {
-				const k = r - (edge ? 0 : 0.008),
-					along = Math.cos(t) * pool.halfLength * k,
-					across = Math.sin(t) * pool.halfWidth * k;
-				points.push(
-					pool.x + along * pool.axisX - across * pool.axisZ,
-					pool.water + 0.005,
-					pool.z + along * pool.axisZ + across * pool.axisX
-				);
-				const c = edge ? foam : blue;
-				colors.push(c.r, c.g, c.b);
-			}
-			if (i) {
-				const inner = 1 + i * 2,
-					previous = inner - 2;
-				faces.push(0, inner, previous, previous, inner, previous + 1, previous + 1, inner, inner + 1);
-			}
-		}
-		const g = new BufferGeometry();
-		g.setAttribute('position', new Float32BufferAttribute(points, 3));
-		g.setAttribute('color', new Float32BufferAttribute(colors, 3));
-		g.setIndex(faces);
-		g.computeVertexNormals();
-		add(g, materials.poolWater);
+	if (!options.streaming) {
+		const water = add(waterSurface(world, level?.pool), materials.water);
+		water.name = 'river-pool-surface';
 	}
 	// Every bridge/stone is drawn at the same authored top as its collider.
 	for (const c of world.crossings) {
@@ -162,6 +150,7 @@ export function createMapVisual(
 	const grayByBlock = new Map<number, BufferGeometry[]>();
 	const props = prefabProxies(world, level);
 	for (const p of storyProps ? [] : props) {
+		if (p.name.startsWith('overlook-')) continue;
 		const b = Math.floor(p.z / BLOCK_SIZE) * 4 + Math.floor(p.x / BLOCK_SIZE),
 			bucket = grayByBlock.get(b) ?? [];
 		bucket.push(propGeometry(p));
@@ -187,11 +176,17 @@ export function createMapVisual(
 		for (const g of geometries) g.dispose();
 	}
 	const checkpoints = pads;
-	for (const c of checkpoints)
-		add(
-			new RingGeometry(1.1, 1.35, 24).rotateX(-Math.PI / 2).translate(c.spawn.x, c.spawn.y + 0.04, c.spawn.z),
-			gold
-		);
+	const padGeometry = checkpoints.map((c) =>
+		new RingGeometry(1.1, 1.35, 24).rotateX(-Math.PI / 2).translate(c.spawn.x, c.spawn.y + 0.04, c.spawn.z)
+	);
+	if (padGeometry.length) {
+		const merged = mergeGeometries(padGeometry, false);
+		for (const g of padGeometry) g.dispose();
+		if (merged) {
+			const mesh = add(merged, gold);
+			mesh.name = 'checkpoint-pads';
+		}
+	}
 	const shape = new Shape();
 	shape.moveTo(0, 1.4);
 	shape.lineTo(-0.7, 0.3);
@@ -206,7 +201,10 @@ export function createMapVisual(
 	arrow.renderOrder = 2;
 	return {
 		object,
+		streamMaterials: materials,
 		props,
+		load: materials.load,
+		textures: materials.textures,
 		update(x: number, y: number, z: number, target: { x: number; z: number }) {
 			arrow.position.set(x, y + 0.08, z);
 			arrow.rotation.y = Math.atan2(target.x - x, target.z - z) + Math.PI;
@@ -216,8 +214,16 @@ export function createMapVisual(
 		},
 		prepareFrame(camera: PerspectiveCamera, time: number, quality: Quality, night: boolean) {
 			lighting.uVisualTime.value = time;
+			lookUniforms.uLookNight.value = night ? 1 : 0;
+			floorCover?.update(camera, time, quality);
+			waterfallFoam?.update(camera);
 			lighting.uTreeRange.value = detailDistances(quality).trees;
 			farTerrain?.update(camera, quality, night);
+			if (options.streaming) {
+				farUniforms.uFarNear.value = detailDistances(quality).terrain;
+				farUniforms.uFarEnd.value = VIEW[quality].far;
+				farUniforms.uFarMist.value.set(night ? LIGHT.night.horizon : LIGHT.daylight.horizon);
+			}
 			for (const mesh of detailed) {
 				const b = mesh.geometry.boundingBox;
 				if (!b) continue;
@@ -232,6 +238,8 @@ export function createMapVisual(
 				lighting.uShadeEnabled.value = 0;
 				lighting.uShadeMap.value = null;
 			}
+			floorCover?.dispose();
+			waterfallFoam?.dispose();
 			canopy.dispose();
 			farTerrain?.dispose();
 			atmosphere?.dispose();

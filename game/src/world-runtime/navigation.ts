@@ -44,7 +44,8 @@ export class MapCheckpoints extends CheckpointTracker {
 		checkpoints: readonly Checkpoint[],
 		killY: number,
 		readonly pool?: Pool,
-		readonly onCheckpoint?: (checkpoint: Checkpoint) => void
+		readonly onCheckpoint?: (checkpoint: Checkpoint) => void,
+		readonly waterAt?: (x: number, z: number) => number | null
 	) {
 		super(start, checkpoints, killY);
 	}
@@ -53,7 +54,9 @@ export class MapCheckpoints extends CheckpointTracker {
 		this.onCheckpoint?.(this.start);
 	}
 	override update(dt: number, feet: Vec3): CheckpointEvent | null {
-		const water = riverSurfaceAt(this.map, feet.x, feet.z, this.pool);
+		const water = this.waterAt
+			? this.waterAt(feet.x, feet.z)
+			: riverSurfaceAt(this.map, feet.x, feet.z, this.pool);
 		const event = super.update(
 			dt,
 			water !== null && feet.y < water - 0.65 ? { x: feet.x, y: this.killY - 1, z: feet.z } : feet

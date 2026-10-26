@@ -45,7 +45,7 @@ export function patchFarShader(shader: ShaderSource) {
  if(farDistance<uFarNear-8.0)discard;
  // Retain land contrast beyond the detail fog end: haze is not an opaque sky-coloured wall.
  float farHaze=smoothstep(uFarNear,uFarEnd*1.3,farDistance)*0.48;
- gl_FragColor.rgb=mix(gl_FragColor.rgb,uFarMist,farHaze);
+ gl_FragColor.rgb=mix(gl_FragColor.rgb,lookGrade(uFarMist),farHaze);
  #include <colorspace_fragment>`
 	);
 }

@@ -6,7 +6,8 @@ import {
 	type Material,
 	Mesh,
 	MeshLambertMaterial,
-	type Object3D
+	type Object3D,
+	Vector3
 } from 'three';
 import flora from '../assets/models/kit-flora.glb?url';
 import type { StoryLevel, Trail } from '../level/types.ts';
@@ -21,25 +22,23 @@ import {
 } from '../render/index.ts';
 import { disposeModel, loadModel } from '../scene/avatar.ts';
 import { SharedModelTextures } from '../scene/shared-textures.ts';
+import type { StudyVegetation } from '../study/vegetation.ts';
 import { RAMPS } from '../style/palette.ts';
-import type { Placements, SurvivalWorld } from '../survival/types.ts';
+import { type Placements, type SurvivalWorld, TREE_SPECIES } from '../survival/types.ts';
 import { geometryRanges, renderAssetPlan } from './asset-plan.ts';
 import { applyFlow } from './flow.ts';
 import { coverScale, MODEL_FILES, TREE_MODELS, TREE_NODES } from './model-catalog.ts';
+import {
+	createPlacementRoute,
+	modelCapacity,
+	type PlacementModel,
+	STREAM_COVER_KINDS,
+	STREAM_ROCK_KINDS
+} from './streaming/placement-route.ts';
 import { treeDepth } from './tree-depth.ts';
 import { createTreeImpostors, type TreePrototype } from './tree-impostors.ts';
 
-interface LoadedModel {
-	family: string;
-	kind: string;
-	near: string;
-	far?: string;
-	bounds: Box3;
-	scale: number;
-	count: number;
-	wind?: WindOptions;
-	canopyBase?: number;
-}
+type LoadedModel = PlacementModel;
 /** One instanced pool per geometry/material/LOD; each stable placement uses exactly one geometry band. */
 export async function loadWorldPlacements(
 	grid: BlockGrid,
@@ -47,15 +46,35 @@ export async function loadWorldPlacements(
 	world: SurvivalWorld,
 	signal: AbortSignal,
 	_trails: readonly Trail[] = [],
-	level?: StoryLevel
+	level?: StoryLevel,
+	streaming?: { radius: number }
 ) {
 	const plan = renderAssetPlan(world, level),
 		source = new Group(),
-		textures = new SharedModelTextures({ 'foliage-atlas': 256 }),
+		textures = new SharedModelTextures({ 'foliage-atlas': 256, 'trees-atlas': 448 }),
 		models: LoadedModel[] = [],
 		prototypes: TreePrototype[] = [];
 	let pools: PoolSet | undefined, impostors: ReturnType<typeof createTreeImpostors> | undefined;
+	let study: StudyVegetation | null = null;
+	let bank: ReturnType<typeof createPlacementRoute> | undefined;
 	try {
+		if (streaming) {
+			// Preserve the source kind indices; append the catalog needed by chunks beyond the initial map.
+			plan.trees = {
+				...plan.trees,
+				kinds: [...world.trees.kinds, ...TREE_SPECIES.filter((k) => !world.trees.kinds.includes(k))]
+			};
+			plan.rocks = {
+				...plan.rocks,
+				kinds: [...plan.rocks.kinds, ...STREAM_ROCK_KINDS.filter((k) => !plan.rocks.kinds.includes(k))]
+			};
+			plan.cover = {
+				...plan.cover,
+				kinds: [...plan.cover.kinds, ...STREAM_COVER_KINDS.filter((k) => !plan.cover.kinds.includes(k))]
+			};
+			if (!plan.scenery.kinds.includes('ground-waterfall'))
+				plan.scenery = { ...plan.scenery, kinds: [...plan.scenery.kinds, 'ground-waterfall'] };
+		}
 		const batches = [
 			['tree', plan.trees],
 			['rock', plan.rocks],
@@ -65,7 +84,7 @@ export async function loadWorldPlacements(
 		const kit = plan.rocks.kinds.includes('log') ? await loadModel(flora, signal) : undefined;
 		if (kit) source.add(kit);
 		for (const [family, placements] of batches) {
-			const counts = new Map<string, number>();
+			const counts = new Map<string, number>(streaming ? placements.kinds.map((k) => [k, 0]) : []);
 			for (let i = 0; i < placements.count; i++) {
 				const k = placements.kinds[placements.kind[i]];
 				counts.set(k, (counts.get(k) ?? 0) + 1);
@@ -108,6 +127,19 @@ export async function loadWorldPlacements(
 					const bounds = new Box3().setFromObject(near),
 						height = bounds.max.y - bounds.min.y;
 					const canopyBase = family === 'tree' ? bounds.min.y + height * 0.45 : undefined;
+					let trunkRadius = 0.15;
+					if (family === 'tree') {
+						const point = new Vector3();
+						near.traverse((node) => {
+							if (!(node instanceof Mesh)) return;
+							const positions = node.geometry.getAttribute('position');
+							for (let i = 0; i < positions.count; i++) {
+								point.fromBufferAttribute(positions, i).applyMatrix4(node.matrixWorld);
+								if (point.y > bounds.min.y + height * 0.08 && point.y < bounds.min.y + height * 0.3)
+									trunkRadius = Math.max(trunkRadius, Math.min(height * 0.09, Math.hypot(point.x, point.z)));
+							}
+						});
+					}
 					const converted = new Map<Material, Material>();
 					raw.traverse((node) => {
 						if (!(node instanceof Mesh)) return;
@@ -157,7 +189,18 @@ export async function loadWorldPlacements(
 										sample: 'vertex'
 									}
 								: undefined;
-					models.push({ family, kind, near: name, far: far?.name, bounds, scale, count, wind, canopyBase });
+					models.push({
+						family,
+						kind,
+						near: name,
+						far: far?.name,
+						bounds,
+						scale,
+						count: streaming ? Math.max(count, modelCapacity(family, kind, streaming.radius)) : count,
+						wind,
+						canopyBase,
+						trunkRadius
+					});
 					if (family === 'tree') prototypes.push({ kind, model: near, bounds });
 				})
 			);
@@ -203,6 +246,43 @@ export async function loadWorldPlacements(
 						mesh.customDepthMaterial = treeDepth(material, m.canopyBase, m.wind);
 				}
 			}
+		if (streaming) {
+			prototypes.sort((a, b) => a.kind.localeCompare(b.kind));
+			impostors = createTreeImpostors(prototypes, { ...world.trees, count: 0 }, quality, {
+				capacity: TREE_SPECIES.reduce((n, kind) => n + modelCapacity('tree', kind, streaming.radius), 0)
+			});
+			ownedPools.object.add(impostors.object);
+			const ownedImpostors = impostors;
+			bank = createPlacementRoute(ownedPools, models, quality, {
+				impostors: ownedImpostors,
+				scenery: plan.scenery
+			});
+			const ownedBank = bank;
+			return {
+				pools: ownedPools,
+				stream: ownedBank,
+				canopies: ownedBank.canopies,
+				stats() {
+					let near = 0,
+						far = 0;
+					for (const m of models) {
+						near += ownedPools.get(m.near).count;
+						if (m.far) far += ownedPools.get(m.far).count;
+					}
+					return { near, far, overlap: 0, atlasTextures: textures.count };
+				},
+				setQuality(q: Quality) {
+					ownedBank.setQuality(q);
+				},
+				dispose() {
+					ownedBank.dispose();
+					ownedImpostors.dispose();
+					ownedPools.object.removeFromParent();
+					ownedPools.dispose();
+					disposeModel(source);
+				}
+			};
+		}
 		const crowns: CanopyVolume[] = [];
 		for (const [family, placements] of batches) {
 			const byKind = new Map(models.filter((m) => m.family === family).map((m) => [m.kind, m]));
@@ -250,6 +330,13 @@ export async function loadWorldPlacements(
 						rz: r,
 						ry: Math.max(0.3, (b.max.y - bottom) * 0.5 * k),
 						id,
+						trunk: {
+							x: placements.x[i],
+							z: placements.z[i],
+							bottom: placements.y[i] + b.min.y * k,
+							top: placements.y[i] + bottom * k,
+							radius: m.trunkRadius * k + 0.1
+						},
 						setFade: (id, opacity) => {
 							near.setFade(id, opacity);
 							return far ? far.setFade(id, opacity) : true;
@@ -262,6 +349,15 @@ export async function loadWorldPlacements(
 		impostors = createTreeImpostors(prototypes, world.trees, quality);
 		pools.object.add(impostors.object);
 		const ownedImpostors = impostors;
+		if (import.meta.env.DEV) {
+			const { studyEnabled } = await import('../study/gate.ts');
+			if (studyEnabled()) {
+				const { loadStudyVegetation } = await import('../study/vegetation.ts');
+				study = await loadStudyVegetation({ grid, quality, world, signal, level, existingPools: ownedPools });
+				if (study) ownedPools.object.add(study.object);
+			}
+		}
+		signal.throwIfAborted();
 		return {
 			pools,
 			canopies: new CanopyVisibility(crowns),
@@ -279,13 +375,15 @@ export async function loadWorldPlacements(
 					for (let i = 0; i < a.count; i++) ids.add(a.idAt(i));
 					for (let i = 0; i < b.count; i++) if (ids.has(b.idAt(i))) overlap++;
 				}
-				return { near, far, overlap, atlasTextures: textures.count };
+				return { near, far, overlap, atlasTextures: textures.count, study: study?.debug() };
 			},
 			setQuality(q: Quality) {
 				applyBands(q);
 				ownedImpostors.setQuality(q);
+				study?.setQuality(q);
 			},
 			dispose() {
+				study?.dispose();
 				ownedImpostors.dispose();
 				ownedPools.object.removeFromParent();
 				ownedPools.dispose();
@@ -293,6 +391,8 @@ export async function loadWorldPlacements(
 			}
 		};
 	} catch (error) {
+		bank?.dispose();
+		study?.dispose();
 		impostors?.dispose();
 		pools?.dispose();
 		disposeModel(source);
