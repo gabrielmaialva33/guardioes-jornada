@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { drive, storyBuild, walk } from '../game/story-driver.ts';
+import { climbTreehouse, drive, storyBuild, walk } from '../game/story-driver.ts';
 
 test.use({
 	viewport: { width: 915, height: 412 },
@@ -48,6 +48,7 @@ test('completes all six story missions through real keyboard movement and touch 
 	await expect(page.getByRole('button', { name: 'Agora não', exact: true })).toBeFocused();
 	await page.screenshot({ path: testInfo.outputPath('iara-dialogue.png') });
 	await page.getByRole('button', { name: 'Vamos começar', exact: true }).press('Enter');
+	await climbTreehouse(page);
 	await walk(page, at('lixo-1'), 0.8);
 	await act('Recolher resíduo');
 	console.info('seeds');
@@ -65,7 +66,7 @@ test('completes all six story missions through real keyboard movement and touch 
 	if (!leaf) throw new Error('leaf');
 	await walk(page, leaf, 0.8);
 	await act('Recolher folha dourada');
-	await expect(page.locator('.missions .inventory')).toContainText('Resíduos 1/10 · Folhas 1/7');
+	await expect(page.locator('.missions .inventory')).toContainText('Resíduos 1/10 · Folhas 1/9');
 	await page.screenshot({ path: testInfo.outputPath('corridor-restored.png') });
 	await expect.poll(() => page.evaluate(() => globalThis.__gameDebug?.().storyProgress[0])).toBe(5);
 	// A synchronous event save survives closing/reopening immediately.
@@ -149,6 +150,34 @@ test('completes all six story missions through real keyboard movement and touch 
 			0
 		);
 	await page.screenshot({ path: testInfo.outputPath('victory.png') });
+	await page.getByRole('button', { name: 'Continuar explorando', exact: true }).tap();
+	const zip = level.act1?.zipline;
+	if (!zip) throw Error('zipline');
+	await expect(page.getByRole('dialog')).toBeHidden();
+	await drive(page, [{ x: 130, z: 80 }], 6000);
+	await drive(page, [zip.start], 8000, true);
+	await act('Descer de tirolesa');
+	await expect.poll(() => page.evaluate(() => globalThis.__gameDebug?.().park?.mode)).toBe('zipline');
+	await expect.poll(() => page.evaluate(() => globalThis.__gameDebug?.().animation)).toBe('hang');
+	await page.screenshot({ path: testInfo.outputPath('zipline-hang.png') });
+	await page.waitForFunction(
+		() => {
+			const s = globalThis.__gameDebug?.();
+			return s?.park?.mode === 'walk' && s.x < 50;
+		},
+		null,
+		{ timeout: 30000 }
+	);
+	await page.screenshot({ path: testInfo.outputPath('zipline-arrival.png') });
+	// Replay remains available from Iara after exploring the opened park.
+	await page.getByRole('button', { name: 'Voltar à base', exact: true }).click();
+	await page.waitForFunction((p) => {
+		const s = globalThis.__gameDebug?.();
+		return s && Math.hypot(s.x - p.x, s.z - p.z) < 1;
+	}, level.start.spawn);
+	await walk(page, at('iara'), 2);
+	await act('Falar com Iara');
+
 	await page.getByRole('button', { name: 'Jogar de novo', exact: true }).tap();
 	await expect.poll(() => page.evaluate(() => globalThis.__gameDebug?.().storyProgress[0])).toBe(0);
 	expect(errors).toEqual([]);

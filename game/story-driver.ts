@@ -51,6 +51,12 @@ for (const p of prefabProxies(world, storyBuild.level)) {
 				blocked[z * N + x] = 1;
 		}
 }
+// Raised Act 1 decks cannot be crossed by the ground-only route planner.
+for (const d of storyBuild.level.act1?.decks ?? [])
+	for (let z = Math.floor(d.z0 - 0.6); z <= Math.ceil(d.z1 + 0.6); z++)
+		for (let x = Math.floor(d.x0 - 0.6); x <= Math.ceil(d.x1 + 0.6); x++)
+			if (d.y - world.heights[z * N + x] > 0.4 && d.y - world.heights[z * N + x] < 3.5)
+				blocked[z * N + x] = 1;
 const index = (x: number, z: number) => Math.round(z) * N + Math.round(x);
 function floorAt(q: number) {
 	if (world.flags[q] & 16) {
@@ -215,4 +221,26 @@ export async function drive(
 		},
 		{ path, timeout, jump, allowVictory }
 	);
+}
+
+/** Mission 0: actual walking approach and fixed-tick ladder traversal. */
+export async function climbTreehouse(page: Page) {
+	const ladder = storyBuild.level.act1?.treehouse.ladder;
+	if (!ladder) throw Error('treehouse');
+	await walk(page, { ...ladder.bottom, z: ladder.bottom.z + 1 }, 0.5);
+	await drive(page, [ladder.bottom], 5000);
+	await page.keyboard.down('w');
+	try {
+		await page.waitForFunction(() => globalThis.__gameDebug?.().park?.house === true, null, {
+			timeout: 10000
+		});
+	} finally {
+		await page.keyboard.up('w');
+	}
+	await page.getByRole('button', { name: 'Continuar', exact: true }).press('Enter');
+	await page.getByRole('button', { name: 'Voltar à base', exact: true }).click();
+	await page.waitForFunction((p) => {
+		const s = globalThis.__gameDebug?.();
+		return s && Math.hypot(s.x - p.x, s.z - p.z) < 1;
+	}, storyBuild.level.start.spawn);
 }
