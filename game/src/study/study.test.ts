@@ -17,9 +17,11 @@ import {
 	Float32BufferAttribute,
 	Group,
 	Matrix4,
+	Mesh,
 	MeshBasicMaterial,
 	Skeleton,
 	SkinnedMesh,
+	Texture,
 	Uint16BufferAttribute,
 	Vector3,
 	VectorKeyframeTrack
@@ -31,11 +33,11 @@ import { LIGHTNESS, RAMPS, SATURATION } from '../style/palette.ts';
 import { FLAG } from '../survival/types.ts';
 import { STUDY_PICKS } from './catalog.ts';
 import { clipKey } from './data.ts';
-import { fixSkinOffset, makeInPlace, resolveRoles } from './fauna.ts';
+import { fixSkinOffset, keepMainMeshes, makeInPlace, resolveRoles } from './fauna.ts';
 import { type StudyContext, studyAutomated, studyEnabled, studyLook, studyUrl } from './gate.ts';
 import { BANK_BAND, habitatAt, planStudyHerds } from './herds.ts';
 import { startStudy } from './index.ts';
-import { posterizePixels, rgbToHsl } from './stylize.ts';
+import { forceOpaque, posterizePixels, rgbToHsl } from './stylize.ts';
 
 const open: StudyContext = { dev: true, browser: true, test: false, webdriver: false, softwareTest: false };
 
@@ -196,11 +198,28 @@ describe('painted look', () => {
 		const tones = new Set<string>();
 		for (let i = 0; i < 64; i++) tones.add(grey.slice(i * 4, i * 4 + 3).join(','));
 		expect(tones.size).toBeLessThanOrEqual(4);
-		const rock = RAMPS.rock.map((hex) => {
+		const rockLightness = RAMPS.rock.map((hex) => {
 			const n = Number.parseInt(hex.slice(1), 16);
-			return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
+			return rgbToHsl((n >> 16) & 255, (n >> 8) & 255, n & 255)[2];
 		});
-		for (const tone of tones) expect(rock).toContain(tone);
+		for (const tone of tones) {
+			const [r, g, b] = tone.split(',').map(Number);
+			const l = rgbToHsl(r, g, b)[2];
+			expect(Math.min(...rockLightness.map((x) => Math.abs(x - l)))).toBeLessThan(0.02);
+		}
+	});
+
+	it('keeps the value structure of a dark texture (dark back, pale band) and makes it opaque', () => {
+		// A dark grey-brown body with a pale band, alpha holding smoothness (not opacity).
+		const pixels = new Uint8ClampedArray(100 * 4);
+		for (let i = 0; i < 100; i++) pixels.set(i < 80 ? [52, 44, 38, 40] : [150, 140, 125, 10], i * 4);
+		const ramp = posterizePixels(pixels, undefined, undefined, true);
+		expect(['wood', 'soil']).toContain(ramp);
+		for (let i = 0; i < 100; i++) expect(pixels[i * 4 + 3]).toBe(255);
+		const body = rgbToHsl(pixels[0], pixels[1], pixels[2]);
+		const band = rgbToHsl(pixels[90 * 4], pixels[90 * 4 + 1], pixels[90 * 4 + 2]);
+		expect(band[2]).toBeGreaterThan(body[2] + 0.1);
+		expect(body[1]).toBeGreaterThan(0.1);
 	});
 
 	it('sends a brown animal to a brown ramp', () => {
@@ -242,6 +261,46 @@ describe('clips and skins', () => {
 		expect(v[6] - v[0]).toBeCloseTo(0);
 		expect(v[3]).toBeCloseTo(0);
 		expect(v[4] - v[1]).toBeCloseTo(0.2);
+	});
+
+	it('makes blended materials opaque, keeps cut-outs as an alpha test, and logs each fix', () => {
+		const blended = new MeshBasicMaterial({
+			name: 'body',
+			transparent: true,
+			opacity: 0.8,
+			depthWrite: false
+		});
+		const fur = new MeshBasicMaterial({ name: 'fur', transparent: true });
+		fur.map = new Texture();
+		fur.map.name = 'armadillo_fur_AlbedoOp';
+		const solid = new MeshBasicMaterial({ name: 'eye' });
+		const root = new Group();
+		for (const material of [blended, fur, solid]) root.add(new Mesh(new BoxGeometry(), material));
+		const log = forceOpaque(root);
+		expect(log).toHaveLength(2);
+		for (const material of [blended, fur]) {
+			expect(material.transparent).toBe(false);
+			expect(material.opacity).toBe(1);
+			expect(material.depthWrite).toBe(true);
+		}
+		expect(blended.alphaTest).toBe(0);
+		expect(fur.alphaTest).toBe(0.5);
+		expect(forceOpaque(root)).toEqual([]);
+	});
+
+	it('keeps only the biggest skinned mesh of a material (the calf drew its shadow caster inside)', () => {
+		const material = new MeshBasicMaterial();
+		const skeleton = new Skeleton([new Bone()]);
+		const big = new SkinnedMesh(new BoxGeometry(1, 1, 1, 4, 4, 4), material);
+		const caster = new SkinnedMesh(new BoxGeometry(), material);
+		const other = new SkinnedMesh(new BoxGeometry(), new MeshBasicMaterial());
+		const root = new Group();
+		for (const mesh of [big, caster, other]) {
+			mesh.bind(skeleton);
+			root.add(mesh);
+		}
+		expect(keepMainMeshes(root)).toHaveLength(1);
+		expect(root.children).toEqual([big, other]);
 	});
 
 	it('moves a skin baked a root offset away back onto its skeleton', () => {

@@ -7,14 +7,21 @@
  *   edited): flat shading on animals, the house lighting chunk (hemisphere,
  *   canopy shade, height mist) and its rim light. No specular, no normal map.
  * - Albedo: drawn once, at load, small (≤ 96 px, then a soft linear filter), so
- *   fur and pores melt into flat areas; then each pixel takes one of 4 tones of
- *   the palette ramp nearest its hue (greys go to `rock`), pulled 60% onto the
- *   ramp's colour, with saturation and lightness clamped to the world's range
- *   (ART.md §2: S 25–70%, L 12–90%). It keeps each species' pattern (a calf's
- *   stripes, a jaguar's rosettes) in our colours. Nothing is written to disk.
- * - Outline (ART.md §5 characters and animals): a back-face shell in the darkest
- *   tone of the mesh's own ramp, about 1.5 px wide, plus a darker contour on the
- *   faces that turn away. One extra draw per skinned mesh.
+ *   fur and pores melt into flat areas. Each pixel then keeps its place in the
+ *   texture's own value structure (dark back, pale collar, light belly): its
+ *   lightness, relative to the texture's 5–95% range, picks one of 4 tones of
+ *   the palette ramp nearest its hue (near-greys go to `rock`); value and
+ *   saturation are pulled 60% onto that tone and the hue half as much, then
+ *   clamped to the world's range (ART.md §2: S ≤ 70%, L 12–90%). Nothing is
+ *   written to disk.
+ * - Opaque: their materials are alpha-blended with smoothness in the albedo's
+ *   alpha, which draws a body see-through. Painted materials are opaque, depth
+ *   writing and full alpha; only cut-out textures (`…AlbedoOp`, fur cards) keep
+ *   an alpha test. `forceOpaque()` does the same to the raw look's materials.
+ * - Outline (ART.md §5 characters and animals): a back-face shell in a tone
+ *   darker than the body (the ramp's darkest tone, taken down to L 14%), about
+ *   1.25 CSS px wide at any distance, plus a darker contour on the faces that
+ *   turn away. One extra draw per skinned mesh; callers skip it on small animals.
  * - One painted material and outline per source material, one canvas per source
  *   image: models stylized before cloning (SkeletonUtils.clone) share them.
  *
@@ -54,8 +61,8 @@ export interface StylizeOptions {
 	contour?: number;
 	/** Back-face shell outline (default: on for skinned meshes unless `vegetation`). */
 	outline?: boolean;
-	/** Outline width in clip space (≈ px × 2 / viewport height; default 0.006). */
-	outlineWidth?: number;
+	/** Opaque, depth-writing materials with full alpha, cut-outs aside (default: on unless `vegetation`). */
+	opaque?: boolean;
 }
 
 export interface StylizedModel {
@@ -75,9 +82,23 @@ const DEFAULT_SIZE = 96;
 const DEFAULT_SNAP = 0.6;
 const DEFAULT_BANDS = 4;
 const DEFAULT_CONTOUR = 0.35;
-const DEFAULT_OUTLINE = 0.006;
+/** Outline width, CSS px (ART.md: a thin shell, about 1–1.5 px). */
+export const OUTLINE_PX = 1.25;
+/** Lightness of the outline tone: under every ramp's darkest tone, over LIGHTNESS.min (never black). */
+const OUTLINE_LIGHTNESS = 0.14;
 /** Below this saturation a pixel is a grey: it goes to the rock ramp. */
-const GREY = 0.16;
+const GREY = 0.08;
+/** Texture names whose alpha is a real cut-out (fur and hair cards), not smoothness. */
+const CUTOUT = /albedoop|opacity|_op$|alpha|hair/i;
+
+/**
+ * The outline width every shell reads, in clip space: OUTLINE_PX of the view's
+ * height. Callers update it when the view resizes (`setOutlineViewHeight`).
+ */
+const outlineWidth = { value: (2 * OUTLINE_PX) / 720 };
+export function setOutlineViewHeight(cssHeight: number) {
+	if (cssHeight > 0) outlineWidth.value = (2 * OUTLINE_PX) / cssHeight;
+}
 
 type Rgb = readonly [number, number, number];
 
@@ -170,33 +191,62 @@ export function rampFor(h: number, s: number): RampTones {
 }
 
 /**
- * Posterize RGBA bytes in place (pure, so the tests run it without a canvas):
- * each opaque pixel's lightness is cut into `bands` tones of its ramp, its
- * colour is pulled by `snap` onto that ramp tone, and saturation and lightness
- * end inside the world's range. Returns the ramp most pixels went to.
+ * Posterize RGBA bytes in place (pure, so the tests run it without a canvas).
+ * Each pixel's lightness, relative to the image's own 5–95% range, picks one of
+ * `bands` tones of the ramp nearest its hue; value and saturation are pulled by
+ * `snap` onto that tone, the hue by half of it; everything ends inside the
+ * world's range. `opaque` first sets every alpha to 255 (smoothness in alpha).
+ * Returns the ramp most pixels went to.
  */
-export function posterizePixels(data: Uint8ClampedArray, snap = DEFAULT_SNAP, bands = DEFAULT_BANDS): Ramp {
+export function posterizePixels(
+	data: Uint8ClampedArray,
+	snap = DEFAULT_SNAP,
+	bands = DEFAULT_BANDS,
+	opaque = false
+): Ramp {
 	const counts = new Map<Ramp, number>();
+	// Pass 1: the image's own value range, from a 64-bucket lightness histogram.
+	const histogram = new Uint32Array(64);
+	let total = 0;
+	for (let i = 0; i < data.length; i += 4) {
+		if (opaque) data[i + 3] = 255;
+		else if (data[i + 3] < 8) continue;
+		const max = Math.max(data[i], data[i + 1], data[i + 2]);
+		const min = Math.min(data[i], data[i + 1], data[i + 2]);
+		histogram[Math.min(63, Math.floor(((max + min) / 510) * 64))]++;
+		total++;
+	}
+	const percentile = (p: number) => {
+		let seen = 0;
+		for (let k = 0; k < 64; k++) {
+			seen += histogram[k];
+			if (seen >= total * p) return (k + 0.5) / 64;
+		}
+		return 1;
+	};
+	const low = percentile(0.05);
+	const high = Math.max(low + 0.04, percentile(0.95));
+	// Pass 2: tones.
 	for (let i = 0; i < data.length; i += 4) {
 		if (data[i + 3] < 8) continue;
 		const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
 		const ramp = rampFor(h, s);
 		counts.set(ramp.name, (counts.get(ramp.name) ?? 0) + 1);
-		const level = Math.min(bands - 1, Math.floor(l * bands * 1.15));
-		const toneIndex = Math.round((level / Math.max(1, bands - 1)) * (ramp.tones.length - 1));
-		const tone = ramp.tones[toneIndex];
-		// The source, posterized: its own hue, its band's lightness, saturation in range.
-		// Greys stay grey (the rock ramp itself sits under the 25% floor); colours stay in range.
-		const sat = s < GREY ? s : Math.min(SATURATION.max - 0.1, Math.max(SATURATION.min, s));
-		const lit = Math.min(LIGHTNESS.max, Math.max(LIGHTNESS.min, (level + 0.5) / bands));
-		const [sr, sg, sb] = hslToRgb(h, sat, lit);
-		let r = sr + (tone[0] - sr) * snap;
-		let g = sg + (tone[1] - sg) * snap;
-		let b = sb + (tone[2] - sb) * snap;
-		const [fh, fs, fl] = rgbToHsl(r, g, b);
-		const clampS = Math.min(SATURATION.max, fs);
-		const clampL = Math.min(LIGHTNESS.max, Math.max(LIGHTNESS.min, fl));
-		if (clampS !== fs || clampL !== fl) [r, g, b] = hslToRgb(fh, clampS, clampL);
+		const t = Math.min(1, Math.max(0, (l - low) / (high - low)));
+		const band = Math.min(bands - 1, Math.floor(t * bands));
+		const tone = ramp.tones[Math.round((band / Math.max(1, bands - 1)) * (ramp.tones.length - 1))];
+		const [th, ts, tl] = rgbToHsl(tone[0], tone[1], tone[2]);
+		// The source's own value for this band (so a dark animal stays darker than a pale one).
+		const own = low + ((band + 0.5) / bands) * (high - low);
+		let lit = own + (tl - own) * snap;
+		let sat = s + (ts - s) * snap;
+		let gap = th - h;
+		if (gap > 0.5) gap -= 1;
+		if (gap < -0.5) gap += 1;
+		const hue = (h + gap * snap * 0.5 + 1) % 1;
+		sat = s < GREY ? Math.min(sat, ts + 0.04) : Math.min(SATURATION.max, Math.max(SATURATION.min * 0.8, sat));
+		lit = Math.min(LIGHTNESS.max, Math.max(LIGHTNESS.min, lit));
+		const [r, g, b] = hslToRgb(hue, sat, lit);
 		data[i] = r;
 		data[i + 1] = g;
 		data[i + 2] = b;
@@ -229,7 +279,7 @@ interface Painted {
 	ramp: Ramp;
 }
 
-function paintTexture(source: Texture, options: StylizeOptions): Painted | null {
+function paintTexture(source: Texture, options: StylizeOptions, opaque: boolean): Painted | null {
 	const image: unknown = source.image;
 	if (!isDrawable(image) || typeof document === 'undefined') return null;
 	const max = Math.min(PAINTED_MAX_SIZE, options.maxSize ?? DEFAULT_SIZE);
@@ -246,7 +296,12 @@ function paintTexture(source: Texture, options: StylizeOptions): Painted | null 
 	context.imageSmoothingQuality = 'high';
 	context.drawImage(image, 0, 0, width, height);
 	const pixels = context.getImageData(0, 0, width, height);
-	const ramp = posterizePixels(pixels.data, options.snap ?? DEFAULT_SNAP, options.bands ?? DEFAULT_BANDS);
+	const ramp = posterizePixels(
+		pixels.data,
+		options.snap ?? DEFAULT_SNAP,
+		options.bands ?? DEFAULT_BANDS,
+		opaque
+	);
 	context.putImageData(pixels, 0, 0);
 	const texture = new CanvasTexture(canvas);
 	texture.name = `${source.name}-painted`;
@@ -289,10 +344,10 @@ function addContour(material: MeshLambertMaterial, strength: number) {
 }
 
 /** The back-face shell: pushed out along the normal in clip space, so it keeps its width at any distance. */
-function outlineMaterial(color: string, width: number): MeshBasicMaterial {
+function outlineMaterial(color: Color): MeshBasicMaterial {
 	const material = new MeshBasicMaterial({ color, side: BackSide, name: 'study-outline' });
 	material.onBeforeCompile = (shader) => {
-		shader.uniforms.uStudyOutline = { value: width };
+		shader.uniforms.uStudyOutline = outlineWidth;
 		shader.vertexShader = shader.vertexShader
 			.replace('#include <common>', '#include <common>\nuniform float uStudyOutline;')
 			.replace(
@@ -310,7 +365,7 @@ function outlineMaterial(color: string, width: number): MeshBasicMaterial {
  gl_Position.xy += normalize( studyDir + vec2( 1e-6 ) ) * uStudyOutline * gl_Position.w;`
 			);
 	};
-	material.customProgramCacheKey = () => 'study-outline-v1';
+	material.customProgramCacheKey = () => 'study-outline-v2';
 	return material;
 }
 
@@ -328,11 +383,13 @@ function paintMaterial(
 	created: Created
 ): { material: MeshLambertMaterial; ramp: Ramp } {
 	const lit = source as Partial<MeshStandardMaterial>;
+	const opaque = options.opaque ?? !options.vegetation;
+	const cutout = source.alphaTest > 0 || CUTOUT.test(lit.map?.name ?? '');
 	let painted: Painted | null = null;
 	if (lit.map) {
 		const key = lit.map.image ?? lit.map;
 		if (!images.has(key)) {
-			const next = paintTexture(lit.map, options);
+			const next = paintTexture(lit.map, options, opaque && !cutout);
 			images.set(key, next);
 			if (next) {
 				created.textures.push(next.texture);
@@ -347,10 +404,10 @@ function paintMaterial(
 		map: painted?.texture ?? null,
 		color: painted ? new Color('#ffffff') : (lit.color?.clone() ?? new Color('#ffffff')),
 		side: source.side,
-		transparent: source.transparent,
-		opacity: source.opacity,
-		alphaTest: source.alphaTest,
-		depthWrite: source.depthWrite
+		transparent: opaque ? false : source.transparent,
+		opacity: opaque ? 1 : source.opacity,
+		alphaTest: opaque ? (cutout ? Math.max(0.5, source.alphaTest) : 0) : source.alphaTest,
+		depthWrite: opaque ? true : source.depthWrite
 	});
 	let ramp: Ramp = painted?.ramp ?? 'rock';
 	// Untextured parts (eyes, some rocks) keep their colour, posterized like the pixels.
@@ -369,6 +426,36 @@ function paintMaterial(
 	material.userData.study = true;
 	created.materials.push(material);
 	return { material, ramp };
+}
+
+/**
+ * Make every material of a model opaque and depth-writing (their alpha holds
+ * smoothness, so blending draws bodies see-through); cut-out textures keep an
+ * alpha test. Returns one line per material it had to fix, for the load log.
+ */
+export function forceOpaque(model: Object3D): string[] {
+	const fixed: string[] = [];
+	const seen = new Set<Material>();
+	model.traverse((object) => {
+		const mesh = object as Mesh;
+		if (!mesh.isMesh) return;
+		for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+			if (seen.has(material)) continue;
+			seen.add(material);
+			if (!material.transparent && material.opacity >= 1 && material.depthWrite) continue;
+			const map = (material as Partial<MeshStandardMaterial>).map;
+			const cutout = material.alphaTest > 0 || CUTOUT.test(map?.name ?? '');
+			fixed.push(
+				`${material.name || '(unnamed)'}: transparent=${material.transparent} opacity=${material.opacity} depthWrite=${material.depthWrite} -> opaque${cutout ? ' + alphaTest 0.5' : ''}`
+			);
+			material.transparent = false;
+			material.opacity = 1;
+			material.depthWrite = true;
+			material.alphaTest = cutout ? Math.max(0.5, material.alphaTest) : 0;
+			material.needsUpdate = true;
+		}
+	});
+	return fixed;
 }
 
 /**
@@ -408,7 +495,9 @@ export function stylizeModel(model: Object3D, look: StudyLook, options: StylizeO
 			const ramp = painted[0].ramp;
 			let shellMaterial = outlines.get(ramp);
 			if (!shellMaterial) {
-				shellMaterial = outlineMaterial(RAMPS[ramp][0], options.outlineWidth ?? DEFAULT_OUTLINE);
+				const hsl = { h: 0, s: 0, l: 0 };
+				new Color(RAMPS[ramp][0]).getHSL(hsl);
+				shellMaterial = outlineMaterial(new Color().setHSL(hsl.h, hsl.s, OUTLINE_LIGHTNESS));
 				outlines.set(ramp, shellMaterial);
 				created.materials.push(shellMaterial);
 			}

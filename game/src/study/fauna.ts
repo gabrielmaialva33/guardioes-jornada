@@ -57,7 +57,7 @@ import {
 	type StudyPlan,
 	studyRandom
 } from './herds.ts';
-import { type StylizedModel, stylizeModel } from './stylize.ts';
+import { forceOpaque, type StylizedModel, setOutlineViewHeight, stylizeModel } from './stylize.ts';
 
 export interface StudyFrame {
 	dt: number;
@@ -211,6 +211,8 @@ const TUNING: Record<string, Tuning> = {
 
 /** Mixers beyond this camera distance step at half rate. */
 const HALF_RATE = 45;
+/** Animals shorter than this (u) get no outline shell. */
+const OUTLINE_MIN_HEIGHT = 1;
 /** Outline shells beyond this camera distance are hidden (a 1.5 px rim no longer reads there). */
 const OUTLINE_FAR = 60;
 /** The fastest flight, u/s (the avatar runs 9.6 u/s). */
@@ -374,6 +376,33 @@ export function fixSkinOffset(scene: Object3D): boolean {
 	return true;
 }
 
+/**
+ * Draw only the main mesh of each material: a converter that kept a second,
+ * smaller skinned mesh on the same material (a shadow caster or a LOD, like the
+ * calf's `_SC`) would draw inside the body. Returns one line per mesh removed.
+ */
+export function keepMainMeshes(scene: Object3D): string[] {
+	const byMaterial = new Map<string, SkinnedMesh[]>();
+	scene.traverse((o) => {
+		const mesh = o as SkinnedMesh;
+		if (!mesh.isSkinnedMesh) return;
+		const key = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((m) => m.uuid).join('+');
+		byMaterial.set(key, [...(byMaterial.get(key) ?? []), mesh]);
+	});
+	const removed: string[] = [];
+	for (const meshes of byMaterial.values()) {
+		if (meshes.length < 2) continue;
+		const size = (m: SkinnedMesh) => m.geometry.attributes.position.count;
+		meshes.sort((a, b) => size(b) - size(a));
+		for (const extra of meshes.slice(1)) {
+			removed.push(`hid a duplicate mesh of ${size(extra)} vertices (main: ${size(meshes[0])})`);
+			extra.removeFromParent();
+			extra.geometry.dispose();
+		}
+	}
+	return removed;
+}
+
 function findBone(scene: Object3D, test: RegExp, reject?: RegExp): Object3D | null {
 	let found: Object3D | null = null;
 	scene.traverse((o) => {
@@ -419,7 +448,9 @@ async function loadTemplate(
 		if (!clips.has(key)) clips.set(key, clip);
 	}
 	const roles = resolveRoles(pick, [...clips.keys()]);
-	fixSkinOffset(scene);
+	if (fixSkinOffset(scene)) console.info(`[estudo] ${id}: skin moved back onto its skeleton`);
+	for (const line of keepMainMeshes(scene)) console.info(`[estudo] ${id}: ${line}`);
+	for (const line of forceOpaque(scene)) console.info(`[estudo] ${id}: ${line}`);
 	const wrapper = new Group();
 	wrapper.add(scene);
 	wrapper.updateMatrixWorld(true);
@@ -505,7 +536,8 @@ async function loadTemplate(
 			for (const value of Object.values(material)) if (value instanceof Texture) sources.textures.add(value);
 		}
 	});
-	const styled = stylizeModel(scene, look);
+	// Outline shells only on animals a child sees from afar (ART.md: small ones read by colour).
+	const styled = stylizeModel(scene, look, { outline: pick.height >= OUTLINE_MIN_HEIGHT });
 	// Draws and triangles as drawn: the painted look adds an outline shell per skinned mesh.
 	let triangles = 0;
 	let draws = 0;
@@ -701,6 +733,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 	readonly actors: StudyActor[] = [];
 	readonly templates = new Map<string, Template>();
 	readonly failed: string[] = [];
+	/** `&estudo-lineup=onca`: where our onça stood (for the capture's camera). */
+	lineupOrigin: { x: number; z: number } | null = null;
 	readonly #host: StudyFaunaHost;
 	readonly #abort = new AbortController();
 	readonly #ground: GroundSampler;
@@ -715,6 +749,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 	#started = false;
 	readonly #species: string[];
 	#disposed = false;
+	#viewHeight = 0;
 	readonly #unbadge: () => void;
 	readonly #still = typeof location !== 'undefined' && new URLSearchParams(location.search).has('golden');
 
@@ -847,7 +882,16 @@ export class StudyFaunaRuntime implements StudyFauna {
 	#lineup() {
 		const value =
 			typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('estudo-lineup');
-		const [x, z, yaw] = (value ?? '').split(',').map(Number);
+		let [x, z, yaw] = (value ?? '').split(',').map(Number);
+		if (value === 'onca') {
+			// Beside our own onça (life/), wherever its route has it: the row runs west from 4 u off it.
+			const onca = this.#host.parent.getObjectByName('life-onca-pintada');
+			if (!onca) return;
+			onca.updateWorldMatrix(true, false);
+			const at = new Vector3().setFromMatrixPosition(onca.matrixWorld);
+			[x, z, yaw] = [at.x - 4, at.z, -Math.PI / 2];
+			this.lineupOrigin = { x: at.x, z: at.z };
+		}
 		if (![x, z, yaw].every(Number.isFinite)) return;
 		const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
 		LINEUP.forEach((key, i) => {
@@ -1161,6 +1205,10 @@ export class StudyFaunaRuntime implements StudyFauna {
 		const p = frame.playerPosition;
 		const eye = frame.camera.position;
 		const blobs = this.#host.blobs;
+		if (typeof innerHeight === 'number' && innerHeight !== this.#viewHeight) {
+			this.#viewHeight = innerHeight;
+			setOutlineViewHeight(innerHeight);
+		}
 		for (const actor of this.actors) {
 			if (dt > 0) this.#step(actor, dt, p.x, p.z);
 			this.#pose(actor);
