@@ -71,7 +71,7 @@ export const SHADOW_TIERS: Readonly<Record<Quality, ShadowTierSettings>> = {
 /** Light intensities per variant (colours and sun elevation come from LIGHT). Tunable on the device. */
 export const LIGHT_INTENSITY: Readonly<Record<LightVariant, { hemisphere: number; sun: number }>> = {
 	daylight: { hemisphere: 1, sun: 1.6 },
-	night: { hemisphere: 0.6, sun: 0.45 }
+	night: { hemisphere: 1, sun: 0.8 }
 };
 
 /** Sun azimuth, degrees from +z toward +x: 245 places the afternoon key west-south-west. */

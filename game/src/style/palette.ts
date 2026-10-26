@@ -30,12 +30,12 @@ export const LIGHT = {
 		horizon: '#afc9d7'
 	},
 	night: {
-		hemisphereSky: '#2a4a5c',
-		hemisphereGround: '#14271c',
+		hemisphereSky: '#87aed1',
+		hemisphereGround: '#476b68',
 		sun: '#b9c8ff',
 		sunElevationDeg: 35,
-		skyTop: '#0d2318',
-		horizon: '#24493a'
+		skyTop: '#163a59',
+		horizon: '#476a78'
 	}
 } as const;
 

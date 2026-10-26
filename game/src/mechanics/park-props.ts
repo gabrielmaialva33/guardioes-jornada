@@ -140,10 +140,11 @@ export async function loadParkProps(park: ParkRuntime, signal: AbortSignal) {
 	}
 	function label(text: string, x: number, y: number, z: number) {
 		const canvas = document.createElement('canvas');
-		canvas.width = 512;
-		canvas.height = 96;
+		canvas.width = 256;
+		canvas.height = 48;
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
+		ctx.scale(0.5, 0.5);
 		ctx.fillStyle = '#f7ebc7';
 		ctx.fillRect(0, 0, 512, 96);
 		ctx.strokeStyle = '#4a613b';

@@ -1,5 +1,13 @@
 /** One Lambert shader family. Resources are owned by the level, never by a material hook. */
-import { Color, type IUniform, type MeshLambertMaterial, ShaderChunk, type Texture, Vector3 } from 'three';
+import {
+	Color,
+	type IUniform,
+	type MeshLambertMaterial,
+	ShaderChunk,
+	type Texture,
+	Vector2,
+	Vector3
+} from 'three';
 import { testing } from '../scene/testing.ts';
 import { LIGHT } from '../style/palette.ts';
 import { patchLeafCoverage } from './leaf-coverage.ts';
@@ -20,6 +28,7 @@ export interface ShaderSource {
 export const lighting = {
 	uShadeMap: { value: null as Texture | null },
 	uShadeSize: { value: 160 },
+	uShadeOrigin: { value: new Vector2() },
 	uTreeRange: { value: 48 },
 	uGameEye: { value: new Vector3() },
 	uShadeEnabled: { value: 0 },
@@ -67,6 +76,7 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
 		`#include <common>
  varying vec3 vStylizedWorld;
  uniform sampler2D uShadeMap;
+ uniform vec2 uShadeOrigin;
  uniform float uShadeSize, uShadeEnabled, uShadeReceiver, uVisualTime, uSunSpots, uRim, uHeightFog, uMistBase;
  uniform vec3 uHemisphereSky, uHemisphereGround;
  `
@@ -89,7 +99,7 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
 		'#include <aomap_fragment>',
 		`
  if (uShadeEnabled > 0.5 && uShadeReceiver > 0.5) {
-  vec2 shadeUV = vStylizedWorld.xz / uShadeSize;
+  vec2 shadeUV = (vStylizedWorld.xz-uShadeOrigin) / uShadeSize;
   float insideMap = step(0.0, shadeUV.x) * step(0.0, shadeUV.y) * step(shadeUV.x,1.0) * step(shadeUV.y,1.0);
   float shade = mix(1.0, texture2D(uShadeMap, shadeUV).r, insideMap);
   float noise = sin(vStylizedWorld.x * 2.7 + uVisualTime * 0.18) * sin(vStylizedWorld.z * 2.1 - uVisualTime * 0.12);
