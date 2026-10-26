@@ -4,10 +4,11 @@
  * AnimationMixer playing its own clips (idle, walk, eat, alerted, run), and a
  * small behaviour that keeps it on its habitat and reacts to the child.
  *
- * - Loading: GLBs come from the dev middleware (studyUrl), one template per
- *   species, stylized once (stylize.ts) and cloned with SkeletonUtils.
+ * - Loading: the served catalog (data.ts) gives each pick's GLB; it comes from
+ *   the dev middleware (studyUrl), one template per species, stylized once
+ *   (stylize.ts) and cloned with SkeletonUtils.
  * - Scale (ART.md §3): each species is scaled by HEIGHT, feet to the top of the
- *   silhouette measured on its idle pose, to `height` of catalog.ts (×1.5 life
+ *   silhouette measured on its idle pose, to the pick's `height` (×1.5 life
  *   size against the 3.0 u avatar), as our animals in animation/animals/species.ts.
  * - Root motion: the clips are made in-place (the linear drift of every position
  *   track removed); the drift measured first gives the clip's natural speed,
@@ -43,7 +44,8 @@ import type { StoryLevel } from '../level/types.ts';
 import { GroundSampler } from '../life/ground.ts';
 import type { Quality } from '../render/quality.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
-import { clipKey, type StudyAnimal, type StudyClipRoles, studyAnimal } from './catalog.ts';
+import { STUDY_PICKS, type StudyPick } from './catalog.ts';
+import { clipKey, loadStudyCatalog, type StudyAssetAnimal } from './data.ts';
 import { type StudyLook, studyLook, studyUrl } from './gate.ts';
 import {
 	habitatAt,
@@ -196,15 +198,27 @@ const TUNING: Record<string, Tuning> = {
 
 /** Mixers beyond this camera distance step at half rate. */
 const HALF_RATE = 45;
+/** The fastest flight, u/s (the avatar runs 9.6 u/s). */
+const MAX_RUN = 12;
+/** The puma leaves at a brisk walk, this much over its natural walk (our onça: 2.3 vs 1.8). */
+const LEAVE_PACE = 1.3;
+/** Warm-up: 5 s at 30 Hz, with the player out of the map. */
+const WARM_STEPS = 150;
+const FAR_AWAY = -1e4;
 const FADE = 0.35;
 const CPU_WINDOW = 120;
 
 type Role = 'idle' | 'walk' | 'run' | 'eat' | 'alerted' | 'extra' | 'show';
 type State = 'idle' | 'graze' | 'walk' | 'trail' | 'alert' | 'flee' | 'hide' | 'leave' | 'perch';
 
+type Roles = Record<Role, string | null>;
+
 interface Template {
-	entry: StudyAnimal;
-	roles: StudyClipRoles;
+	id: string;
+	pick: StudyPick;
+	asset: StudyAssetAnimal;
+	/** The clip key each role plays (null: none in the file). */
+	roles: Roles;
 	tuning: Tuning;
 	scene: Group;
 	clips: Map<string, AnimationClip>;
@@ -214,6 +228,9 @@ interface Template {
 	/** Natural ground speed of the walk and run clips at this scale, u/s (0: in place). */
 	naturalWalk: number;
 	naturalRun: number;
+	/** Ground speeds the behaviours use: the natural ones when the clips travel (no foot slide). */
+	walkSpeed: number;
+	runSpeed: number;
 	forward: string;
 	spheres: Sphere[];
 	triangles: number;
@@ -310,12 +327,31 @@ function findBone(scene: Object3D, test: RegExp, reject?: RegExp): Object3D | nu
 	return found;
 }
 
-async function loadTemplate(entry: StudyAnimal, look: StudyLook, signal: AbortSignal): Promise<Template> {
-	const roles = entry.roles;
-	const tuning = TUNING[entry.id];
-	if (!roles || !tuning || !entry.height) throw new Error(`study: ${entry.id} is not a placed pick`);
-	const response = await fetch(studyUrl(entry.path), { signal });
-	if (!response.ok) throw new Error(`study: ${entry.path} ${response.status}`);
+/** Each role's clip key from the pick's names (`extra`: the first match). */
+export function resolveRoles(pick: StudyPick, keys: readonly string[]): Roles {
+	const has = (key: string | undefined) => (key !== undefined && keys.includes(key) ? key : null);
+	return {
+		idle: has(pick.idle),
+		walk: has(pick.walk),
+		run: has(pick.run) ?? has(pick.walk),
+		eat: has(pick.eat) ?? has(pick.idle),
+		alerted: has(pick.alerted) ?? has(pick.idle),
+		extra: keys.find((k) => pick.extra?.test(k)) ?? null,
+		show: has(pick.show)
+	};
+}
+
+async function loadTemplate(
+	id: string,
+	pick: StudyPick,
+	asset: StudyAssetAnimal,
+	look: StudyLook,
+	signal: AbortSignal
+): Promise<Template> {
+	const tuning = TUNING[id];
+	if (!tuning) throw new Error(`study: no tuning for ${id}`);
+	const response = await fetch(studyUrl(asset.path), { signal });
+	if (!response.ok) throw new Error(`study: ${id} ${response.status}`);
 	const buffer = await response.arrayBuffer();
 	await MeshoptDecoder.ready;
 	const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buffer, '');
@@ -326,36 +362,28 @@ async function loadTemplate(entry: StudyAnimal, look: StudyLook, signal: AbortSi
 		const key = clipKey(clip.name);
 		if (!clips.has(key)) clips.set(key, clip);
 	}
+	const roles = resolveRoles(pick, [...clips.keys()]);
 	const wrapper = new Group();
 	wrapper.add(scene);
 	wrapper.updateMatrixWorld(true);
 	const mixer = new AnimationMixer(scene);
 
 	// Root motion: measure on the raw clips, then make every used clip in place.
-	const walkClip = clips.get(roles.walk);
-	const runClip = clips.get(roles.run);
+	const walkClip = roles.walk ? clips.get(roles.walk) : undefined;
+	const runClip = roles.run ? clips.get(roles.run) : undefined;
 	const mover = motionBone(scene, walkClip);
 	const walkDrift = new Vector3();
 	const runDrift = new Vector3();
 	if (mover && walkClip) measureDrift(mixer, scene, mover, walkClip, walkDrift);
 	if (mover && runClip) measureDrift(mixer, scene, mover, runClip, runDrift);
-	const used = new Set<string>([
-		roles.idle,
-		roles.walk,
-		roles.run,
-		roles.eat,
-		roles.alerted,
-		...(roles.extra ?? [])
-	]);
-	if (tuning.hides) used.add('show');
-	for (const key of used) {
-		const clip = clips.get(key);
+	for (const key of new Set(Object.values(roles))) {
+		const clip = key ? clips.get(key) : undefined;
 		if (clip) makeInPlace(clip);
 	}
 
 	// Pose on the idle clip's first frame and measure the silhouette.
 	mixer.stopAllAction();
-	const idleClip = clips.get(roles.idle);
+	const idleClip = roles.idle ? clips.get(roles.idle) : undefined;
 	if (idleClip) {
 		mixer.clipAction(idleClip).reset().play();
 		mixer.setTime(0);
@@ -364,7 +392,7 @@ async function loadTemplate(entry: StudyAnimal, look: StudyLook, signal: AbortSi
 	_box.makeEmpty();
 	_box.setFromObject(scene, true);
 	const height = Math.max(1e-6, _box.max.y - _box.min.y);
-	const scale = entry.height / height;
+	const scale = pick.height / height;
 	const offset = new Vector3(-(_box.min.x + _box.max.x) / 2, -_box.min.y, -(_box.min.z + _box.max.z) / 2);
 
 	// Forward: the walk's drift if it travels, else head minus tail.
@@ -432,7 +460,9 @@ async function loadTemplate(entry: StudyAnimal, look: StudyLook, signal: AbortSi
 	if (look === 'painted') releaseSources(sources);
 	const footprint = Math.max(_box.max.x - _box.min.x, _box.max.z - _box.min.z) * scale;
 	return {
-		entry,
+		id,
+		pick,
+		asset,
 		roles,
 		tuning,
 		scene,
@@ -442,6 +472,8 @@ async function loadTemplate(entry: StudyAnimal, look: StudyLook, signal: AbortSi
 		yawOffset,
 		naturalWalk,
 		naturalRun,
+		walkSpeed: naturalWalk > 0.05 ? naturalWalk : tuning.walk,
+		runSpeed: naturalRun > 0.05 ? Math.min(naturalRun, MAX_RUN) : tuning.run,
 		forward,
 		spheres,
 		triangles,
@@ -531,30 +563,15 @@ class StudyActor {
 		this.holder.add(pivot);
 		this.holder.name = `study:${member.key}`;
 		this.mixer = new AnimationMixer(model);
-		const roles = template.roles;
-		const bind = (role: Role, key: string | undefined) => {
+		for (const [role, key] of Object.entries(template.roles) as [Role, string | null][]) {
 			const clip = key ? template.clips.get(key) : undefined;
-			if (!clip) return;
+			if (!clip) continue;
+			// One action per clip and mixer: roles sharing a clip share it.
 			const action = this.mixer.clipAction(clip);
-			action.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
+			const once = template.pick.show !== undefined && (role === 'alerted' || role === 'show');
+			action.setLoop(once ? LoopOnce : LoopRepeat, once ? 1 : Number.POSITIVE_INFINITY);
+			action.clampWhenFinished = once;
 			this.actions.set(role, action);
-		};
-		bind('idle', roles.idle);
-		bind('walk', roles.walk);
-		bind('run', roles.run);
-		bind('eat', roles.eat);
-		bind('alerted', roles.alerted);
-		const extra = roles.extra?.[Math.floor(this.random() * roles.extra.length)];
-		bind('extra', extra);
-		if (template.tuning.hides) {
-			for (const role of ['alerted', 'show'] as const) {
-				bind(role, role === 'show' ? 'show' : roles.alerted);
-				const action = this.actions.get(role);
-				if (action) {
-					action.setLoop(LoopOnce, 1);
-					action.clampWhenFinished = true;
-				}
-			}
 		}
 		this.state = member.behaviour === 'perch' ? 'perch' : 'idle';
 		this.timer = 1 + this.random() * 4;
@@ -628,24 +645,29 @@ export class StudyFaunaRuntime implements StudyFauna {
 	}
 
 	async #load(id: string) {
-		const entry = studyAnimal(id);
 		try {
-			if (!entry) throw new Error(`study: ${id} not in the catalog`);
-			const template = await loadTemplate(entry, this.look, this.#abort.signal);
+			const pick = STUDY_PICKS[id];
+			const catalog = await loadStudyCatalog(this.#abort.signal);
+			const asset = catalog.animals.find((a) => a.id === id);
+			if (!pick || !asset) throw new Error(`study: ${id} is not in the served catalog`);
+			const template = await loadTemplate(id, pick, asset, this.look, this.#abort.signal);
 			if (this.#disposed) {
 				disposeTemplate(template);
 				return;
 			}
 			this.templates.set(id, template);
+			const fresh: StudyActor[] = [];
 			this.#members.forEach((member, i) => {
 				if (member.species !== id) return;
 				const actor = new StudyActor(member, template);
 				this.#placeStart(actor);
 				this.actors.push(actor);
+				fresh.push(actor);
 				this.root.add(actor.holder);
 				if (this.#host.blobs && member.behaviour !== 'perch') actor.blob = this.#host.blobs.add('actor');
 				actor.halfStep = i & 1;
 			});
+			this.#warm(fresh);
 		} catch (error) {
 			if (!this.#disposed) {
 				this.failed.push(id);
@@ -653,6 +675,33 @@ export class StudyFaunaRuntime implements StudyFauna {
 			}
 		} finally {
 			this.#pending--;
+		}
+	}
+
+	/** Ground height and the holder's transform from the actor's state. */
+	#pose(actor: StudyActor) {
+		if (actor.member.y === null) {
+			this.#ground.x = actor.x;
+			this.#ground.z = actor.z;
+			this.#ground.sample();
+			actor.y = this.#ground.y;
+		}
+		actor.holder.position.set(actor.x, actor.y, actor.z);
+		actor.holder.rotation.y = actor.yaw + (actor.template.tuning.sideways ?? 0);
+	}
+
+	/**
+	 * A few seconds of life, with the child far away, before the first frame:
+	 * golden captures freeze the clock once the scene is ready, and the study
+	 * loads after that, so this is what they show.
+	 */
+	#warm(actors: readonly StudyActor[]) {
+		const step = 1 / 30;
+		for (let i = 0; i < WARM_STEPS; i++)
+			for (const actor of actors) this.#step(actor, step, FAR_AWAY, FAR_AWAY);
+		for (const actor of actors) {
+			actor.mixer.update(FADE * 2);
+			this.#pose(actor);
 		}
 	}
 
@@ -793,7 +842,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 		const rate =
 			natural > 0.05
 				? cruise / natural
-				: cruise / Math.max(0.05, role === 'walk' ? actor.template.tuning.walk : actor.template.tuning.run);
+				: cruise / Math.max(0.05, role === 'walk' ? actor.template.walkSpeed : actor.template.runSpeed);
 		action.setEffectiveTimeScale(Math.max(0.4, Math.min(2, rate)));
 	}
 
@@ -834,7 +883,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 				else this.#enter(actor, 'alert', px, pz);
 			}
 			if (actor.state === 'leave') {
-				const left = this.#move(actor, dt, t.run);
+				const left = this.#move(actor, dt, actor.template.walkSpeed * LEAVE_PACE);
 				this.#rate(actor, 'walk');
 				if (d > t.flee * 1.5) this.#enter(actor, 'idle', px, pz);
 				else if ((left === -1 || left < 0.5 || actor.timer <= 0) && !this.#pickAway(actor, px, pz, 22))
@@ -869,7 +918,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 				}
 				return;
 			case 'flee': {
-				const left = this.#move(actor, dt, t.run);
+				const left = this.#move(actor, dt, actor.template.runSpeed);
 				this.#rate(actor, 'run');
 				if (left === -1 && !this.#pickAway(actor, px, pz, 10)) this.#enter(actor, 'alert', px, pz);
 				else if (left >= 0 && left < 0.4) this.#enter(actor, d < t.alert ? 'alert' : 'idle', px, pz);
@@ -904,7 +953,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 				}
 				return;
 			case 'walk': {
-				const left = this.#move(actor, dt, t.walk);
+				const left = this.#move(actor, dt, actor.template.walkSpeed);
 				this.#rate(actor, 'walk');
 				if (left === -1 || left < 0.3 || actor.timer <= 0)
 					this.#enter(actor, m.behaviour === 'cross' || actor.random() < 0.6 ? 'graze' : 'idle', px, pz);
@@ -932,14 +981,14 @@ export class StudyFaunaRuntime implements StudyFauna {
 		actor.targetZ = leader.z - s * m.offsetX + c * m.offsetZ;
 		const gap = Math.hypot(actor.targetX - actor.x, actor.targetZ - actor.z);
 		const hurry = leader.state === 'flee' || leader.state === 'trail' || gap > 4;
-		const t = actor.template.tuning;
 		if (gap > (actor.state === 'trail' ? 0.4 : 0.9)) {
 			const role = hurry ? 'run' : 'walk';
 			if (actor.state !== 'trail' || actor.clip !== role) {
 				actor.state = 'trail';
 				actor.play(role, 0.25);
 			}
-			const left = this.#move(actor, dt, hurry ? t.run : Math.max(t.walk, leader.speed * 1.15));
+			const tpl = actor.template;
+			const left = this.#move(actor, dt, hurry ? tpl.runSpeed : Math.max(tpl.walkSpeed, leader.speed * 1.15));
 			this.#rate(actor, role);
 			if (left === -1) this.#enter(actor, 'idle', px, pz);
 			return;
@@ -963,15 +1012,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 		const blobs = this.#host.blobs;
 		for (const actor of this.actors) {
 			if (dt > 0) this.#step(actor, dt, p.x, p.z);
-			if (actor.member.y === null) {
-				this.#ground.x = actor.x;
-				this.#ground.z = actor.z;
-				this.#ground.sample();
-				actor.y = this.#ground.y;
-			}
+			this.#pose(actor);
 			const h = actor.holder;
-			h.position.set(actor.x, actor.y, actor.z);
-			h.rotation.y = actor.yaw + (actor.template.tuning.sideways ?? 0);
 			const distance = Math.hypot(eye.x - actor.x, eye.y - actor.y, eye.z - actor.z);
 			actor.distance = distance;
 			actor.visible = distance < actor.template.tuning.far;
@@ -1027,7 +1069,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 		for (const [id, t] of this.templates)
 			templates[id] = {
 				scale: Number(t.scale.toFixed(5)),
-				height: t.entry.height ?? 0,
+				height: t.pick.height,
 				walk: Number(t.naturalWalk.toFixed(3)),
 				run: Number(t.naturalRun.toFixed(3)),
 				forward: t.forward

@@ -7,32 +7,28 @@
  * Shared API (P15 sound and P16 vegetation import it; keep it stable):
  * - `studyEnabled()`, `studyLook()`, `studyUrl(path)` (gate.ts);
  * - `stylizeModel(model, look)` (stylize.ts);
- * - `studyCatalog` and its typed parts (catalog.ts).
+ * - `loadStudyCatalog()`: per-asset data (paths, sizes, tris, clips, roles, fit),
+ *   served at runtime from tmp/ (data.ts). The repo keeps curation only: keys,
+ *   roles, homes and clip names (catalog.ts `STUDY_PICKS`, herds.ts).
  *
- * Gate every use as `import.meta.env.DEV && studyEnabled()` so builds drop it.
+ * Gate every use as `import.meta.env.DEV && studyEnabled()`, and reach this
+ * folder through a dynamic `import()` inside that branch, so builds drop it.
  */
 import type { StudyFauna, StudyFaunaHost } from './fauna.ts';
 import { studyEnabled } from './gate.ts';
 
+export { STUDY_PICKS, type StudyPick } from './catalog.ts';
 export {
 	clipKey,
-	STUDY_ANIMALS,
-	STUDY_PLANTS,
-	STUDY_SOUNDS,
-	STUDY_TERRAIN,
-	type StudyAnimal,
-	type StudyClipRoles,
+	loadStudyCatalog,
+	type StudyAssetAnimal,
+	type StudyAssetPlant,
+	type StudyCatalog,
 	type StudyFit,
-	type StudyItem,
-	type StudyPlant,
-	type StudyPlantRole,
+	type StudyImage,
 	type StudySoundGroup,
-	type StudySoundRole,
-	type StudyTerrainRole,
-	type StudyTerrainTexture,
-	studyAnimal,
-	studyCatalog
-} from './catalog.ts';
+	type StudyTerrainTexture
+} from './data.ts';
 export type { StudyFauna, StudyFaunaDebug, StudyFaunaHost, StudyFrame } from './fauna.ts';
 export { STUDY_PREFIX, type StudyLook, studyEnabled, studyLook, studyUrl } from './gate.ts';
 export {
