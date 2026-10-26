@@ -21,6 +21,8 @@ function setup(value?: unknown) {
 function start(g: StoryGame) {
 	g.act(spot('iara'));
 	g.choose('start', spot('iara'));
+	const d = level.act1?.treehouse.deck;
+	if (d) g.visit({ x: (d.x0 + d.x1) / 2, y: d.y, z: (d.z0 + d.z1) / 2 }, true);
 	g.closeDialogue();
 }
 function corridor(g: StoryGame) {

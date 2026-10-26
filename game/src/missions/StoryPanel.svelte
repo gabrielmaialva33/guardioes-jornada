@@ -61,7 +61,7 @@
 		onclick={() => {
 			expanded = !expanded;
 			onmenu(expanded);
-		}}>Missões · {view.missions.filter((m) => m.completed).length} de 6</button
+		}}>Missões · {view.missions.filter((m) => m.completed).length} de {view.missions.length}</button
 	>
 	{#if expanded}<ol id="mission-list" aria-label="Missões da reserva">
 			{#each view.missions as m (m.id)}<li>
@@ -87,7 +87,7 @@
 				</li>{/each}
 		</ol>{/if}
 	<p class="inventory">
-		Sementes {view.seeds} · Mudas {view.seedlings}<br />Resíduos {view.trash}/10 · Folhas {view.leaves}/7
+		Sementes {view.seeds} · Mudas {view.seedlings}<br />Resíduos {view.trash}/10 · Folhas {view.leaves}/{view.leafTotal}
 	</p>
 </div>
 {#if view.saveError || view.readOnlySave}<p class="save-warning" role="status">

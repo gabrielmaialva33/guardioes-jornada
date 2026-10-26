@@ -13,6 +13,7 @@ export function storyView(game: StoryGame, feet: Point) {
 		seedlings: game.seedlings,
 		trash: game.trash,
 		leaves: game.leaves,
+		leafTotal: game.level.collectibles.filter((c) => c.kind === 'gold-leaf').length,
 		selected: game.data.selected,
 		action: game.context(feet),
 		missions: game.level.missions.map((m) => ({

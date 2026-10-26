@@ -1,11 +1,17 @@
 import type { StoryLevel } from '../level/types.ts';
 import type { Point } from '../survival/types.ts';
+import { withAct1 } from './act1.ts';
 import { type Dialogue, TEXT } from './content.ts';
 
 export interface StorySave extends Record<string, unknown> {
 	version: 1;
 	levelVersion: number;
 	started: boolean;
+	houseVisited: boolean;
+	gatheredSeeds: string[];
+	photographedBirds: string[];
+	npcAccepted: string[];
+	seedsDelivered: boolean;
 	fruits: string[];
 	planted: string[];
 	collected: string[];
@@ -33,6 +39,7 @@ const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
 const record = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === 'object' && !Array.isArray(v);
 export function decodeStorySave(level: StoryLevel, value: unknown): { data: StorySave; readOnly: boolean } {
+	level = withAct1(level);
 	const input = record(value) ? value : {};
 	// The first story pack used a planting-cell id for this reward.
 	const collected =
@@ -66,6 +73,18 @@ export function decodeStorySave(level: StoryLevel, value: unknown): { data: Stor
 			version: 1,
 			levelVersion: level.version,
 			started: input.started === true,
+			houseVisited:
+				input.houseVisited === true ||
+				(input.houseVisited === undefined &&
+					input.started === true &&
+					(typeof input.levelVersion !== 'number' ||
+						input.levelVersion < level.version ||
+						fruits.length > 0 ||
+						input.summit === true)),
+			gatheredSeeds: validIds(input.gatheredSeeds, level.act1?.seeds.map((s) => s.id) ?? []),
+			photographedBirds: validIds(input.photographedBirds, level.act1?.birds.map((s) => s.species) ?? []),
+			npcAccepted: validIds(input.npcAccepted, ['ana', 'ze']),
+			seedsDelivered: input.seedsDelivered === true,
 			fruits,
 			planted: [
 				...corridor,
@@ -89,8 +108,7 @@ export function decodeStorySave(level: StoryLevel, value: unknown): { data: Stor
 			selected:
 				typeof input.selected === 'number' &&
 				Number.isInteger(input.selected) &&
-				input.selected >= 1 &&
-				input.selected <= 6
+				level.missions.some((m) => m.id === input.selected)
 					? input.selected
 					: 1
 		}
@@ -99,6 +117,7 @@ export function decodeStorySave(level: StoryLevel, value: unknown): { data: Stor
 export class StoryGame {
 	/** Transient renderer hooks; neither points nor gestures enter the per-device save. */
 	onGesture: ((gesture: StoryGesture, point: Point | null) => void) | null = null;
+	onMissionComplete: ((id: number) => void) | null = null;
 	companion: Point | null = null;
 	readonly level: StoryLevel;
 	data: StorySave;
@@ -113,7 +132,7 @@ export class StoryGame {
 	#badgeSent = false;
 	#danger = false;
 	constructor(level: StoryLevel, options: StoryOptions) {
-		this.level = level;
+		this.level = level = withAct1(level);
 		this.position = { ...level.spawn };
 		const decoded = decodeStorySave(level, options.value);
 		this.data = decoded.data;
@@ -153,6 +172,9 @@ export class StoryGame {
 		return this.completed(6);
 	}
 	progress(id: number) {
+		if (id === 0) return +this.data.houseVisited;
+		if (id === 7) return this.data.gatheredSeeds.length;
+		if (id === 8) return this.data.photographedBirds.length;
 		if (id === 1 || id === 4)
 			return this.data.planted.filter((key) => this.level.planting.find((p) => p.id === key)?.mission === id)
 				.length;
@@ -164,13 +186,20 @@ export class StoryGame {
 	}
 	available(id: number): boolean {
 		return (
-			(id === 1 || this.data.started) &&
+			(id === 0 || id === 1 || this.data.started) &&
 			!!this.level.missions.find((m) => m.id === id)?.requires.every((required) => this.completed(required))
 		);
 	}
 	completed(id: number): boolean {
 		const m = this.level.missions.find((m) => m.id === id);
-		return !!m && this.data.started && this.available(id) && this.progress(id) >= m.count;
+		return (
+			!!m &&
+			this.data.started &&
+			this.available(id) &&
+			this.progress(id) >= m.count &&
+			(id !== 7 || this.data.seedsDelivered) &&
+			(id !== 8 || this.data.npcAccepted.includes('ze'))
+		);
 	}
 	nextMission() {
 		return this.level.missions.find((m) => this.available(m.id) && !this.completed(m.id))?.id ?? 6;
@@ -202,12 +231,15 @@ export class StoryGame {
 		};
 		const iara = this.level.landmarks.find((l) => l.kind === 'npc-iara');
 		if (iara) offer('iara', 'Falar com Iara', iara, 3);
+		for (const npc of this.level.act1?.npcs ?? []) offer(npc.id, `Falar com ${npc.name}`, npc, 3);
+		const note = this.level.act1?.grotto.note;
+		if (note) offer('grotto-note', 'Ler o bilhete da Iara', note, 2);
 		if (this.#inside('mirante', feet) && Math.abs(feet.y - this.level.mirante.y) < 0.3)
 			offer('binoculars', 'Observar a reserva', this.level.mirante, 4);
 		if (!this.data.started) return candidates[0] ?? null;
 		if (this.companion) offer('pet', 'Fazer carinho no mico', this.companion, 2);
 		for (const c of this.level.collectibles) {
-			if (c.kind === 'jucara-fruit' && !this.data.fruits.includes(c.id))
+			if (c.kind === 'jucara-fruit' && this.available(1) && !this.data.fruits.includes(c.id))
 				offer(c.id, 'Colher sementes de juçara', c, c.radius + 0.35);
 			if (c.kind === 'trash' && !this.data.collected.includes(c.id))
 				offer(c.id, 'Recolher resíduo', c, c.radius + 0.35);
@@ -233,6 +265,10 @@ export class StoryGame {
 					1.55,
 					p.mission === 1 ? this.seeds < 1 : this.seedlings < 1
 				);
+		if (this.available(7) && this.data.npcAccepted.includes('ana'))
+			for (const seed of this.level.act1?.seeds ?? [])
+				if (!this.data.gatheredSeeds.includes(seed.id))
+					offer(seed.id, 'Guardar semente para Ana', seed, seed.radius + 0.5);
 		const nursery = this.level.landmarks.find((l) => l.kind === 'viveiro');
 		if (nursery && this.available(4) && !this.data.nurseryTaken)
 			offer('nursery', 'Pegar seis mudas', nursery, 3.3);
@@ -270,6 +306,44 @@ export class StoryGame {
 			this.revision++;
 			return;
 		}
+		if (action.id === 'grotto-note') {
+			this.dialogue = {
+				id: action.id,
+				speaker: 'Bilhete da Iara',
+				lines: [this.level.act1?.text.GRUTA_BILHETE ?? 'Você encontrou o bilhete da Iara.']
+			};
+			this.revision++;
+			return;
+		}
+		const npc = this.level.act1?.npcs.find((n) => n.id === action.id);
+		if (npc) {
+			if (!this.available(npc.mission)) {
+				this.dialogue = {
+					id: npc.id,
+					speaker: npc.name,
+					lines: ['Conclua o corredor da juçara e volte para conversarmos.']
+				};
+				this.revision++;
+				return;
+			}
+			this.change(() => {
+				if (!this.data.npcAccepted.includes(npc.id)) this.data.npcAccepted.push(npc.id);
+				if (npc.id === 'ana' && this.progress(7) >= (this.level.act1?.seeds.length ?? 6))
+					this.data.seedsDelivered = true;
+				const done =
+					npc.id === 'ana'
+						? this.data.seedsDelivered
+						: this.progress(8) >= (this.level.act1?.birds.length ?? 3);
+				const key =
+					npc.id === 'ana' ? (done ? 'ANA_OBRIGADA' : 'ANA_INTRO') : done ? 'ZE_OBRIGADO' : 'ZE_INTRO';
+				this.dialogue = {
+					id: npc.id,
+					speaker: npc.name,
+					lines: [this.level.act1?.text[key] ?? 'Vamos observar a mata juntos.']
+				};
+			});
+			return;
+		}
 		if (action.id === 'pet' || action.id === 'binoculars') {
 			this.onGesture?.(action.id, action.id === 'pet' ? action.point : null);
 			this.notice =
@@ -280,6 +354,11 @@ export class StoryGame {
 			return;
 		}
 		if (action.id === 'iara') {
+			if (this.finished) {
+				this.dialogue = { id: 'victory', speaker: 'Iara', lines: TEXT.closing, finished: true };
+				this.revision++;
+				return;
+			}
 			this.dialogue = {
 				id: 'iara',
 				speaker: 'Iara',
@@ -304,6 +383,12 @@ export class StoryGame {
 		const collectible = this.level.collectibles.find((c) => c.id === action.id);
 		this.change(() => {
 			const c = collectible;
+			const seed = this.level.act1?.seeds.find((s) => s.id === action.id);
+			if (seed) {
+				this.data.gatheredSeeds.push(seed.id);
+				this.notice = `Sementes guardadas para Ana: ${this.data.gatheredSeeds.length}/${this.level.act1?.seeds.length}.`;
+				this.onGesture?.('pickup', seed);
+			}
 			const p = this.level.planting.find((p) => p.id === action.id);
 			if (c) {
 				if (c.kind === 'jucara-fruit') {
@@ -338,7 +423,8 @@ export class StoryGame {
 			this.change(() => {
 				this.data.started = true;
 				this.dialogue = null;
-				this.notice = 'Colha sementes sob as palmeiras e semeie o corredor.';
+				this.notice =
+					this.level.act1?.text.CASA_INTRO ?? 'Colha sementes sob as palmeiras e semeie o corredor.';
 			});
 			return;
 		}
@@ -379,6 +465,15 @@ export class StoryGame {
 		}
 		this.#danger = danger;
 		if (!grounded || !this.data.started) return;
+		if (this.level.act1 && !this.data.houseVisited && this.#inside('casa-na-arvore', feet))
+			this.change(() => {
+				this.data.houseVisited = true;
+				this.dialogue = {
+					id: 'treehouse',
+					speaker: 'Iara pelo rádio',
+					lines: [this.level.act1?.text.CASA_VISTA ?? 'Você chegou à casa da árvore.']
+				};
+			});
 		const bank = this.level.checkpoints.find((c) => c.id === 'pedras-leste');
 		if (
 			!this.data.crossed &&
@@ -406,6 +501,23 @@ export class StoryGame {
 				this.dialogue = { id: 'victory', speaker: 'Iara', lines: TEXT.closing, finished: true };
 			});
 	}
+	/** Accepted camera saves, never a player-provided mission counter. */
+	recordPhotos(species: readonly string[]) {
+		const valid = this.level.act1?.birds.map((b) => b.species) ?? [];
+		const aliases: Record<string, string> = {
+			'tucano-de-bico-verde': 'tucano',
+			'saira-sete-cores': 'saira',
+			'sabia-laranjeira': 'sabia'
+		};
+		const fresh = species
+			.map((s) => aliases[s] ?? s)
+			.filter((s) => valid.includes(s) && !this.data.photographedBirds.includes(s));
+		if (!fresh.length) return;
+		this.change(() => {
+			for (const s of fresh)
+				if (!this.data.photographedBirds.includes(s)) this.data.photographedBirds.push(s);
+		});
+	}
 	repairBadge() {
 		if (this.finished && !this.#badgeSent) {
 			try {
@@ -431,7 +543,17 @@ export class StoryGame {
 		const id = this.data.selected;
 		let points: (Point & { id?: string })[] = [];
 		let name = this.level.missions.find((m) => m.id === id)?.name ?? 'Explore a reserva';
-		if (id === 1) {
+		if (id === 7) {
+			points =
+				!this.data.npcAccepted.includes('ana') || this.progress(7) >= (this.level.act1?.seeds.length ?? 6)
+					? (this.level.act1?.npcs.filter((n) => n.id === 'ana') ?? [])
+					: (this.level.act1?.seeds.filter((s) => !this.data.gatheredSeeds.includes(s.id)) ?? []);
+			name = points[0]?.id === 'ana' ? 'Levar sementes para Ana' : 'Encontrar sementes para Ana';
+		} else if (id === 8) {
+			points = !this.data.npcAccepted.includes('ze')
+				? (this.level.act1?.npcs.filter((n) => n.id === 'ze') ?? [])
+				: (this.level.act1?.birds.filter((b) => !this.data.photographedBirds.includes(b.species)) ?? []);
+		} else if (id === 1) {
 			points = this.seeds
 				? this.level.planting.filter((p) => p.mission === 1 && !this.data.planted.includes(p.id))
 				: this.level.collectibles.filter(
@@ -471,6 +593,7 @@ export class StoryGame {
 		for (const m of this.level.missions)
 			if (this.completed(m.id) && !before.includes(m.id)) {
 				this.onGesture?.('cheer', null);
+				this.onMissionComplete?.(m.id);
 				this.notice = `Missão concluída: ${m.name}!`;
 				if (m.id === 1)
 					this.dialogue = { id: 'corridor', speaker: 'Corredor do mico-leão-dourado', lines: TEXT.corridor };
