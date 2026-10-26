@@ -44,6 +44,7 @@ export function preparePaletteMap(texture: Texture): Texture {
 export function houseMaterial(source: Material, options: StylizedOptions = {}): MeshLambertMaterial {
 	options = {
 		vegetation: source.userData.vegetation === true,
+		canopyBase: typeof source.userData.canopyBase === 'number' ? source.userData.canopyBase : undefined,
 		cover: source.userData.cover === true,
 		...options
 	};

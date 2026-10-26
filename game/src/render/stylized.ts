@@ -3,6 +3,7 @@ import { Color, type IUniform, type MeshLambertMaterial, ShaderChunk, type Textu
 import { LIGHT } from '../style/palette.ts';
 export interface StylizedOptions {
 	vegetation?: boolean;
+	canopyBase?: number;
 	cover?: boolean;
 	rim?: boolean;
 	terrain?: boolean;
@@ -15,6 +16,7 @@ export interface ShaderSource {
 export const lighting = {
 	uShadeMap: { value: null as Texture | null },
 	uShadeSize: { value: 160 },
+	uTreeRange: { value: 48 },
 	uShadeEnabled: { value: 0 },
 	uVisualTime: { value: 0 },
 	uSunSpots: { value: 1 },
@@ -110,6 +112,44 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
  #endif
  `
 	);
+	if (options.canopyBase !== undefined) {
+		shader.uniforms.uCanopyBase = { value: options.canopyBase };
+		shader.vertexShader = shader.vertexShader.replace(
+			'#include <common>',
+			`#include <common>
+#ifdef USE_INSTANCING
+attribute float instanceFade;
+uniform float uCanopyBase,uTreeRange;
+varying float vCanopyFade;
+#endif`
+		);
+		shader.vertexShader = shader.vertexShader.replace(
+			'#include <begin_vertex>',
+			`#include <begin_vertex>
+#ifdef USE_INSTANCING
+vCanopyFade=mix(1.0,instanceFade,smoothstep(uCanopyBase,uCanopyBase+0.7,position.y));
+vec4 treeCenter=modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
+vCanopyFade*=1.0-smoothstep(uTreeRange-6.0,uTreeRange+6.0,length(treeCenter.xz-cameraPosition.xz));
+#endif`
+		);
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <common>',
+			`#include <common>
+#ifdef USE_INSTANCING
+varying float vCanopyFade;
+#endif`
+		);
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <alphatest_fragment>',
+			`#include <alphatest_fragment>
+#ifdef USE_INSTANCING
+// Stable ordered dither keeps depth writing, single-pass instancing and opaque sorting.
+vec2 ditherPixel=mod(floor(gl_FragCoord.xy),4.0);
+float ditherValue=mod(ditherPixel.x*2.0+ditherPixel.y*3.0,4.0)*4.0+mod(ditherPixel.x+ditherPixel.y*2.0,4.0);
+if(vCanopyFade<(ditherValue+0.5)/16.0)discard;
+#endif`
+		);
+	}
 	if (options.cover)
 		shader.vertexShader = shader.vertexShader.replace(
 			'#include <beginnormal_vertex>',
@@ -150,7 +190,7 @@ export function stylize<T extends MeshLambertMaterial>(material: T, options: Sty
 		patchStylizedShader(shader, options);
 	};
 	material.customProgramCacheKey = () =>
-		`${previousKey}|guardioes-lambert-v2:${!!options.vegetation}:${!!options.cover}:${!!options.terrain}`;
+		`${previousKey}|guardioes-lambert-v2:${!!options.vegetation}:${!!options.cover}:${!!options.terrain}:${options.canopyBase !== undefined}`;
 	material.userData.stylized = true;
 	return material;
 }

@@ -59,6 +59,8 @@ export interface InstancePoolOptions {
 	 * Created up front, so the shader program never changes later.
 	 */
 	colors?: boolean;
+	/** Per-instance opaque canopy dither, independent of colour and draw order. */
+	fades?: boolean;
 	/** Distance thinning of far blocks (fog-lod.ts lodProfiles); null draws all of a visible block. */
 	lod?: LodProfile | null;
 	/** Instances move often (animals, spinning pickups): hint DYNAMIC_DRAW. */
@@ -145,6 +147,9 @@ export class InstancePool implements BlockSyncTarget {
 	readonly #ownsGeometry: boolean;
 	readonly #matrices: Float32Array;
 	readonly #colors: Float32Array | null;
+	readonly #fades: Float32Array | null;
+	readonly #instanceFade: InstancedBufferAttribute | null;
+	readonly #fadeRange: Range = { start: 0, count: 0 };
 	readonly #gpuMatrices: Float32Array;
 	readonly #gpuColors: Float32Array | null;
 	readonly #instanceMatrix: InstancedBufferAttribute;
@@ -188,6 +193,10 @@ export class InstancePool implements BlockSyncTarget {
 		this.object.matrixAutoUpdate = false;
 
 		this.#matrices = new Float32Array(capacity * 16);
+		this.#fades = options.fades ? new Float32Array(capacity).fill(1) : null;
+		this.#instanceFade = options.fades
+			? new InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1).setUsage(DynamicDrawUsage)
+			: null;
 		this.#colors = options.colors ? new Float32Array(capacity * 3).fill(1) : null;
 		this.#instanceMatrix = new InstancedBufferAttribute(new Float32Array(capacity * 16), 16);
 		this.#instanceColor = options.colors
@@ -226,6 +235,7 @@ export class InstancePool implements BlockSyncTarget {
 		const meshes: InstancedMesh[] = [];
 		for (const part of parts) {
 			const geometry = part.geometry;
+			if (this.#instanceFade) geometry.setAttribute('instanceFade', this.#instanceFade);
 			if (!geometry.boundingSphere) geometry.computeBoundingSphere();
 			const sphere = geometry.boundingSphere as Sphere;
 			if (first) this.localSphere.copy(sphere);
@@ -348,6 +358,18 @@ export class InstancePool implements BlockSyncTarget {
 		return true;
 	}
 
+	/** Changes one stable instance id; compaction retains its fade. Requires fades: true. */
+	setFade(id: number, opacity: number): boolean {
+		if (!this.#fades || !this.#instanceFade || !this.has(id)) return false;
+		const value = Math.max(0, Math.min(1, opacity));
+		this.#fades[id] = value;
+		const gpu = this.#gpuOf[id];
+		if (gpu >= 0) {
+			this.#instanceFade.setX(gpu, value);
+			this.#touch(gpu);
+		}
+		return true;
+	}
 	setColor(id: number, color: Color): boolean {
 		return this.setRGB(id, color.r, color.g, color.b);
 	}
@@ -362,6 +384,7 @@ export class InstancePool implements BlockSyncTarget {
 		if (this.#gpuOf[id] >= 0) this.#dirty = true;
 		this.#gpuOf[id] = -1;
 		if (this.#colors) this.#colors.fill(1, id * 3, id * 3 + 3);
+		if (this.#fades) this.#fades[id] = 1;
 		return true;
 	}
 
@@ -373,6 +396,7 @@ export class InstancePool implements BlockSyncTarget {
 		this.#tail.fill(-1);
 		this.#members.fill(0);
 		this.#colors?.fill(1);
+		this.#fades?.fill(1);
 		for (let slot = 0; slot < this.capacity; slot++) this.#free[slot] = this.capacity - 1 - slot;
 		this.#freeTop = this.capacity;
 		this.#size = 0;
@@ -552,6 +576,7 @@ export class InstancePool implements BlockSyncTarget {
 						gpuColors[n * 3 + 1] = colors[slot * 3 + 1];
 						gpuColors[n * 3 + 2] = colors[slot * 3 + 2];
 					}
+					if (this.#fades && this.#instanceFade) this.#instanceFade.setX(n, this.#fades[slot]);
 					this.#slotAt[n] = slot;
 					this.#gpuOf[slot] = n;
 					n++;
@@ -577,6 +602,7 @@ export class InstancePool implements BlockSyncTarget {
 
 	#upload(from: number, to: number): void {
 		pushRange(this.#instanceMatrix, this.#matrixRange, from * 16, (to - from) * 16);
+		if (this.#instanceFade) pushRange(this.#instanceFade, this.#fadeRange, from, to - from);
 		if (this.#instanceColor) pushRange(this.#instanceColor, this.#colorRange, from * 3, (to - from) * 3);
 		this.#lo = Number.POSITIVE_INFINITY;
 		this.#hi = -1;

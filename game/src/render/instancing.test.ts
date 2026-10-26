@@ -388,3 +388,33 @@ describe('addPlacements', () => {
 		]);
 	});
 });
+
+it('keeps per-instance fades attached to stable ids across culling, compaction and reuse', () => {
+	const grid = new BlockGrid({ minX: 0, minZ: 0, columns: 2, rows: 1 });
+	const pool = new InstancePool([{ geometry: new BoxGeometry(), material: new MeshLambertMaterial() }], {
+		capacity: 3,
+		grid,
+		fades: true
+	});
+	const a = pool.add(2, 0, 2),
+		b = pool.add(45, 0, 2);
+	showAll(grid);
+	pool.sync();
+	pool.setFade(b, 0.25);
+	pool.sync();
+	const attribute = pool.meshes[0].geometry.getAttribute('instanceFade');
+	expect(attribute.getX(1)).toBe(0.25);
+	grid.visible[0] = 0;
+	pool.sync();
+	expect(pool.idAt(0)).toBe(b);
+	expect(attribute.getX(0)).toBe(0.25);
+	pool.remove(b);
+	expect(pool.add(46, 0, 2)).toBe(b);
+	pool.sync();
+	expect(attribute.getX(0)).toBe(1);
+	pool.clear();
+	expect(pool.add(46, 0, 2)).toBe(a);
+	pool.sync();
+	expect(attribute.getX(0)).toBe(1);
+	pool.dispose();
+});
