@@ -16,15 +16,31 @@ export class Spring {
 		this.omega = omega;
 	}
 
+	/**
+	 * Target and time step for update(): hot paths set these fields instead of
+	 * passing numbers, which V8 boxes when a call is not inlined (track.ts Playhead).
+	 */
+	target = 0;
+	dt = 0;
+
 	step(target: number, dt: number): number {
-		if (!(dt > 0)) return this.value;
+		this.target = target;
+		this.dt = dt;
+		this.update();
+		return this.value;
+	}
+
+	/** Advances toward `this.target` by `this.dt` seconds; read `value` after. */
+	update() {
+		const dt = this.dt;
+		if (!(dt > 0)) return;
+		const target = this.target;
 		const omega = this.omega;
 		const offset = this.value - target;
 		const slope = this.velocity + omega * offset;
 		const decay = Math.exp(-omega * dt);
 		this.value = target + (offset + slope * dt) * decay;
 		this.velocity = (this.velocity - omega * slope * dt) * decay;
-		return this.value;
 	}
 
 	/**

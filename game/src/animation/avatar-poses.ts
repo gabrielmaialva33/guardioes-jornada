@@ -247,11 +247,74 @@ const POINTING = key({
 	armR: { r: [-90, 0, -4] }
 });
 
-export const EMOTE_IDS = ['wave', 'cheer', 'point'] as const;
+// --- Gestures (P10) ------------------------------------------------------------
+// One-shot actions the story triggers, through the emote path. The keys carry
+// the body; avatar-animator.ts adds what depends on the scene: the bow and the
+// hand aimed at the picked item or the petted animal.
+
+/** Pick up: lunge on the left leg, left arm back for balance; the bow and the right hand are procedural. */
+const LUNGE = key({
+	root: { p: [0, -0.04, 0] },
+	head: { r: [10, 0, 0] },
+	armL: { r: [18, 0, 10] },
+	legL: { r: [-35, 0, 0] },
+	legR: { r: [28, 0, 0] }
+});
+
+/** Pet: down on the heels next to the animal (rigid legs cannot kneel); the right hand is procedural. */
+const CROUCH = key({
+	root: { p: [0, -0.15, 0] },
+	torso: { r: [28, 0, 0] },
+	head: { r: [-12, 0, 0] },
+	armL: { r: [-20, 0, 12] },
+	legL: { r: [-60, 0, 4] },
+	legR: { r: [-52, 0, -4] }
+});
+
+/** Binoculars: both hands at the eyes; `yaw` turns the body (two thirds) and the head to scan. */
+const GLASSES = (yaw: number) =>
+	key({
+		torso: { r: [-3, yaw * 0.6, 0] },
+		head: { r: [-6, yaw * 0.4, 0] },
+		armL: { r: [-138, 0, -26] },
+		armR: { r: [-138, 0, 26] }
+	});
+
+const TALK = [
+	key({ head: { r: [2, 4, 0] }, armL: { r: [0, 0, 4] }, armR: { r: [0, 0, -4] } }),
+	key({
+		torso: { r: [0, -6, 0] },
+		head: { r: [4, -2, 2] },
+		armL: { r: [0, 0, 5] },
+		armR: { r: [-50, -10, -22] }
+	}),
+	key({ head: { r: [-3, 2, 0] }, armL: { r: [0, 0, 4] }, armR: { r: [-20, 0, -8] } }),
+	key({
+		torso: { r: [0, 6, 0] },
+		head: { r: [5, 3, -2] },
+		armL: { r: [-45, 8, 24] },
+		armR: { r: [0, 0, -4] }
+	}),
+	key({ head: { r: [-2, 0, 0] }, armL: { r: [-15, 0, 8] }, armR: { r: [-15, 0, -8] } })
+];
+
+export const EMOTE_IDS = ['wave', 'cheer', 'point', 'pickup', 'talk', 'binoculars', 'pet'] as const;
 
 export type EmoteId = (typeof EMOTE_IDS)[number];
 
-/** Roblox's non-looping emotes: they play once and fade back to idle. */
+/** Gestures whose right hand avatar-animator.ts aims at a point, and when (seconds) the hand is there. */
+export const REACH: Readonly<
+	Partial<Record<EmoteId, { in: number; hold: number; out: number; end: number }>>
+> = {
+	pickup: { in: 0, hold: 0.22, out: 0.4, end: 0.6 },
+	pet: { in: 0.35, hold: 0.7, out: 1.9, end: 2.3 }
+};
+
+/**
+ * Roblox's non-looping emotes and the story's gestures: they play once and
+ * fade back to idle, except `talk`, which loops while a dialogue is open.
+ * Mission complete is `cheer`.
+ */
 export const EMOTES: Readonly<Record<EmoteId, Track>> = {
 	wave: gesture([
 		[0, REST],
@@ -285,6 +348,27 @@ export const EMOTES: Readonly<Record<EmoteId, Track>> = {
 		[0.25, POINTING],
 		[1.2, POINTING],
 		[1.6, REST]
+	]),
+	pickup: gesture([
+		[0, REST],
+		[0.22, LUNGE],
+		[0.4, LUNGE],
+		[0.6, REST]
+	]),
+	talk: cycle(TALK, 3.6, 'smooth', [0, 0.2, 0.4, 0.62, 0.82]),
+	binoculars: gesture([
+		[0, REST],
+		[0.45, GLASSES(0)],
+		[1.3, GLASSES(30)],
+		[2.4, GLASSES(-30)],
+		[3, GLASSES(0)],
+		[3.6, REST]
+	]),
+	pet: gesture([
+		[0, REST],
+		[0.45, CROUCH],
+		[2.1, CROUCH],
+		[2.6, REST]
 	])
 };
 

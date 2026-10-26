@@ -44,6 +44,9 @@ const JUMP_IMPULSE = JUMP_SPEED * 0.25;
 /** World units/s. */
 const JUMP_MIN_SPEED = 1;
 
+/** Ground under the feet, for the contextual locomotion layer (avatar-animator.ts). */
+export type Surface = 'ground' | 'narrow' | 'water';
+
 /** What the engine's character reports each update. */
 export interface MotionInput {
 	/** Horizontal speed actually covered after collision, world units/s (Character.planarSpeed). */
@@ -60,6 +63,16 @@ export interface MotionInput {
 	climbing: boolean;
 	swimming: boolean;
 	sitting: boolean;
+	/**
+	 * Optional context; the state machine ignores it, the animator's layers read it.
+	 * 'narrow': river stones, the bridge, a log (arms out, short steps, a wobble);
+	 * 'water': wading below the knee (high knees, a slower cycle). Default 'ground'.
+	 */
+	surface?: Surface;
+	/** Ground slope along the facing direction, radians, uphill positive. Default 0. */
+	slope?: number;
+	/** Distance (u) to a drop in the move direction, or the facing one when still; Infinity when none. */
+	edgeAhead?: number;
 }
 
 export interface StateMachineOptions {
@@ -68,8 +81,6 @@ export interface StateMachineOptions {
 	/** Airborne time without a jump before fall starts: the coyote window still reads as grounded. */
 	fallDelay?: number;
 }
-
-const finite = (value: number) => (Number.isFinite(value) ? value : 0);
 
 export class AvatarStateMachine {
 	state: AvatarState = 'idle';
@@ -158,8 +169,8 @@ export class AvatarStateMachine {
 	update(rawDt: number, input: MotionInput) {
 		const dt = rawDt > 0 ? Math.min(rawDt, MAX_DT) : 0;
 		const grounded = input.grounded;
-		const verticalSpeed = finite(input.verticalSpeed);
-		const speed = Math.max(0, finite(input.speed)) / this.#stud;
+		const verticalSpeed = Number.isFinite(input.verticalSpeed) ? input.verticalSpeed : 0;
+		const speed = Math.max(0, Number.isFinite(input.speed) ? input.speed : 0) / this.#stud;
 		const lastVerticalSpeed = this.#lastVerticalSpeed;
 		this.studSpeed = speed;
 
@@ -173,7 +184,7 @@ export class AvatarStateMachine {
 		this.#wasGrounded = grounded;
 		this.#lastVerticalSpeed = verticalSpeed;
 		this.#airTime = grounded ? 0 : this.#airTime + dt;
-		const airTime = Math.max(finite(input.airTime), this.#airTime);
+		const airTime = Math.max(Number.isFinite(input.airTime) ? input.airTime : 0, this.#airTime);
 
 		// Animate's stepAnimate counts the jump hold down every frame.
 		if (this.jumped) this.#jumpTimer = ANIMATE.jumpDuration;
@@ -182,7 +193,7 @@ export class AvatarStateMachine {
 
 		const moving = speed > ANIMATE.speedThreshold;
 		const still = grounded && !moving && !input.sitting && !input.climbing && !input.swimming;
-		const steering = finite(input.intent) > INTENT_DEADZONE;
+		const steering = (Number.isFinite(input.intent) ? input.intent : 0) > INTENT_DEADZONE;
 		if (this.#pendingEmote !== null) {
 			if (still && !steering) {
 				this.emote = this.#pendingEmote;
@@ -196,7 +207,8 @@ export class AvatarStateMachine {
 		if (this.emote !== null) {
 			this.emoteTime += dt;
 			if (this.#emoteActive) {
-				const over = this.emoteTime - EMOTES[this.emote].period;
+				// A looping gesture (talk) plays until stopEmote, a move or the stick.
+				const over = EMOTES[this.emote].loop ? -1 : this.emoteTime - EMOTES[this.emote].period;
 				if (over >= 0) emoteOver = Math.min(dt, over);
 				if (over >= 0 || !still || steering) this.#emoteActive = false;
 			}
