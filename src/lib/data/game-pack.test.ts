@@ -185,6 +185,30 @@ describe('optional independent packs', () => {
 		});
 		expect(request).not.toHaveBeenCalled();
 	});
+	it('tells a saved pack apart from a newer published one, reading only latest.json', async () => {
+		const storage = memoryCaches(),
+			a = await pack('A'),
+			b = await pack('B');
+		b.files[0].gzipBytes = 2048;
+		await new GamePacks({ root, storage, fetch: vi.fn(async () => new Response('A')) }).download(a);
+		const requested: string[] = [];
+		const serve = (latest: GameManifest) =>
+			vi.fn(async (url: string | URL | Request) => {
+				requested.push(String(url));
+				return Response.json(latest);
+			});
+		expect(await new GamePacks({ root, storage, fetch: serve(a) }).newer(a)).toBeNull();
+		expect(await new GamePacks({ root, storage, fetch: serve(b) }).newer(a)).toEqual({
+			manifest: b,
+			bytes: 2048
+		});
+		expect(requested).toEqual([
+			new URL('game-packs/latest.json', root).href,
+			new URL('game-packs/latest.json', root).href
+		]);
+		// Checking never replaces the saved pack.
+		expect(await new GamePacks({ root, storage }).current()).toEqual(a);
+	});
 	it('does not publish an interrupted streaming download', async () => {
 		const storage = memoryCaches(),
 			manifest = await pack('ABC'),

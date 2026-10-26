@@ -130,6 +130,23 @@ export class GamePacks {
 		const bytes = await this.#read(new URL('game-packs/latest.json', this.root).href, signal, 512 * 1024);
 		return decodeGameManifest(JSON.parse(new TextDecoder().decode(bytes)));
 	}
+	/**
+	 * The published pack when it differs from `saved`, with its transfer size for this device's codec
+	 * (every file is fetched again under the new pack's URLs); null when `saved` is already the latest.
+	 * Reads only latest.json: nothing is downloaded until the player asks.
+	 */
+	async newer(
+		saved: GameManifest,
+		signal?: AbortSignal
+	): Promise<{ manifest: GameManifest; bytes: number } | null> {
+		const latest = await this.latest(signal);
+		if (latest.packId === saved.packId) return null;
+		const bytes = requiredFiles(latest, this.audioCodec).reduce(
+			(sum, file) => sum + (file.gzipBytes ?? file.bytes),
+			0
+		);
+		return { manifest: latest, bytes };
+	}
 	async download(input: GameManifest, options: DownloadOptions = {}): Promise<GameManifest> {
 		const manifest = decodeGameManifest(input);
 		const download = () => this.#download(manifest, options);
