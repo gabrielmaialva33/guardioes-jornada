@@ -657,6 +657,19 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			restored() {
 				if (failed || disposed) return;
 				lost = false;
+				// Every program is gone with the old context: compile the thumbnails' variant again, off the frame.
+				if (thumbShaders) {
+					thumbShaders = false;
+					compile(target, thumbCamera).then(
+						() => {
+							thumbShaders = true;
+							wake();
+						},
+						() => {
+							thumbShaders = true;
+						}
+					);
+				}
 				queue.reset();
 				if (!thumbFailed) queue.request(lastRequest.map((request) => request.key));
 				dirty = true;
