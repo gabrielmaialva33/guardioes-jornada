@@ -36,7 +36,8 @@ export function createMapEnvironment(
 	const tracker = new MapCheckpoints(world, start, checkpoints, level?.killY ?? -20, level?.pool, (c) =>
 		save.setCheckpoint(mapKey, c.id)
 	);
-	const saved = save.checkpoint(mapKey);
+	const stored = save.checkpoint(mapKey);
+	const saved = level && stored === 'mirante' ? 'mirante-topo' : stored;
 	const checkpoint = [start, ...checkpoints].find((c) => c.id === saved) ?? start;
 	tracker.current = checkpoint;
 	const targets =
