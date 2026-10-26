@@ -38,9 +38,10 @@ export default defineConfig({
 		assetsInlineLimit: 0,
 		cssCodeSplit: false,
 		rolldownOptions: {
-			input: { entry: fileURLToPath(new URL('./src/main.ts', import.meta.url)) },
+			// The entry is the small loader (loading screen); the game is a chunk it imports (P11).
+			input: { entry: fileURLToPath(new URL('./src/ui/loading/entry.ts', import.meta.url)) },
 			preserveEntrySignatures: 'strict',
-			output: { format: 'es', entryFileNames: 'entry.js', codeSplitting: false }
+			output: { format: 'es', entryFileNames: 'entry.js', chunkFileNames: 'chunks/[name]-[hash].js' }
 		}
 	}
 });
