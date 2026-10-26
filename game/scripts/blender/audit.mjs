@@ -8,6 +8,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -269,6 +270,7 @@ function main() {
 		let totalOutOfBounds = 0;
 		let totalBudgetViolations = 0;
 		let totalTextureBytesVram = 0;
+		const seenTextureHashes = new Set();
 
 		for (const mf of modelFiles) {
 			const packedPath = path.join(MODELS_DIR, mf);
@@ -276,12 +278,16 @@ function main() {
 			const unpackedPath = unpackIfMeshopt(packedPath, workDir);
 			const { json, bin } = readGlbRaw(unpackedPath);
 
-			// Decode embedded images
+			// Decode embedded images (deduplicating shared atlases by RGBA content hash)
 			const decodedImages = (json.images || []).map((img, idx) => {
 				const bv = json.bufferViews[img.bufferView];
 				const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
 				const dec = decodeImageBuffer(bytes, workDir, `${mf}-${idx}`);
-				totalTextureBytesVram += dec.width * dec.height * 4;
+				const h = crypto.createHash('sha256').update(dec.rgba).digest('hex');
+				if (!seenTextureHashes.has(h)) {
+					seenTextureHashes.add(h);
+					totalTextureBytesVram += dec.width * dec.height * 4;
+				}
 				return dec;
 			});
 
@@ -416,7 +422,11 @@ function main() {
 			const bytes = fs.readFileSync(p);
 			const dec = decodeImageBuffer(bytes, workDir, sf);
 			const vramBytes = dec.width * dec.height * 4;
-			totalTextureBytesVram += vramBytes;
+			const h = crypto.createHash('sha256').update(dec.rgba).digest('hex');
+			if (!seenTextureHashes.has(h)) {
+				seenTextureHashes.add(h);
+				totalTextureBytesVram += vramBytes;
+			}
 			const uniq = new Map();
 			let minL = 1;
 			let maxL = 0;
