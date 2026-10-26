@@ -33,6 +33,23 @@ function canvas(w: number, h: number) {
 	c.height = h;
 	return c;
 }
+/** Canvas affine UV projection, preserving every alpha-MASK hole instead of painting a solid card. */
+export function triangleTransform(
+	uv: readonly number[],
+	p: readonly number[]
+): [number, number, number, number, number, number] | null {
+	const [u0, v0, u1, v1, u2, v2] = uv,
+		d = u0 * (v1 - v2) + u1 * (v2 - v0) + u2 * (v0 - v1);
+	if (Math.abs(d) < 1e-10) return null;
+	const project = (a: number, b: number, c: number) => [
+		(a * (v1 - v2) + b * (v2 - v0) + c * (v0 - v1)) / d,
+		(a * (u2 - u1) + b * (u0 - u2) + c * (u1 - u0)) / d,
+		(a * (u1 * v2 - u2 * v1) + b * (u2 * v0 - u0 * v2) + c * (u0 * v1 - u1 * v0)) / d
+	];
+	const x = project(p[0], p[2], p[4]),
+		y = project(p[1], p[3], p[5]);
+	return [x[0], y[0], x[1], y[1], x[2], y[2]];
+}
 /** Orthographic, painter-sorted triangles of the real GLBs; no extra WebGL context or live previews. */
 export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 	const atlas = canvas(COLS * TILE_W, Math.ceil(prototypes.length / COLS) * TILE_H),
@@ -52,7 +69,14 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 			x0 + 2 + ((v.x - p.bounds.min.x) / w) * (TILE_W - 4),
 			y0 + TILE_H - 2 - ((v.y - p.bounds.min.y) / h) * (TILE_H - 4)
 		];
-		const triangles: { p: number[]; z: number; color: string }[] = [];
+		const triangles: {
+			p: number[];
+			z: number;
+			color: string;
+			image?: HTMLCanvasElement;
+			uv?: number[];
+			shade: number;
+		}[] = [];
 		p.model.updateWorldMatrix(true, true);
 		p.model.traverse((node) => {
 			if (!(node instanceof Mesh)) return;
@@ -62,7 +86,7 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 				uv = g.getAttribute('uv'),
 				index = g.index;
 			const materials = Array.isArray(node.material) ? node.material : [node.material];
-			const palettes = new Map<unknown, { data: Uint8ClampedArray; w: number; h: number }>();
+			const palettes = new Map<unknown, { image: HTMLCanvasElement; w: number; h: number }>();
 			for (const material of materials) {
 				const map = 'map' in material ? material.map : null;
 				if (!map || typeof map !== 'object' || !('image' in map)) continue;
@@ -79,11 +103,10 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 					ic = imageCanvas.getContext('2d');
 				if (!ic) continue;
 				ic.drawImage(image, 0, 0);
-				palettes.set(material, {
-					data: ic.getImageData(0, 0, image.width, image.height).data,
-					w: image.width,
-					h: image.height
-				});
+				const pixels = ic.getImageData(0, 0, image.width, image.height);
+				for (let k = 3; k < pixels.data.length; k += 4) pixels.data[k] = pixels.data[k] >= 128 ? 255 : 0;
+				ic.putImageData(pixels, 0, 0);
+				palettes.set(material, { image: imageCanvas, w: image.width, h: image.height });
 			}
 			const count = index ? index.count : pos.count;
 			for (let i = 0; i < count; i += 3) {
@@ -108,26 +131,24 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 					color.b *= point.z;
 				}
 				const palette = palettes.get(material);
-				if (palette && uv) {
-					const u = (uv.getX(ia) + uv.getX(ib) + uv.getX(ic)) / 3,
-						v = (uv.getY(ia) + uv.getY(ib) + uv.getY(ic)) / 3;
-					const k =
-						(Math.max(0, Math.min(palette.h - 1, Math.floor(v * palette.h))) * palette.w +
-							Math.max(0, Math.min(palette.w - 1, Math.floor(u * palette.w)))) *
-						4;
-					if (palette.data[k + 3] < 128) continue;
-					const texel = new Color().setRGB(
-						palette.data[k] / 255,
-						palette.data[k + 1] / 255,
-						palette.data[k + 2] / 255,
-						SRGBColorSpace
-					);
-					color.multiply(texel);
-				}
+
 				triangles.push({
 					p: [...project(a), ...project(b), ...project(c)],
 					z: (a.z + b.z + c.z) / 3,
-					color: color.getStyle()
+					color: color.getStyle(),
+					shade: (color.r + color.g + color.b) / 3,
+					image: palette?.image,
+					uv:
+						palette && uv
+							? [
+									uv.getX(ia) * palette.w,
+									uv.getY(ia) * palette.h,
+									uv.getX(ib) * palette.w,
+									uv.getY(ib) * palette.h,
+									uv.getX(ic) * palette.w,
+									uv.getY(ic) * palette.h
+								]
+							: undefined
 				});
 			}
 		});
@@ -143,7 +164,17 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 			ctx.lineTo(t.p[2], t.p[3]);
 			ctx.lineTo(t.p[4], t.p[5]);
 			ctx.closePath();
-			ctx.fill();
+			if (t.image && t.uv) {
+				const matrix = triangleTransform(t.uv, t.p);
+				if (matrix) {
+					ctx.save();
+					ctx.clip();
+					ctx.filter = `brightness(${t.shade})`;
+					ctx.transform(...matrix);
+					ctx.drawImage(t.image, 0, 0);
+					ctx.restore();
+				}
+			} else ctx.fill();
 		}
 		ctx.restore();
 	});

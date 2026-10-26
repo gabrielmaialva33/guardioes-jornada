@@ -83,7 +83,7 @@ export function createMapEnvironment(
 							this.pools.dispose();
 						}
 					})
-				: loadWorldPlacements(grid, quality, renderWorld, signal, level?.trails),
+				: loadWorldPlacements(grid, quality, renderWorld, signal, level?.trails, level),
 		get target() {
 			return (
 				story?.target(story.position) ?? targets[targetIndex] ?? { ...world.base.spawn, name: 'Volte à base' }
