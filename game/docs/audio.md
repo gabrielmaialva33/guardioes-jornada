@@ -109,6 +109,8 @@ The top bar has a **Som** button (mutes master, `aria-pressed`, "Ligar o som" / 
 
 ## 11. Study mode audio (DEV only, P15)
 
+The owner has authorized direct reuse of selected recordings (`PARK.md` §10). This section describes the current DEV implementation and its isolation checks; it does not prohibit integrating those recordings into the game audio pipeline. Production pack loading remains to be implemented.
+
 `src/study/audio.ts` plays the local Green Hell extraction's ambience and animal calls over or instead of our mix, to compare by ear. It is reached only through `if (import.meta.env.DEV) void import('../study/audio.ts')` in `Soundscape.startNature`, then `studyEnabled()` (`study/gate.ts`): on by default on the dev server, off with `?estudo=off` and in automated runs (`?golden`, `?e2e`, software-test builds, WebDriver, Vitest), forced with `?estudo=greenhell`. URL: `&hora=dia|entardecer|noite` (no dusk material exists, so dusk blends day and night), `&tempo=chuva|chuva-forte`, `&som=ambos` (theirs over ours) or `&som=nosso` (ours only); by default theirs plays and our forest bed, river and waterfall stop to free voices. Files come at runtime from the dev middleware's catalog; the module holds curation only (group ids, clip-name variants, intervals, ranges, gains), never a path. At most 4 study one-shots at once, inside the shared 16 voices.
 
 Leak check after any change near it (must print 0 three times):

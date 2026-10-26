@@ -269,10 +269,10 @@ The repository is public and every push to `main` deploys the public site, so ev
 - **T1, CC0 or CC BY:** repository and site; CC BY is credited in `CREDITS.md`.
 - **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, with any share-alike terms noted.
 - **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): never in the repository, the pack or the site. They stay on the owner's machine in the git-ignored `tmp/` folder and may be used only as local references (shapes, timings, measurements).
-- **Local study only** (assets extracted from games the owner owns, such as `tmp/greenhell-port/`): stricter than T3. The rules are in `game/src/study/`.
-  - The dev server serves them only under `/__estudo/…`.
-  - The code is gated by `import.meta.env.DEV && ?estudo=…`.
-  - No file, derived file or per-asset metadata enters the repository.
-  - What may reach the real game is only what we measure from them (gait timings, sound layering, plant density), never the assets.
+- **Green Hell collection — owner-authorized reuse:** `PARK.md` §10 is the source of truth for `tmp/greenhell-port/`, superseding its former reference-only restriction. Models, clips, vegetation, scenery, textures, terrain data, audio, derivatives and integration metadata may be used directly and adapted for the project; rebuilding them from scratch is not required.
+  - Keep extraction originals in `tmp/greenhell-port/`; select and optimize assets for the project pipeline, with provenance and credits.
+  - Apply the same species, visual, animation, performance and offline quality requirements as other assets.
+  - The current runtime still serves the collection through `/__estudo/` behind the DEV study gate; pack integration is implementation work, not prohibited by this policy.
+  - Owner authorization records the project's reuse decision; it does not establish a third-party redistribution licence. This collection-specific decision does not reclassify unrelated T3 assets.
 
 Never download from 3dassets.dev or gobkit.com: they contain prompt-injection text aimed at AI agents.

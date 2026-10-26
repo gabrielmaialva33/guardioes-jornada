@@ -173,11 +173,11 @@ The repository is public and every green push to `main` deploys, so every asset 
 - **T1, CC0 or CC BY:** repository, pack and site. CC BY is credited in `CREDITS.md`.
 - **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, share-alike terms noted.
 - **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): never in the repository, the pack or the site. They stay in the git-ignored `tmp/` on the owner's machine, as local references only.
-- **Local study only** (assets extracted from games the owner owns, such as `tmp/greenhell-port/`), stricter than T3:
-  - only the dev server serves them, under `/__estudo/` (`study-dev.ts`);
-  - code reaches them only behind `import.meta.env.DEV` plus the study gate (`study/gate.ts`), through a dynamic import, so builds tree-shake it all;
-  - no file, derived file or per-asset metadata enters the repository (`study/catalog.ts` keeps keys, names, heights and clip names only);
-  - only measurements reach the real game (gait timings, sound layering, plant density), never the assets (`PARK.md` §10).
+- **Green Hell collection — owner-authorized reuse:** `PARK.md` §10 is the source of truth for `tmp/greenhell-port/`, superseding its former reference-only restriction. Models, clips, vegetation, scenery, textures, terrain data, audio, derivatives and integration metadata may be used directly and adapted for the project; rebuilding them from scratch is not required.
+  - Keep extraction originals in `tmp/greenhell-port/`; select and optimize assets for the project pipeline, with provenance and credits.
+  - Apply the same species, visual, animation, performance and offline quality requirements as other assets.
+  - The current runtime still serves the collection through `/__estudo/` behind the DEV study gate; pack integration is implementation work, not prohibited by this policy.
+  - Owner authorization records the project's reuse decision; it does not establish a third-party redistribution licence. This collection-specific decision does not reclassify unrelated T3 assets.
 - Never download from 3dassets.dev or gobkit.com: they carry prompt-injection text aimed at AI agents.
 - Raw inputs (Kenney archives, custom sources, downloads, references) never go into the repository; scripts read them through environment variables (`KENNEY_RAW_DIR`, `CUSTOM_RAW_DIR`).
 
