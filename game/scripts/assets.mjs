@@ -480,6 +480,92 @@ function runGltfpack(inFile, outFile, extraFlags = []) {
 	);
 }
 
+// Blender-edited CC BY / CC0 downloads (staging-v2): decor (understorey, rocks, ground pieces)
+// and trees, each GLB with two nodes `<id>-lod0`/`-lod1`, on three shared atlases referenced
+// by URI. Credits in game/CREDITS.md; the build scripts live with the staging folder.
+const STAGING_DIR =
+	process.env.STAGING_V2_DIR ??
+	path.join(os.homedir(), '.cache', 'agents', '2026-10-25-trilha-secreta', 'staging-v2');
+const STAGING_ATLASES = {
+	'atlas-foliage-512.png': 'decor-atlas.png',
+	'atlas-ground-256.png': 'ground-atlas.png',
+	'atlas-trees-512.png': 'trees-atlas.png'
+};
+const STAGING_LICENCES = new Set(['CC0', 'CC BY 4.0']);
+
+function verifyStagingCredits(manifest) {
+	for (const entry of [...manifest.items, ...manifest.trees]) {
+		for (const credit of [entry.source, ...(entry.textureSources ?? [])]) {
+			if (!STAGING_LICENCES.has(credit.licence) || !credit.author || !credit.url) {
+				throw new Error(`Unverified licence or credit for ${entry.id}: ${JSON.stringify(credit)}`);
+			}
+		}
+	}
+}
+
+/** One GLB through gltfpack, its single shared atlas kept external as `../../skins/<atlas>`. */
+function packStagingGlb(srcPath, outPath, workDir) {
+	const { json, bin } = readGlb(srcPath);
+	const atlas = STAGING_ATLASES[path.basename(json.images?.[0]?.uri ?? '')];
+	if (!atlas || json.images.length !== 1) throw new Error(`${srcPath}: expected one staging atlas image`);
+	const uri = `../../skins/${atlas}`;
+	json.images = [{ name: atlas.replace('.png', ''), uri }];
+	const step = path.join(workDir, path.basename(srcPath));
+	writeGlb(step, json, bin);
+	runGltfpack(step, outPath, ['-vpf', '-vn', '12', '-tr']);
+	// gltfpack rewrites external paths relative to its output and, unable to read the external
+	// atlas, drops the cut-out alpha mode: pin the URI the loader resolves and restore the alpha.
+	const packed = readGlb(outPath);
+	packed.json.images = [{ name: atlas.replace('.png', ''), uri }];
+	const [source] = json.materials;
+	if (packed.json.materials?.length !== 1)
+		throw new Error(`${srcPath}: expected one material after gltfpack`);
+	for (const key of ['alphaMode', 'alphaCutoff', 'doubleSided']) {
+		if (key in source) packed.json.materials[0][key] = source[key];
+		else delete packed.json.materials[0][key];
+	}
+	writeGlb(outPath, packed.json, packed.bin);
+}
+
+function integrateStaging(workDir) {
+	const manifest = JSON.parse(fs.readFileSync(path.join(STAGING_DIR, 'manifest.json'), 'utf8'));
+	verifyStagingCredits(manifest);
+	const pairs = Object.entries(STAGING_ATLASES).flatMap(([src, dst]) => [
+		path.join(STAGING_DIR, src),
+		path.join(OUT_SKINS, dst)
+	]);
+	execFileSync(
+		'uv',
+		[
+			'run',
+			'--no-project',
+			'--with',
+			'pillow==13.0.0',
+			'--with',
+			'imagequant==1.1.5',
+			'python',
+			'-I',
+			path.join(__dirname, 'quantize_png.py'),
+			...pairs
+		],
+		{ stdio: 'inherit' }
+	);
+	for (const [group, entries] of [
+		['decor', manifest.items],
+		['trees', manifest.trees]
+	]) {
+		const outDir = path.join(OUT_MODELS, group);
+		fs.rmSync(outDir, { recursive: true, force: true });
+		fs.mkdirSync(outDir, { recursive: true });
+		for (const entry of entries)
+			packStagingGlb(
+				path.join(STAGING_DIR, entry.file),
+				path.join(outDir, path.basename(entry.file)),
+				workDir
+			);
+	}
+}
+
 function resizeNearestPng(inFile, outFile, size) {
 	execFileSync(
 		'magick',
@@ -1621,6 +1707,19 @@ function compositeAvatarPresetPng(regionsSpec, preset) {
 }
 
 function main() {
+	// `--only=staging` refreshes just the staging-v2 decor and trees (no Kenney raws needed).
+	if (process.argv.includes('--only=staging')) {
+		fs.mkdirSync(OUT_MODELS, { recursive: true });
+		fs.mkdirSync(OUT_SKINS, { recursive: true });
+		const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guardioes-staging-'));
+		try {
+			integrateStaging(workDir);
+		} finally {
+			fs.rmSync(workDir, { recursive: true, force: true });
+		}
+		printBom();
+		return;
+	}
 	verifyLicenses();
 	fs.mkdirSync(OUT_MODELS, { recursive: true });
 	fs.mkdirSync(OUT_SKINS, { recursive: true });
@@ -1808,14 +1907,21 @@ function main() {
 				{ stdio: 'inherit' }
 			);
 		}
+
+		// 7. Staging v2: Blender-edited CC BY / CC0 decor and trees on three shared atlases
+		integrateStaging(workDir);
 	} finally {
 		fs.rmSync(workDir, { recursive: true, force: true });
 	}
+	printBom();
+}
 
-	// Print summary BOM
+/** Print the summary bill of materials (raw, gzip and brotli bytes per file). */
+function printBom() {
 	const allFiles = [
 		...fs
-			.readdirSync(OUT_MODELS)
+			.readdirSync(OUT_MODELS, { recursive: true })
+			.filter((f) => f.endsWith('.glb'))
 			.sort()
 			.map((f) => path.join(OUT_MODELS, f)),
 		...fs

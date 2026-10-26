@@ -1,6 +1,10 @@
 # Credits & Bill of Materials — Secret Trail 3D Assets
 
-All 3D models, character skins, and color palettes in `src/assets/` are derived exclusively from **Kenney** asset packs released under the **Creative Commons Zero (CC0 1.0 Universal — Public Domain)** license.
+The 3D models, character skins, and color palettes in `src/assets/` come from three places:
+
+- **Kenney packs** (CC0): the avatar, pets, kits, skins and palettes in the tables right below.
+- **Repository scripts:** the `models/custom-*.glb` are modelled by the repository's own Blender scripts (`scripts/blender/models/`).
+- **Edited downloads:** `models/decor/`, `models/trees/` and their atlases are edited in Blender from CC0 and CC BY 4.0 downloads, credited in [Decor and trees](#decor-and-trees-staging-v2) below.
 
 - **Author:** Kenney Vleugels (https://www.kenney.nl)
 - **License:** CC0 1.0 Universal (http://creativecommons.org/publicdomain/zero/1.0/)
@@ -60,6 +64,65 @@ All 3D models, character skins, and color palettes in `src/assets/` are derived 
 | `src/assets/skins/skin-r.webp`                      |         — |         — |       1,842 B |       1,865 B |          1,846 B | Optional skin R (`256×256` lossless WebP)                                                  |
 | **Subtotal: Models + All 8 Palettes + `skin-a`**    | **7,550** | **9,539** | **182,893 B** |  **89,832 B** |     **82,049 B** | Initial pack payload (without the 17 on-demand skins)                                      |
 | **TOTAL (All 33 Files)**                            | **7,550** | **9,539** | **220,777 B** | **128,058 B** |    **119,783 B** | Complete asset directory (`215.6 KiB` raw / `117.0 KiB` br)                                |
+
+---
+
+## Decor and trees (staging v2)
+
+These files were edited in Blender in October 2026 from the downloads below:
+- `src/assets/models/decor/*.glb`: understorey, rocks, shore and waterfall;
+- `src/assets/models/trees/tree-*.glb`: the seven Atlantic Forest tree species;
+- the atlases `src/assets/skins/decor-atlas.png`, `trees-atlas.png` and `ground-atlas.png`.
+
+Licences were checked on 2026-10-25:
+- **Sketchfab:** each download's embedded `asset.extras` (title, author, `CC-BY-4.0`) and its model page;
+- **OpenGameArt:** the licence field on the page;
+- **Kenney:** the pack's `License.txt`.
+
+The original downloads and the build scripts are kept outside the repository; `scripts/assets.mjs --only=staging` packs them (gltfpack meshopt, atlases quantized to 256 colours).
+
+**Modifications (all models):**
+- re-meshed to the game's budgets (decimated, leaf cards resampled or flattened) with near and far LODs, and scaled to ART.md §3;
+- UVs moved into a shared atlas, normals rebuilt, and a vertex-colour gradient added;
+- textures downsampled, recoloured to the palette ramps of `src/style/palette.ts` and packed into the atlases.
+
+The trees are also reshaped into their species:
+- **ipê-amarelo and pau-brasil:** from the Ginkgo trees; the ipê's crown is widened and recoloured yellow, and the pau-brasil is mirrored with a red-brown bark;
+- **jequitibá-rosa:** stretched into an emergent tree with an umbrella crown;
+- **juçara:** slimmed, with purple fruit bunches added;
+- **mangue-vermelho:** the trunk is shortened under a fuller crown;
+- **jerivá:** the untextured queen palm is textured with the PSX pack's frond and bark.
+
+### CC BY 4.0 attributions (required)
+
+All under **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/), modified as described above.
+
+| Files                                                                                                         | Attribution                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `models/trees/tree-ipe-amarelo.glb`, `skins/trees-atlas.png`                                                  | "Ginkgo Tree Autumn/Fall" by **PuzzledPapaya**, https://sketchfab.com/3d-models/b3313ffda86a46a8b16a83de1bdb155a                          |
+| `models/trees/tree-pau-brasil.glb`, `tree-ipe-amarelo.glb` (bark), `skins/trees-atlas.png`                    | "Ginkgo Tree Spring/Summer" by **PuzzledPapaya**, https://sketchfab.com/3d-models/2aa9348064c243f8b1f67ba73707c45e                        |
+| `models/trees/tree-ipe-rosa.glb`, `skins/trees-atlas.png`                                                     | "Stylized Tree" by **Voyage** (vrsns_voyage), https://sketchfab.com/3d-models/69e0951f356c4a21ac60cd17f8462ad5                            |
+| `models/trees/tree-jequitiba-rosa.glb`, `skins/trees-atlas.png`                                               | "Stylized tree pack" by **W_illness**, https://sketchfab.com/3d-models/a1f40f1a9e6043a19881b00d318b6ed8                                   |
+| `models/trees/tree-jeriva.glb`                                                                                | "Queen Palm Tree" by **neutralize**, https://sketchfab.com/3d-models/2128328672f6410f9a37a4e0e08c9f8f                                     |
+| `models/trees/tree-palmeira-jucara.glb`, `tree-jeriva.glb` (textures), `skins/trees-atlas.png`                | "PSX Tropical Pack V1" by **PROJEKTSANSSTUDIOS**, https://sketchfab.com/3d-models/831f5ce303354977a6acb695571ac01b                        |
+| `models/trees/tree-mangue-vermelho.glb`, `skins/trees-atlas.png`                                              | "Tall Mangrove Tree" by **Matt Bodner** (liphttam1), https://sketchfab.com/3d-models/b722ee2895e84fd3b02a467cd1ba1cbe                     |
+| `models/decor/understorey-bush.glb`, `skins/decor-atlas.png`                                                  | "Stylized Bush" by **Daniel** (danielpetrov), https://sketchfab.com/3d-models/9d9ce79d3ae040619e96d5b22c7de1a6                            |
+| `models/decor/understorey-taioba.glb`, `skins/decor-atlas.png`                                                | "Elephant Ear Bush" by **ehhhaaa**, https://sketchfab.com/3d-models/75882b72d1374270aeac76c96db2aa4e                                      |
+| `models/decor/understorey-heliconia.glb`, `skins/decor-atlas.png`                                             | "Stylized broadleaf plant" by **€r!c** (ericdavis), https://sketchfab.com/3d-models/3bf353171e7e48b4a50861f908f05be7                      |
+| `models/decor/understorey-flowers-{ground,tall}-{a,b}.glb`, `skins/decor-atlas.png`                           | "Stylized Flowers and Dandelions" by **Nadia du Preez** (Octoprobz), https://sketchfab.com/3d-models/bffdeb9b066c43ac9456d9899e37d509     |
+| `models/decor/understorey-{fern,monstera}-{a,b}.glb`, `understorey-palm-a.glb`, `skins/decor-atlas.png`       | "Tropical Plants Pack M02P" by **MozzarellaARC**, https://sketchfab.com/3d-models/2f093afb792742438f0f7ba7eaab90f0                        |
+| `models/decor/rock-polyone-{01..11}.glb`, `ground-shore-rocks-{a,b,c}.glb` (texture), `skins/decor-atlas.png` | "Free Pack - Rocks Stylized" by **PolyOne Studio** (polyone), https://sketchfab.com/3d-models/7c60b4d1b8ab4187965f30c5e0212fc0            |
+| `models/decor/rock-deadzik-{1..5}.glb`, `skins/decor-atlas.png`                                               | "Stylized Rocks Formation Asset Pack" by **Gebus** (deadzik), https://sketchfab.com/3d-models/726e8563eb634c529410f4e00857bbb3            |
+| `models/decor/rock-cliff-{a,b}.glb`, `skins/decor-atlas.png`                                                  | "Low poly Stylized Nature Pack" by **Satendra Saraswat** (satendra5286), https://sketchfab.com/3d-models/9c773e846c6e4448b26b2cdecb2b91bf |
+
+### CC0 sources (no attribution required, credited anyway)
+
+| Files                                                                                     | Source                                                                                                                               | Author      | Licence |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------- |
+| `models/decor/ground-waterfall.glb`, `skins/decor-atlas.png`                              | "Toon waterfall", https://opengameart.org/content/toon-waterfall                                                                     | doodlebuilt | CC0 1.0 |
+| `models/decor/ground-sand-{foliage,patch}.glb`, `ground-shore-rocks-{a,b,c}.glb`          | Kenney **Pirate Kit**, https://kenney.nl/assets/pirate-kit                                                                           | Kenney      | CC0 1.0 |
+| `skins/decor-atlas.png` (moss, grass), `skins/ground-atlas.png`, moss on the rocks        | "Ancient civ in the jungle (200 seamless textures)", https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures | DevEarley   | CC0 1.0 |
+| `skins/decor-atlas.png` (sand), `skins/ground-atlas.png` (rock), sand on the shore pieces | "Big pack of hand-painted tiling textures", https://opengameart.org/content/big-pack-of-hand-painted-tiling-textures                 | Drummyfish  | CC0 1.0 |
 
 ---
 
