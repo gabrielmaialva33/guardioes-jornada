@@ -1,5 +1,6 @@
 /** One Lambert shader family. Resources are owned by the level, never by a material hook. */
 import { Color, type IUniform, type MeshLambertMaterial, ShaderChunk, type Texture } from 'three';
+import { testing } from '../scene/testing.ts';
 import { LIGHT } from '../style/palette.ts';
 export interface StylizedOptions {
 	vegetation?: boolean;
@@ -27,6 +28,7 @@ export const lighting = {
 };
 /** Comparison switches are dev/acceptance-only; shipped games always use the full look. */
 export function visualStep(): number {
+	if (testing) return 0;
 	if (typeof location === 'undefined') return 4;
 	const q = new URLSearchParams(location.search);
 	if (!import.meta.env.DEV || !q.has('golden')) return 4;

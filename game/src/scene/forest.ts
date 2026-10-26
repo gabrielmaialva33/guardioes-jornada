@@ -15,6 +15,7 @@ import {
 } from '../render/index.ts';
 import { disposeModel, loadModel } from './avatar.ts';
 import { FOREST_KINDS, type ForestKind } from './forest-layout.ts';
+import { SharedModelTextures } from './shared-textures.ts';
 
 export async function loadForest(
 	grid: BlockGrid,
@@ -34,9 +35,11 @@ export async function loadForest(
 	};
 
 	try {
+		const textures = new SharedModelTextures();
 		const loads = await Promise.allSettled(
 			FOREST_KINDS.map(async (name) => {
 				const model = await loadModel(customFiles[name], signal);
+				textures.adopt(model);
 				model.traverse((node) => {
 					if (node instanceof Mesh)
 						for (const m of Array.isArray(node.material) ? node.material : [node.material])

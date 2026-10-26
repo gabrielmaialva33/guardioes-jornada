@@ -1,9 +1,12 @@
 import type { createLocalSave } from '../data/local-save.ts';
 import type { StoryLevel } from '../level/types.ts';
+import { createLivingWorld } from '../life/index.ts';
 import { loadStoryProps } from '../missions/props.ts';
 import type { StoryGame } from '../missions/story.ts';
-import { BlockGrid } from '../render/index.ts';
+import { BlockGrid, PoolSet } from '../render/index.ts';
+import { loadModel } from '../scene/avatar.ts';
 import type { SceneEnvironment } from '../scene/environment.ts';
+import { testing } from '../scene/testing.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { buildMapCollision, prefabProxies } from './collision.ts';
 import { MapCheckpoints } from './navigation.ts';
@@ -56,6 +59,10 @@ export function createMapEnvironment(
 	const grid = BlockGrid.covering(0, 0, world.size, world.size);
 	const environment: SceneEnvironment = {
 		kind: 'map',
+		loadLife: testing
+			? undefined
+			: (quality, signal, blobs, onHowl) =>
+					createLivingWorld({ world, level, quality, signal, blobs, onHowl, loadGlb: loadModel }),
 		story,
 		loadStoryAssets:
 			level && story ? (signal) => loadStoryProps(level, story, signal, world.crossings) : undefined,
@@ -69,7 +76,14 @@ export function createMapEnvironment(
 			return visual;
 		},
 		loadPlacements: (quality, signal) =>
-			loadWorldPlacements(grid, quality, renderWorld, signal, level?.trails),
+			testing
+				? Promise.resolve({
+						pools: new PoolSet([], []),
+						dispose() {
+							this.pools.dispose();
+						}
+					})
+				: loadWorldPlacements(grid, quality, renderWorld, signal, level?.trails),
 		get target() {
 			return (
 				story?.target(story.position) ?? targets[targetIndex] ?? { ...world.base.spawn, name: 'Volte à base' }

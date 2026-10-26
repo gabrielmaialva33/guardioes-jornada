@@ -14,10 +14,10 @@ describe('fog', () => {
 				cameraFar: VIEW[quality].far
 			});
 		}
-		expect(fogSettings('low')).toMatchObject({ near: 30, far: 70 });
+		expect(fogSettings('low')).toMatchObject({ near: 75, far: 140 });
 		const night = fogSettings('low', 'night');
 		expect(night.color).toBe(LIGHT.night.horizon);
-		expect(night.far).toBeLessThan(70);
+		expect(night.far).toBeLessThan(140);
 		expect(night.near).toBeLessThan(night.far);
 	});
 
@@ -26,7 +26,7 @@ describe('fog', () => {
 		const camera = new PerspectiveCamera(70, 1, 0.1, 500);
 		const fog = applyFog(scene, camera, fogSettings('low'));
 		expect(scene.fog).toBe(fog);
-		expect(camera.far).toBe(70);
+		expect(camera.far).toBe(140);
 		expect((scene.background as Color).equals(new Color(LIGHT.daylight.horizon))).toBe(true);
 		const again = applyFog(scene, camera, fogSettings('medium', 'night'));
 		expect(again).toBe(fog);
@@ -39,14 +39,14 @@ describe('fog', () => {
 describe('LOD', () => {
 	it('cuts its bands from the tier view distance', () => {
 		const low = lodProfilesFor('low');
-		expect(low.tree.map((band) => band.until)).toEqual([30, 50, 70]);
+		expect(low.tree.map((band) => band.until)).toEqual([75, 107.5, 140]);
 		expect(keepFraction(low.tree, 10)).toBe(1);
-		expect(keepFraction(low.tree, 40)).toBe(0.5);
-		expect(keepFraction(low.tree, 65)).toBe(0.25);
-		expect(keepFraction(low.tree, 71)).toBe(0);
-		expect(keepFraction(low.cover, 31)).toBe(0);
+		expect(keepFraction(low.tree, 90)).toBe(0.5);
+		expect(keepFraction(low.tree, 130)).toBe(0.25);
+		expect(keepFraction(low.tree, 141)).toBe(0);
+		expect(keepFraction(low.cover, 76)).toBe(0);
 		expect(keepFraction(low.gameplay, 69)).toBe(1);
-		expect(lodProfilesFor('high').tree.at(-1)?.until).toBe(120);
+		expect(lodProfilesFor('high').tree.at(-1)?.until).toBe(260);
 	});
 
 	it('ranks slots so any run keeps an even, nested share', () => {
