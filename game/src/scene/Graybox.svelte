@@ -39,6 +39,7 @@
 		type Quality
 	} from '../render/index.ts';
 	import { loadAvatar, type AvatarInstance } from './avatar.ts';
+	import { AvatarWiring } from './avatar-wiring.ts';
 
 	import { horizontalFov, verticalFov } from './projection.ts';
 	import type { GameDebug, HudState } from './types.ts';
@@ -121,6 +122,10 @@
 	const shadowRay = new Ray(new Vector3(), new Vector3(0, -1, 0));
 	const animator = new AvatarAnimator();
 	const animationInput = createAvatarInput();
+	const avatarWiring = new AvatarWiring(
+		animator,
+		untrack(() => environment.story)
+	);
 	let rig: RigBinding | undefined;
 	let avatarInstance: AvatarInstance | undefined;
 	let appearanceGeneration = 0;
@@ -131,6 +136,7 @@
 		await avatarInstance.appearance.apply(profile);
 		if (generation === appearanceGeneration) {
 			currentProfile = profile;
+			animator.hairStyle = profile.style === 'classic' ? (profile.hairStyle ?? 'curto') : null;
 			invalidate();
 		}
 	}
@@ -216,6 +222,17 @@
 			grounded: controller.frame.grounded,
 			checkpoint: controller.checkpoints?.current.id ?? 'start',
 			animation: animator.state,
+			avatarContext: {
+				surface: animationInput.surface ?? 'ground',
+				slope: animationInput.slope ?? 0,
+				edgeAhead: animationInput.edgeAhead ?? Infinity,
+				talking: animationInput.talking,
+				look: animationInput.lookTarget ? { ...animationInput.lookTarget } : null,
+				gesture: animator.states.emote,
+				lastGesture: avatarWiring.lastGesture,
+				hairPitch: animator.hair.pitch,
+				hairRoll: animator.hair.roll
+			},
 			avatarStyle: currentProfile?.style ?? avatarProfile.style,
 			avatarHair: currentProfile?.hairStyle ?? avatarProfile.hairStyle ?? 'curto',
 			avatarSkin: currentProfile?.kenneySkin ?? avatarProfile.kenneySkin,
@@ -236,6 +253,7 @@
 		};
 	};
 	onMount(() => {
+		if (environment.story) environment.story.onGesture = avatarWiring.enqueue;
 		const abort = new AbortController();
 		setQuality(quality);
 		const detach = attachInput(wrapper, input, {
@@ -304,6 +322,7 @@
 				avatarInstance = instance;
 				const model = instance.model;
 				currentProfile = avatarProfile;
+				animator.hairStyle = avatarProfile.style === 'classic' ? (avatarProfile.hairStyle ?? 'curto') : null;
 				rig = bindRig(model, AVATAR_LAYOUT, BLOCKY_RIG);
 				actor.add(model);
 				shadows.addCaster(actor, 'actor');
@@ -320,6 +339,7 @@
 						return;
 					}
 					life = value;
+					avatarWiring.setLife(value);
 					visual.add(value.object3d);
 					if (golden.enabled && golden.lifeScenario)
 						value.onStory({
@@ -373,6 +393,7 @@
 				}
 			});
 		return () => {
+			avatarWiring.dispose();
 			abort.abort();
 			detach();
 			resize.disconnect();
@@ -383,6 +404,24 @@
 			}
 		};
 	});
+	function applyAvatarPose(delta: number) {
+		if (rig) applyToRig(animator.update(delta, animationInput), rig);
+		const hair = avatarInstance?.hair;
+		if (hair)
+			for (const dangle of hair.dangles)
+				if (dangle.visible) dangle.rotation.set(animator.hair.pitch, 0, animator.hair.roll, 'YXZ');
+	}
+	function animateAvatar(delta: number, intent = 0) {
+		readCharacter(animationInput, controller.character, delta);
+		animationInput.yaw = controller.frame.yaw;
+		animationInput.intent = intent;
+		animationInput.reducedMotion = motion.matches;
+		animationInput.talking = environment.story?.dialogue?.speaker.includes('Iara') ?? false;
+		if (paused) animationInput.speed = 0;
+		environment.avatarGround?.update(animationInput, controller.character);
+		avatarWiring.update(animationInput, delta);
+		applyAvatarPose(delta);
+	}
 	function present(p: { x: number; y: number; z: number }) {
 		proxies.update?.(p.x, p.y, p.z, environment.target);
 		shadowRay.origin.set(p.x, p.y + 0.1, p.z);
@@ -453,6 +492,7 @@
 			if (paused) {
 				storyAssets?.update(delta);
 				updateLife(delta, controller.frame.grounded, false);
+				animateAvatar(delta);
 				return;
 			}
 			const frameInput = input.sample(delta);
@@ -471,14 +511,9 @@
 			forest?.canopies?.update(camera.position, canopyHead, delta, motion.matches);
 			actor.visible = frame.pose.avatarOpacity > 0.05;
 			updateLife(delta, frame.grounded, frame.jumped);
-			readCharacter(animationInput, controller.character, delta);
-			animationInput.jumped = frame.jumped;
-			animationInput.yaw = frame.yaw;
-			animationInput.intent = Math.hypot(frameInput.moveX, frameInput.moveY);
-			animationInput.reducedMotion = motion.matches;
 			if (frameInput.emotePressed)
 				notice = animator.playEmote('wave') ? 'Um aceno para a floresta.' : 'Pare um instante para acenar.';
-			if (rig) applyToRig(animator.update(delta, animationInput), rig);
+			animateAvatar(delta, Math.hypot(frameInput.moveX, frameInput.moveY));
 			if (
 				frame.speed > 0.01 ||
 				!frame.grounded ||

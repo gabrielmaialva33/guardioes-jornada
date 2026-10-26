@@ -23,6 +23,7 @@ export interface StoryAction {
 	point: Point;
 	disabled?: boolean;
 }
+export type StoryGesture = 'pickup' | 'pet' | 'binoculars' | 'cheer';
 export interface StoryOptions {
 	value?: unknown;
 	persist: (data: StorySave) => boolean;
@@ -96,6 +97,9 @@ export function decodeStorySave(level: StoryLevel, value: unknown): { data: Stor
 	};
 }
 export class StoryGame {
+	/** Transient renderer hooks; neither points nor gestures enter the per-device save. */
+	onGesture: ((gesture: StoryGesture, point: Point | null) => void) | null = null;
+	companion: Point | null = null;
 	readonly level: StoryLevel;
 	data: StorySave;
 	readonly readOnlySave: boolean;
@@ -199,6 +203,9 @@ export class StoryGame {
 		const iara = this.level.landmarks.find((l) => l.kind === 'npc-iara');
 		if (iara) offer('iara', 'Falar com Iara', iara, 3);
 		if (!this.data.started) return candidates[0] ?? null;
+		if (this.companion) offer('pet', 'Fazer carinho no mico', this.companion, 2);
+		if (this.#inside('mirante', feet) && Math.abs(feet.y - this.level.mirante.y) < 0.3)
+			offer('binoculars', 'Observar a reserva', this.level.mirante, 4);
 		for (const c of this.level.collectibles) {
 			if (c.kind === 'jucara-fruit' && !this.data.fruits.includes(c.id))
 				offer(c.id, 'Colher sementes de juçara', c, c.radius + 0.35);
@@ -263,6 +270,15 @@ export class StoryGame {
 			this.revision++;
 			return;
 		}
+		if (action.id === 'pet' || action.id === 'binoculars') {
+			this.onGesture?.(action.id, action.id === 'pet' ? action.point : null);
+			this.notice =
+				action.id === 'pet'
+					? 'Um carinho no seu companheiro de trilha.'
+					: 'Olhe quanta vida a reserva abriga.';
+			this.revision++;
+			return;
+		}
 		if (action.id === 'iara') {
 			this.dialogue = {
 				id: 'iara',
@@ -285,8 +301,9 @@ export class StoryGame {
 			this.revision++;
 			return;
 		}
+		const collectible = this.level.collectibles.find((c) => c.id === action.id);
 		this.change(() => {
-			const c = this.level.collectibles.find((c) => c.id === action.id);
+			const c = collectible;
 			const p = this.level.planting.find((p) => p.id === action.id);
 			if (c) {
 				if (c.kind === 'jucara-fruit') {
@@ -314,6 +331,7 @@ export class StoryGame {
 				this.notice = 'Armadilha sinalizada. Chame a fiscalização pelo rádio, sem tocar nela.';
 			}
 		});
+		if (collectible || action.id === 'nursery') this.onGesture?.('pickup', action.point);
 	}
 	choose(id: string, feet: Point) {
 		if (id === 'start' && this.dialogue?.id === 'iara' && this.#inside('iara', feet)) {
@@ -384,6 +402,7 @@ export class StoryGame {
 		)
 			this.change(() => {
 				this.data.summit = true;
+				this.onGesture?.('binoculars', null);
 				this.dialogue = { id: 'victory', speaker: 'Iara', lines: TEXT.closing, finished: true };
 			});
 	}
@@ -451,6 +470,7 @@ export class StoryGame {
 		mutate();
 		for (const m of this.level.missions)
 			if (this.completed(m.id) && !before.includes(m.id)) {
+				this.onGesture?.('cheer', null);
 				this.notice = `Missão concluída: ${m.name}!`;
 				if (m.id === 1)
 					this.dialogue = { id: 'corridor', speaker: 'Corredor do mico-leão-dourado', lines: TEXT.corridor };

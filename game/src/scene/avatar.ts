@@ -50,6 +50,7 @@ export async function loadModel(url: string, signal: AbortSignal): Promise<Group
 
 export interface AvatarInstance {
 	model: Group;
+	hair?: HairAccessories;
 	appearance: ReturnType<typeof createAvatarTexture>;
 	dispose(): void;
 }
@@ -102,6 +103,7 @@ export async function loadAvatar(signal: AbortSignal, profile: AvatarProfile): P
 			accessorySource = hairSource;
 		return {
 			model,
+			hair: accessory,
 			appearance: {
 				texture: skin.texture,
 				dispose: () => skin.dispose(),

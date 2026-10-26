@@ -300,6 +300,7 @@ export async function loadStoryProps(
 				f.playerY = game.position.y;
 				f.playerZ = game.position.z;
 				f.talking = game.dialogue?.speaker === 'Iara';
+				input.talking = f.talking;
 				f.busy = animator.state === 'emote';
 				f.reducedMotion = input.reducedMotion;
 				input.yaw = actor.rotation.y = iaraLife.yaw;

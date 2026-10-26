@@ -28,6 +28,30 @@ function corridor(g: StoryGame) {
 	for (const p of level.planting.filter((p) => p.mission === 1)) g.act(p);
 	g.closeDialogue();
 }
+it('emits pickup and completion gestures only for accepted actions, and offers a nearby companion pet', () => {
+	const { game: g, persist } = setup();
+	const gesture = vi.fn();
+	g.onGesture = gesture;
+	start(g);
+	const fruit = level.collectibles.find((c) => c.kind === 'jucara-fruit');
+	if (!fruit) throw new Error('fruit');
+	g.act(fruit);
+	expect(gesture).toHaveBeenCalledWith('pickup', fruit);
+	const count = gesture.mock.calls.length;
+	g.act(fruit);
+	expect(gesture.mock.calls.length).toBe(count);
+	corridor(g);
+	expect(gesture).toHaveBeenCalledWith('cheer', null);
+	g.companion = { x: 10, y: 1.4, z: 10 };
+	const feet = { x: 10, y: 1, z: 11 };
+	expect(g.context(feet)?.id).toBe('pet');
+	const writes = persist.mock.calls.length;
+	g.act(feet);
+	expect(gesture).toHaveBeenLastCalledWith('pet', g.companion);
+	expect(persist.mock.calls.length).toBe(writes);
+	g.companion = null;
+	expect(g.context(feet)?.id).not.toBe('pet');
+});
 it('requires Iara, then mission1, allows 2-5 in any order and locks 6 until all five', () => {
 	const { game: g, badge } = setup();
 	expect(g.available(2)).toBe(false);

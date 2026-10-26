@@ -3,17 +3,37 @@ export function actionControl(action: StoryAction | null | undefined) {
 	if (!action || action.disabled) return null;
 	const id = action.id;
 	const kind =
-		id === 'iara'
-			? 'talk'
-			: id === 'logger' || id === 'inspector'
-				? 'radio'
-				: id.startsWith('armadilha-')
-					? 'mark'
-					: id.startsWith('corredor-') || id.startsWith('clareira-')
-						? 'plant'
-						: 'take';
-	const labels = { talk: 'Falar', radio: 'Rádio', mark: 'Marcar', plant: 'Plantar', take: 'Pegar' } as const;
-	const icons = { talk: 'chat', radio: 'radio', mark: 'flag', plant: 'plant', take: 'take' } as const;
+		id === 'pet'
+			? 'pet'
+			: id === 'binoculars'
+				? 'look'
+				: id === 'iara'
+					? 'talk'
+					: id === 'logger' || id === 'inspector'
+						? 'radio'
+						: id.startsWith('armadilha-')
+							? 'mark'
+							: id.startsWith('corredor-') || id.startsWith('clareira-')
+								? 'plant'
+								: 'take';
+	const labels = {
+		talk: 'Falar',
+		radio: 'Rádio',
+		mark: 'Marcar',
+		plant: 'Plantar',
+		take: 'Pegar',
+		pet: 'Carinho',
+		look: 'Observar'
+	} as const;
+	const icons = {
+		talk: 'chat',
+		radio: 'radio',
+		mark: 'flag',
+		plant: 'plant',
+		take: 'take',
+		pet: 'take',
+		look: 'explore'
+	} as const;
 	return { kind, label: labels[kind], icon: icons[kind], accessibleName: action.label };
 }
 export interface ControlPreferences {

@@ -1,5 +1,16 @@
 import type { LifeDebug } from '../life/index.ts';
 export interface GameDebug {
+	avatarContext?: {
+		surface: string;
+		slope: number;
+		edgeAhead: number;
+		talking: boolean;
+		look: { x: number; y: number; z: number } | null;
+		gesture: string | null;
+		lastGesture: string | null;
+		hairPitch: number;
+		hairRoll: number;
+	};
 	life?: LifeDebug;
 	goldenReady?: boolean;
 	visualTime?: number;
