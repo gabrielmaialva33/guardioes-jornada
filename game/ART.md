@@ -263,6 +263,11 @@ The repository is public and every push to `main` deploys the public site, so ev
 
 - **T1, CC0 or CC BY:** repository and site; CC BY is credited in `CREDITS.md`.
 - **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, with any share-alike terms noted.
-- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): allowed for testing while both the repository and the site are private (the owner closed them on 26/10/2026). They live only under `src/assets/t3/` and are listed in `CREDITS.md` under T3, so they can be removed in one step before either is ever opened again.
+- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): never in the repository, the pack or the site. They stay on the owner's machine in the git-ignored `tmp/` folder and may be used only as local references (shapes, timings, measurements).
+- **Local study only** (assets extracted from games the owner owns, such as `tmp/greenhell-port/`): stricter than T3. The rules are in `game/src/study/`.
+  - The dev server serves them only under `/__estudo/…`.
+  - The code is gated by `import.meta.env.DEV && ?estudo=…`.
+  - No file, derived file or per-asset metadata enters the repository.
+  - What may reach the real game is only what we measure from them (gait timings, sound layering, plant density), never the assets.
 
 Never download from 3dassets.dev or gobkit.com: they contain prompt-injection text aimed at AI agents.
