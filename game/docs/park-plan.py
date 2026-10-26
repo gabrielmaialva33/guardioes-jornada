@@ -45,7 +45,7 @@ PORTALS = [(160, 70, "Portal leste\n(após missão 6)"), (70, 0, "Portal norte")
 # (x, z, label, kind) kinds: m mission, s secret, l landmark, n npc, x new mechanic
 MARKS = [
     # Reserva, part A
-    (40, 74, "Casa na árvore da Iara", "x"), (128, 80, "Tirolesa: mirante → base", "x"), (132, 26, "Gruta atrás da cachoeira", "s"),
+    (40, 74, "Casa na árvore da Iara", "x"), (129, 84, "Tirolesa: mirante → base", "x"), (132, 26, "Gruta atrás da cachoeira", "s"),
     (60, 24, "Folha dourada na copa", "s"), (112, 106, "Bióloga Ana", "n"), (96, 30, "Observador de aves", "n"),
     # Vale das Cachoeiras
     (250, 42, "Cachoeira Grande (som antes da vista)", "l"), (238, 52, "Poço: lixo dos visitantes", "m"),
