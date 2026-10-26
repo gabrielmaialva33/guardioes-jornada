@@ -8,12 +8,9 @@
  *
  * Output is two angles for the dangling part, in the rig's conventions
  * (joints.ts): `pitch` > 0 swings the tail's end back (away from the face) and
- * `roll` > 0 swings it to the character's left (+x). They rotate a node at the
- * style's HAIR_PIVOTS point, parented to the head.
- *
- * avatar-hair.glb has one rigid mesh per style and no separate tail node yet,
- * so nothing applies these angles today (p10-avatar-anim.md); the cap, short,
- * long and afro styles have no dangling part at all.
+ * `roll` > 0 swings it to the character's left (+x). Set them on each of the
+ * style's HAIR_DANGLES nodes (HairAccessories.dangles) as a YXZ rotation, after
+ * applyToRig; the cap, short, long and afro styles have no dangling part.
  *
  * Reduced motion: off (both angles 0). No allocation per update: inputs are
  * fields, as in DampedSpring.
@@ -47,17 +44,21 @@ export const HAIR_SWAY: Readonly<Record<string, HairSwayTuning | null>> = {
 };
 
 /**
- * Where each style's dangling part would pivot, in the head node's units
- * (avatar-hair.glb shares the head's origin): read off the meshes' bounds,
- * for the split this module needs (p10-avatar-anim.md). Braids pivot one per side.
+ * The dangling parts of avatar-hair.glb (avatar-regions-contract.md v3): child
+ * nodes of the style's node, each with its origin at the pivot it swings about,
+ * in the head node's units (the hair GLB shares the head's origin). Braids swing
+ * as one pair, left (+x) first. game/scripts/split-hair.mjs cuts the GLB with
+ * these, so the asset and HairSway agree.
  */
-export const HAIR_PIVOTS: Readonly<Record<string, readonly (readonly [number, number, number])[]>> = {
-	rabo: [[0, 0.78, -0.45]],
+export const HAIR_DANGLES: Readonly<
+	Record<string, readonly { readonly node: string; readonly pivot: readonly [number, number, number] }[]>
+> = {
+	rabo: [{ node: 'hair-ponytail-tail', pivot: [0, 0.63, -0.5] }],
 	trancas: [
-		[0.42, 0.5, -0.1],
-		[-0.42, 0.5, -0.1]
+		{ node: 'hair-braids-left', pivot: [0.32, 0.78, -0.22] },
+		{ node: 'hair-braids-right', pivot: [-0.32, 0.78, -0.22] }
 	],
-	coque: [[0, 0.95, -0.38]]
+	coque: [{ node: 'hair-bun-knot', pivot: [0, 0.9, -0.24] }]
 };
 
 export class HairSway {

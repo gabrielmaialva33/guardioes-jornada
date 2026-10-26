@@ -1,7 +1,9 @@
 """
 Avatar hair accessories (`game/src/assets/models/avatar-hair.glb`): 6 blocky hair/cap
 meshes (`hair-long`, `hair-ponytail`, `hair-bun`, `hair-afro`, `hair-braids`, `cap`)
-matching `avatar-regions-contract.md` (Version 2).
+matching `avatar-regions-contract.md` (Version 2), then split by `scripts/split-hair.mjs`
+into the Version 3 dangling child nodes. Note: the committed GLB predates this file's
+current shapes (triangle counts differ), so a rebuild changes every style.
 
 Run:
   /usr/sbin/blender -b --factory-startup -P game/scripts/blender/models/avatar_hair.py
@@ -249,6 +251,9 @@ def build_all_hair() -> None:
             stderr=subprocess.PIPE,
         )
         print(f"[avatar_hair] Wrote {out_glb} ({out_glb.stat().st_size} B)")
+        # Contract v3: cut the dangling parts into child nodes at HairSway's pivots
+        # (fails loudly if this geometry no longer matches its face classifier).
+        subprocess.run(["node", str(GAME_ROOT / "scripts" / "split-hair.mjs"), "--in", str(out_glb)], check=True)
 
 
 if __name__ == "__main__":
