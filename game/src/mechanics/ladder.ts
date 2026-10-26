@@ -5,14 +5,26 @@ export interface LadderSpec {
 	top: Vec3 /** Feet on the platform, clear of the ladder and rails. */;
 	exit: Vec3;
 	radius: number;
+	/** World units; shared by the mesh and the avatar cadence. Defaults to 0.45. */
+	rungSpacing?: number;
+	/** Height of the first rung above base; defaults to 0.3 u. */
+	rungOffset?: number;
 }
 /** Pure fixed-tick state. Points and output are feet positions; no renderer or clock ownership. */
 export class Ladder {
 	phase: 'idle' | 'climbing' | 'top' | 'bottom' | 'detached' = 'idle';
 	readonly position: Vec3 = { x: 0, y: 0, z: 0 };
 	cooldown = 0;
+	readonly rungSpacing: number;
+	readonly rungOffset: number;
 	constructor(readonly spec: LadderSpec) {
+		this.rungSpacing = spec.rungSpacing ?? 0.45;
+		this.rungOffset = spec.rungOffset ?? 0.3;
 		if (
+			!Number.isFinite(this.rungSpacing) ||
+			this.rungSpacing < 0.1 ||
+			!Number.isFinite(this.rungOffset) ||
+			this.rungOffset < 0 ||
 			!validPoint(spec.base) ||
 			!validPoint(spec.top) ||
 			!validPoint(spec.exit) ||

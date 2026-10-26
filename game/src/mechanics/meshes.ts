@@ -10,6 +10,9 @@ import {
 	SphereGeometry,
 	Vector3
 } from 'three';
+import { HANG_GRIP } from '../animation/avatar-poses.ts';
+import { BLOCKY_RIG } from '../animation/joints.ts';
+import { AVATAR_HEIGHT } from '../engine/constants.ts';
 import { type ColliderSource, CollisionWorld } from '../engine/world.ts';
 import type { Boardwalk } from './boardwalk.ts';
 import type { SuspensionBridge } from './bridge.ts';
@@ -101,7 +104,7 @@ export function createLadderMesh(ladder: Ladder) {
 	v.root.position.set(s.base.x, s.base.y, s.base.z);
 	v.root.rotation.y = Math.atan2(s.exit.x - s.base.x, s.exit.z - s.base.z);
 	for (const side of [-0.65, 0.65]) v.box(side, h / 2, 0, 0.14, h + 0.8, 0.16);
-	for (let y = 0.3; y < h; y += 0.45) v.box(0, y, 0, 1.35, 0.11, 0.16, ROPE);
+	for (let y = ladder.rungOffset; y < h; y += ladder.rungSpacing) v.box(0, y, 0, 1.35, 0.11, 0.16, ROPE);
 	const exitY = s.exit.y - s.base.y;
 	v.box(0, exitY - 0.15, exitDistance, 3.2, 0.3, 3, WOOD, true);
 	for (const side of [-1, 1]) v.box(side * 1.6, exitY + 0.6, exitDistance, 0.15, 1.2, 3, ROPE, true);
@@ -125,15 +128,22 @@ export function createZiplineMesh(zip: Zipline) {
 	const pulley = new Group();
 	v.root.add(pulley);
 	v.add(new CylinderGeometry(0.22, 0.22, 0.18, 8), METAL, 0, 3, 0, false, pulley).rotation.z = Math.PI / 2;
-	v.box(0, 2.65, 0, 0.08, 0.6, 0.08, METAL, false, pulley);
-	v.box(0, 2.4, 0, 1.2, 0.08, 0.08, METAL, false, pulley);
+	const gripHeight = (HANG_GRIP.height * AVATAR_HEIGHT) / (BLOCKY_RIG.height ?? 2.7);
+	const gripForward = (HANG_GRIP.forward * AVATAR_HEIGHT) / (BLOCKY_RIG.height ?? 2.7);
+	v.box(0, (3 + gripHeight) / 2, 0, 0.08, 3 - gripHeight, 0.08, METAL, false, pulley);
+	v.box(0, gripHeight, gripForward / 2, 0.08, 0.08, gripForward, METAL, false, pulley);
+	v.box(0, gripHeight, gripForward, 1.2, 0.08, 0.08, METAL, false, pulley);
 	return Object.assign(v.bake(), {
+		gripHeight,
+		gripForward,
+		pulley,
 		update() {
+			pulley.rotation.y = Math.atan2(s.end.x - s.start.x, s.end.z - s.start.z);
 			pulley.position.set(zip.position.x, zip.position.y, zip.position.z);
 		}
 	});
 }
-export function createCanoeMesh(canoe: Canoe) {
+export function createCanoeMesh(canoe: Canoe, paddleSide: -1 | 1 = 1) {
 	const v = new MechanicMesh(),
 		boat = new Group();
 	v.root.add(boat);
@@ -145,18 +155,25 @@ export function createCanoeMesh(canoe: Canoe) {
 	}
 	const paddle = new Group();
 	boat.add(paddle);
-	paddle.position.set(1, 1, 0);
+	paddle.position.set(paddleSide * 0.85, 1.1, 0.3);
+	paddle.rotation.z = paddleSide * 0.3;
 	v.box(0, 0, 0, 0.09, 2.6, 0.1, WOOD, false, paddle);
 	v.box(0, -1.1, 0, 0.4, 0.65, 0.12, ROPE, false, paddle);
 	return Object.assign(v, {
+		paddleSide,
+		boat,
+		paddle,
+		seatOffset: -0.34,
 		update(reduced: boolean) {
+			const power = Math.min(1, Math.abs(canoe.speed) / 4);
+			const phase = canoe.stroke * (canoe.speed < 0 ? -1 : 1);
 			boat.position.set(
 				canoe.position.x,
-				canoe.position.y + (reduced ? 0 : Math.sin(canoe.stroke) * 0.035),
+				canoe.position.y + (reduced ? 0 : Math.sin(phase) * 0.035 * power),
 				canoe.position.z
 			);
 			boat.rotation.y = canoe.yaw;
-			paddle.rotation.x = reduced ? 0 : Math.sin(canoe.stroke) * 0.5;
+			paddle.rotation.x = Math.sin(phase) * 0.5 * power;
 		}
 	});
 }

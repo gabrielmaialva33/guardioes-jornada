@@ -5,18 +5,25 @@ import {
 	AmbientLight,
 	Color,
 	DirectionalLight,
+	Mesh,
 	PerspectiveCamera,
 	Scene,
 	SRGBColorSpace,
 	Vector3,
 	WebGLRenderer
 } from 'three';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { AvatarAnimator, createAvatarInput, readCharacter } from '../animation/avatar-animator.ts';
+import { AVATAR_LAYOUT, BLOCKY_RIG } from '../animation/joints.ts';
+import { applyToRig, bindRig } from '../animation/rig.ts';
 import { applyCameraPose } from '../engine/camera.ts';
+import { AVATAR_HEIGHT } from '../engine/constants.ts';
 import { PlayerController } from '../engine/controller.ts';
 import { attachInput, InputModel } from '../engine/input.ts';
+import { readTraversal } from './avatar.ts';
 import { distance } from './common.ts';
 import { createMechanicsFixture } from './fixture.ts';
-import { MechanicMesh } from './meshes.ts';
 import { PhotoProjection } from './photo-three.ts';
 
 type Shot = 'ladder' | 'zipline' | 'photo' | 'bridge' | 'canoe' | 'trap' | 'boardwalk';
@@ -75,14 +82,16 @@ const camera = new PerspectiveCamera(60, 1, 0.1, 250),
 	lens = { fov: 60, aspect: 1, near: 0.1 };
 const input = new InputModel();
 const detach = attachInput(app, input);
-const avatar = new MechanicMesh();
-avatar.box(0, 1.65, 0, 1.1, 1.15, 0.6, 0xf1c058);
-avatar.box(0, 2.65, 0, 0.85, 0.85, 0.85, 0xb67e59);
-const armLeft = avatar.box(-0.72, 1.65, 0, 0.3, 1.05, 0.35, 0xb67e59),
-	armRight = avatar.box(0.72, 1.65, 0, 0.3, 1.05, 0.35, 0xb67e59),
-	legLeft = avatar.box(-0.3, 0.6, 0, 0.4, 1.15, 0.4, 0x325b70),
-	legRight = avatar.box(0.3, 0.6, 0, 0.4, 1.15, 0.4, 0x325b70);
-scene.add(avatar.root);
+const avatar = (
+	await new GLTFLoader()
+		.setMeshoptDecoder(MeshoptDecoder)
+		.loadAsync(new URL('../assets/models/avatar.glb', import.meta.url).href)
+).scene;
+avatar.scale.setScalar(AVATAR_HEIGHT / (BLOCKY_RIG.height ?? 2.7));
+const rig = bindRig(avatar, AVATAR_LAYOUT, BLOCKY_RIG),
+	animator = new AvatarAnimator({ seed: 7 }),
+	avatarInput = createAvatarInput();
+scene.add(avatar);
 const projection = new PhotoProjection(fixture.world);
 const rings = fixture.photo.subjects.map(() => {
 	const ring = document.createElement('div');
@@ -151,6 +160,7 @@ function select(name: Shot) {
 	fixture.boardwalk.cancel();
 	input.releaseAll();
 	notice = '';
+	animator.reset();
 	player.camera.pitch = -0.18;
 	player.camera.zoomGoal = 8;
 	let spawn = fixture.ladder.spec.base;
@@ -218,14 +228,29 @@ function renderFrame(dt: number) {
 	const frame = player.update(dt, frameInput, lens);
 	elapsed += dt;
 	fixture.update();
-	avatar.root.position.copy(frame.position);
-	avatar.root.rotation.y = frame.yaw;
+
 	const mode = fixture.traversal.mode;
-	// Neutral block proxy only; production climb/sit/hang/row belongs to animation/.
-	armLeft.rotation.x = armRight.rotation.x = mode === 'zipline' ? Math.PI : mode === 'ladder' ? -1.8 : 0;
-	armLeft.position.y = armRight.position.y = mode === 'zipline' ? 2.65 : mode === 'ladder' ? 2.1 : 1.65;
-	legLeft.rotation.x = legRight.rotation.x = mode === 'canoe' ? -Math.PI / 2 : 0;
-	avatar.root.visible = fixture.photo.phase !== 'framing';
+	readCharacter(avatarInput, player.character, dt);
+	readTraversal(avatarInput, fixture.traversal, fixture.canoeMesh.paddleSide);
+	// Interpolate attachments with the avatar, so the hands never trail their bar/boat by one fixed tick.
+	if (mode === 'zipline') {
+		fixture.ziplineMesh.pulley.position.copy(frame.position);
+		fixture.ziplineMesh.pulley.rotation.y = frame.yaw;
+	} else if (mode === 'canoe') {
+		fixture.canoeMesh.boat.position.x = frame.position.x;
+		fixture.canoeMesh.boat.position.z = frame.position.z;
+		fixture.canoeMesh.boat.position.y += frame.position.y - fixture.canoe.position.y;
+		fixture.canoeMesh.boat.rotation.y = frame.yaw;
+	} else if (mode === 'ladder') {
+		avatarInput.ladderDistance = frame.position.y - fixture.ladder.spec.base.y - fixture.ladder.rungOffset;
+	}
+	avatarInput.intent = Math.hypot(frameInput.moveX, frameInput.moveY);
+	avatarInput.reducedMotion = fixture.reducedMotion;
+	applyToRig(animator.update(dt, avatarInput), rig);
+	avatar.position.copy(frame.position);
+	if (mode === 'canoe') avatar.position.y += fixture.canoeMesh.seatOffset;
+	avatar.rotation.y = frame.yaw;
+	avatar.visible = fixture.photo.phase !== 'framing';
 	applyCameraPose(camera, frame.pose);
 	if (fixture.photo.phase === 'framing') {
 		photoPosition.copy(frame.position);
@@ -335,6 +360,11 @@ const api = {
 			lookout: fixture.boardwalk.phase,
 			reduced: fixture.reducedMotion,
 			discoveries: Array.from(discoveries),
+			avatarState: animator.state,
+			climbPhase: animator.climbPhase,
+			rowPhase: animator.rowPhase,
+			hangSwing: animator.hangSwing.value,
+			missingJoints: rig.missing,
 			draws: renderer.info.render.calls,
 			triangles: renderer.info.render.triangles,
 			elapsed
@@ -349,7 +379,13 @@ window.addEventListener(
 		cancelAnimationFrame(raf);
 		detach();
 		fixture.dispose();
-		avatar.dispose();
+		avatar.traverse((node) => {
+			if (node instanceof Mesh) {
+				node.geometry.dispose();
+				if (Array.isArray(node.material)) for (const material of node.material) material.dispose();
+				else node.material.dispose();
+			}
+		});
 		renderer.dispose();
 		window.removeEventListener('resize', resize);
 		reduced.removeEventListener('change', motion);

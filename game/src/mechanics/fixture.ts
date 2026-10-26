@@ -180,6 +180,8 @@ export function createMechanicsFixture() {
 		trap,
 		traversal,
 		photoMesh,
+		canoeMesh,
+		ziplineMesh,
 		trapPosition,
 		complete,
 		set reducedMotion(value: boolean) {

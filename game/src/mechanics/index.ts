@@ -1,3 +1,4 @@
+export { readTraversal } from './avatar.ts';
 export { Boardwalk, type BoardwalkSpec, type Lookout } from './boardwalk.ts';
 export { type BridgeSpec, SuspensionBridge } from './bridge.ts';
 export { CameraTrap } from './camera-trap.ts';
