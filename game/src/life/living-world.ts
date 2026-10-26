@@ -13,6 +13,7 @@ import { type Camera, Group, type Texture } from 'three';
 import { type AnyAnimal, OncaBehaviour, type SpeciesId } from '../animation/animals/index.ts';
 import type { StoryLevel } from '../level/types.ts';
 import type { Quality } from '../render/quality.ts';
+import type { StudyFauna } from '../study/index.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { Fauna, type HowlEvent, LIFE_TIERS, type LifeBlobs } from './fauna.ts';
 import { BIRD_COUNT, LifeFlocks } from './flocks.ts';
@@ -127,6 +128,8 @@ export class LivingWorldRuntime implements LivingWorld {
 	#cpuCount = 0;
 	#cpuAt = 0;
 	#disposed = false;
+	/** DEV-only Green Hell study fauna (game/src/study/); never set in a build. */
+	#study: StudyFauna | null = null;
 	#profile = false;
 	#story = { known: false, summit: false };
 
@@ -174,6 +177,14 @@ export class LivingWorldRuntime implements LivingWorld {
 		});
 		this.object3d.add(this.particles.mesh);
 		this.object3d.updateMatrixWorld(true);
+		// DEV + ?estudo=greenhell only: local study assets (tmp/, git-ignored). A build drops this branch.
+		if (import.meta.env.DEV)
+			void import('../study/index.ts').then(({ startStudy }) => {
+				const tucano = plan.animals.find((a) => a.species === 'tucano-de-bico-verde');
+				const study = { parent: this.object3d, world, level: parts.level, quality: parts.quality };
+				if (!this.#disposed)
+					this.#study = startStudy({ ...study, blobs: parts.blobs, tucanoPerch: tucano?.perches?.[0] });
+			});
 	}
 
 	update(frame: LifeFrame) {
@@ -200,6 +211,7 @@ export class LivingWorldRuntime implements LivingWorld {
 		f.reducedMotion = reduced;
 		f.camera = frame.camera;
 		this.fauna.update();
+		this.#study?.update(frame);
 
 		const flock = this.flocks.frame;
 		flock.dt = dt;
@@ -311,6 +323,7 @@ export class LivingWorldRuntime implements LivingWorld {
 		if (this.#disposed) return;
 		this.#disposed = true;
 		this.fauna.dispose();
+		this.#study?.dispose();
 		for (const pet of this.pets) pet?.dispose();
 		for (const template of this.#templates.values()) {
 			template.geometry.dispose();
