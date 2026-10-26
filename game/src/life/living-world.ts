@@ -177,7 +177,7 @@ export class LivingWorldRuntime implements LivingWorld {
 		});
 		this.object3d.add(this.particles.mesh);
 		this.object3d.updateMatrixWorld(true);
-		// DEV + ?estudo=greenhell only: local study assets (tmp/, git-ignored). A build drops this branch.
+		// DEV only: the local Green Hell study fauna (study/gate.ts decides; tmp/ assets). A build drops this.
 		if (import.meta.env.DEV)
 			void import('../study/index.ts').then(({ startStudy }) => {
 				const tucano = plan.animals.find((a) => a.species === 'tucano-de-bico-verde');

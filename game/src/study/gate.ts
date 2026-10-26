@@ -4,14 +4,22 @@
  * The owner extracted assets from Green Hell (Creepy Jar) into the git-ignored
  * `tmp/greenhell-port/`. They have no licence for redistribution, so they never
  * enter the repo, the game pack, a production build or the deployed site: the
- * dev server alone serves them (game/study-dev.ts, at STUDY_PREFIX), and every
- * runtime path is gated by `import.meta.env.DEV && ?estudo=greenhell`.
+ * dev server alone serves them (game/study-dev.ts, at STUDY_PREFIX).
  *
- * Callers outside game/src/study/ must write the gate as
- * `import.meta.env.DEV && studyEnabled()` (or put a dynamic import behind it):
- * the literal `import.meta.env.DEV` folds to `false` in a build, so the branch,
- * this module and every string in it are tree-shaken away.
+ * On the dev server the mode is ON by default (the owner's local game):
+ * - `?estudo=off` turns it off; `?estudo=greenhell` forces it on, even in an
+ *   automated run (the study's own captures use it);
+ * - automated runs never see it unless forced: `?golden`, `?e2e`, the software
+ *   GPU test build (`__PACK_SOFTWARE_TEST__`), WebDriver (`navigator.webdriver`,
+ *   so Playwright) and Vitest (`MODE === 'test'`), and Node without a DOM.
+ *
+ * Callers outside game/src/study/ gate with `import.meta.env.DEV` and reach the
+ * folder through a dynamic `import()` inside that branch, then ask
+ * `studyEnabled()`: the literal folds to `false` in a build, so the branch,
+ * this folder and every string in it are tree-shaken away.
  */
+
+declare const __PACK_SOFTWARE_TEST__: boolean;
 
 /** URL prefix the dev middleware (game/study-dev.ts) serves `tmp/greenhell-port/` at. */
 export const STUDY_PREFIX = '/__estudo/greenhell/';
@@ -19,11 +27,48 @@ export const STUDY_PREFIX = '/__estudo/greenhell/';
 /** `raw`: the source PBR materials. `painted` (default): our house look (stylize.ts). */
 export type StudyLook = 'raw' | 'painted';
 
+/** What the gate reads besides the URL (injectable for the tests). */
+export interface StudyContext {
+	/** The dev server (import.meta.env.DEV). */
+	dev: boolean;
+	/** A page with a DOM (false in Node). */
+	browser: boolean;
+	/** Vitest (MODE === 'test'). */
+	test: boolean;
+	/** navigator.webdriver: Playwright, Selenium. */
+	webdriver: boolean;
+	/** The software-GPU test build (GAME_ALLOW_SOFTWARE_TEST=1). */
+	softwareTest: boolean;
+}
+
 const currentSearch = () => (typeof location === 'undefined' ? '' : location.search);
 
-/** True only on the dev server with `?estudo=greenhell`. Always false in a production build. */
-export function studyEnabled(search: string = currentSearch()): boolean {
-	return import.meta.env.DEV && new URLSearchParams(search).get('estudo') === 'greenhell';
+export function studyContext(): StudyContext {
+	return {
+		dev: import.meta.env.DEV,
+		browser: typeof document !== 'undefined',
+		test: import.meta.env.MODE === 'test',
+		webdriver: typeof navigator !== 'undefined' && navigator.webdriver === true,
+		softwareTest: typeof __PACK_SOFTWARE_TEST__ !== 'undefined' && __PACK_SOFTWARE_TEST__
+	};
+}
+
+/** An automated run: golden captures, e2e and acceptance runs, software-GPU tests, WebDriver, Vitest. */
+export function studyAutomated(search: string, context: StudyContext): boolean {
+	const q = new URLSearchParams(search);
+	return q.has('golden') || q.has('e2e') || context.test || context.webdriver || context.softwareTest;
+}
+
+/** Whether this page shows the study. Always false in a production build. */
+export function studyEnabled(
+	search: string = currentSearch(),
+	context: StudyContext = studyContext()
+): boolean {
+	if (!import.meta.env.DEV || !context.dev) return false;
+	const mode = new URLSearchParams(search).get('estudo');
+	if (mode === 'off' || !context.browser) return false;
+	if (mode === 'greenhell') return true;
+	return !studyAutomated(search, context);
 }
 
 /** `&look=raw|painted`, painted by default. */
