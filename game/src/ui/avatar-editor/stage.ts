@@ -271,7 +271,8 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	const camera = new PerspectiveCamera(FOV_DEG, 1, 0.1, 60);
 	const thumbCamera = new PerspectiveCamera(FOV_DEG, 1, 0.1, 60);
 	const placement: CameraPlacement = { x: 0, y: 0, z: 0, targetY: 0 };
-	const eye = new Vector3();
+	/** The avatar looks at the viewer: the camera, in world units (the turntable stands at the origin). */
+	const eye = new Vector3(0, FRAMINGS.body.targetY, 10);
 
 	// --- State -----------------------------------------------------------------------
 	let framing: FramingId = options.framing ?? 'body';
@@ -468,6 +469,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 		placeCamera(tween.current, camera.aspect, placement);
 		camera.position.set(placement.x, placement.y, placement.z);
 		camera.lookAt(0, placement.targetY, 0);
+		eye.copy(camera.position);
 		renderNeutral(null, camera);
 		dirty = false;
 		if (firstFrameAt === null) {
@@ -678,6 +680,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			placeCamera(tween.current, camera.aspect, placement);
 			camera.position.set(placement.x, placement.y, placement.z);
 			camera.lookAt(0, placement.targetY, 0);
+			eye.copy(camera.position);
 			// Parallel shader compile where the driver has it: the first frame does not block on it.
 			await compile(null, camera);
 			compileMs = host.now() - compileStarted;
