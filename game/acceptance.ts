@@ -16,28 +16,36 @@ import {
 	requiredFiles
 } from './protocol.ts';
 import { createGraybox } from './src/engine/graybox.ts';
+import { buildStoryWorld } from './src/level/build.ts';
+import { planLife } from './src/life/homes.ts';
 
+const storyFixture = buildStoryWorld();
+const expectedStoryAnimals = planLife(storyFixture.world, storyFixture.level).animals.length;
 const project = fileURLToPath(new URL('../', import.meta.url));
 const output =
 	process.env.GAME_ACCEPTANCE_DIR ?? join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/p1-acceptance');
 await mkdir(output, { recursive: true });
 async function build(label: string, snapshot = true) {
 	const log = createWriteStream(join(output, `build-${label}.log`));
-	await new Promise<void>((done, reject) => {
-		const child = spawn('pnpm', ['build'], {
-			cwd: project,
-			env: {
-				...process.env,
-				GAME_BUILD_TAG: snapshot ? label : '',
-				GAME_ALLOW_SOFTWARE_TEST: snapshot ? '1' : '0'
-			},
-			stdio: ['ignore', 'pipe', 'pipe']
+	for (const args of [['./node_modules/vite/bin/vite.js', 'build'], ['game/build.ts']])
+		await new Promise<void>((done, reject) => {
+			const child = spawn(process.execPath, args, {
+				cwd: project,
+				env: {
+					...process.env,
+					GAME_BUILD_TAG: snapshot ? label : '',
+					GAME_ALLOW_SOFTWARE_TEST: snapshot ? '1' : '0'
+				},
+				stdio: ['ignore', 'pipe', 'pipe']
+			});
+			child.stdout.pipe(log, { end: false });
+			child.stderr.pipe(log, { end: false });
+			child.once('error', reject);
+			child.once('exit', (code) =>
+				code === 0 ? done() : reject(new Error(`build ${label} failed: ${code}`))
+			);
 		});
-		child.stdout.pipe(log);
-		child.stderr.pipe(log);
-		child.once('error', reject);
-		child.once('exit', (code) => (code === 0 ? done() : reject(new Error(`build ${label} failed: ${code}`))));
-	});
+	await cp(join(project, 'deploy/_headers'), join(project, 'build/_headers'));
 	log.end();
 	if (snapshot) await cp(join(project, 'build'), join(output, label), { recursive: true, force: true });
 	console.info(`Built ${label}`);
@@ -113,18 +121,26 @@ const server = createServer(async (request, response) => {
 });
 await new Promise<void>((done, reject) => {
 	server.once('error', reject);
-	server.listen(4190, '127.0.0.1', done);
+	server.listen(Number(process.env.GAME_ACCEPTANCE_PORT ?? 4190), '127.0.0.1', done);
 });
+// HTTP isolation alone is not enough: a fixed CDP port can attach to another agent's browser.
+const cdpPort = Number(process.env.GAME_ACCEPTANCE_CDP_PORT ?? 9238);
+const cdpProbe = createServer();
+await new Promise<void>((done, reject) => {
+	cdpProbe.once('error', reject);
+	cdpProbe.listen(cdpPort, '127.0.0.1', done);
+});
+await new Promise<void>((done, reject) => cdpProbe.close((error) => (error ? reject(error) : done())));
 const browser = await chromium.launch({
 	channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome',
 	headless: true,
 	args: [
 		'--no-sandbox',
-		'--remote-debugging-port=9238',
+		`--remote-debugging-port=${cdpPort}`,
 		...(process.env.GAME_TEST_ANGLE ? [`--use-angle=${process.env.GAME_TEST_ANGLE}`] : [])
 	]
 });
-const origin = 'http://127.0.0.1:4190';
+const origin = `http://127.0.0.1:${process.env.GAME_ACCEPTANCE_PORT ?? 4190}`;
 const result: Record<string, unknown> = {
 	packIds: manifests.map((manifest) => manifest.packId),
 	packBytes: manifests.map((manifest) => ({
@@ -140,7 +156,7 @@ try {
 		hasTouch: true
 	});
 	// Raw CDP sessions include workers: page-only offline emulation can leave a worker online.
-	const version = await (await fetch('http://127.0.0.1:9238/json/version')).json();
+	const version = await (await fetch(`http://127.0.0.1:${cdpPort}/json/version`)).json();
 	const wire = new WebSocket(version.webSocketDebuggerUrl);
 	await new Promise<void>((done, reject) => {
 		wire.onopen = () => done();
@@ -626,7 +642,8 @@ try {
 		[]
 	);
 	result.defaultStoryWorldOfflineAtC = true;
-	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().life?.animals), 13);
+	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().life?.animals), expectedStoryAnimals);
+	result.expectedStoryAnimals = expectedStoryAnimals;
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 	await page.waitForTimeout(100);
@@ -635,7 +652,9 @@ try {
 	for (let cycle = 0; cycle < 20; cycle++) {
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 		await page.waitForFunction(
-			() => globalThis.__gameDebug?.().ready === true && globalThis.__gameDebug?.().life?.animals === 13
+			(expected) =>
+				globalThis.__gameDebug?.().ready === true && globalThis.__gameDebug?.().life?.animals === expected,
+			expectedStoryAnimals
 		);
 		if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
 			await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
