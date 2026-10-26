@@ -18,7 +18,7 @@ import {
 	SRGBColorSpace,
 	type Texture
 } from 'three';
-import { type StylizedOptions, stylize } from './stylized.ts';
+import { type StylizedOptions, stylize, visualStep } from './stylized.ts';
 
 /** Palette textures: sRGB, nearest, no mipmaps (ART.md §6). Mutates and returns the texture. */
 export function preparePaletteMap(texture: Texture): Texture {
@@ -75,7 +75,7 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 		alphaTest: source.alphaTest
 	});
 	if (lit.color) material.color.copy(lit.color);
-	if (source.userData.groundTint === true) {
+	if (source.userData.groundTint === true && visualStep() >= 1) {
 		material.map = null;
 		material.color.set('#ffffff');
 	}

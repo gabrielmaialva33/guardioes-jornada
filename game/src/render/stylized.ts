@@ -143,13 +143,14 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
 export function stylize<T extends MeshLambertMaterial>(material: T, options: StylizedOptions = {}): T {
 	if (visualStep() < 1) return material;
 	material.flatShading = !options.vegetation;
+	const previousKey = material.customProgramCacheKey();
 	const previous = material.onBeforeCompile.bind(material);
 	material.onBeforeCompile = (shader, renderer) => {
 		previous(shader, renderer);
 		patchStylizedShader(shader, options);
 	};
 	material.customProgramCacheKey = () =>
-		`guardioes-lambert-v2:${!!options.vegetation}:${!!options.cover}:${!!options.terrain}`;
+		`${previousKey}|guardioes-lambert-v2:${!!options.vegetation}:${!!options.cover}:${!!options.terrain}`;
 	material.userData.stylized = true;
 	return material;
 }

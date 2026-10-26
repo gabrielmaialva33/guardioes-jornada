@@ -58,3 +58,13 @@ it('receives canopy shade on terrain and ground cover but not on the tree canopy
 	expect(cover.uniforms.uShadeReceiver.value).toBe(1);
 	expect(tree.uniforms.uShadeReceiver.value).toBe(0);
 });
+it('keeps another shader extension in the program cache key', () => {
+	const material = new MeshLambertMaterial();
+	material.customProgramCacheKey = () => 'wind-version-1';
+	material.onBeforeCompile = (shader) => {
+		shader.vertexShader += '\n// wind-extension';
+	};
+	stylize(material, { vegetation: true });
+	expect(material.customProgramCacheKey()).toContain('wind-version-1');
+	material.dispose();
+});
