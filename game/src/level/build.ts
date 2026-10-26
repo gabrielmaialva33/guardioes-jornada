@@ -87,6 +87,7 @@ import {
 	PLANTING_RADIUS,
 	PLATEAU,
 	POOL,
+	PORTAL,
 	RELIEF,
 	RIVER,
 	RIVER_BANK_SLOPE,
@@ -123,6 +124,7 @@ import type {
 	ObbyTop,
 	PlantingSpot,
 	Pool,
+	Portal,
 	StoryBuild,
 	StoryCheckpoint,
 	StoryLevel,
@@ -217,6 +219,7 @@ export function buildStoryWorld(): StoryBuild {
 	shapeRelief(heights);
 	carveWater(heights, edge, waterY, river, stones.pool);
 	raiseMassifs(heights);
+	openPortal(heights);
 	for (const top of ledges.tops.slice(0, -1)) notch(heights, top);
 	const dry = (q: number) => edge[q] >= 0;
 	flattenDisk(
@@ -254,7 +257,7 @@ export function buildStoryWorld(): StoryBuild {
 		const i = q % N;
 		const j = (q - i) / N;
 		const isRiver = edge[q] < 0 && heights[q] < waterY[q];
-		const onPlateau = insidePolygon(PLATEAU, i, j);
+		const onPlateau = insidePolygon(PLATEAU, i, j) || inCauseway(i, j);
 		const onSerra = insidePolygon(SERRA, i, j);
 		zones[q] = isRiver
 			? ZONE.river
@@ -270,10 +273,8 @@ export function buildStoryWorld(): StoryBuild {
 		if (isRiver) f |= FLAG.river;
 		else if (
 			edge[q] >= 0 &&
-			i >= FENCE_MARGIN &&
-			j >= FENCE_MARGIN &&
-			i < N - FENCE_MARGIN &&
-			j < N - FENCE_MARGIN
+			((i >= FENCE_MARGIN && j >= FENCE_MARGIN && i < N - FENCE_MARGIN && j < N - FENCE_MARGIN) ||
+				inCauseway(i, j))
 		)
 			f |= FLAG.walkable;
 		if (distance(i, j, bcx, bcz) < BASE.radius) f |= FLAG.base;
@@ -616,10 +617,31 @@ function raiseMassifs(heights: Float32Array) {
 		const i = q % N;
 		const j = (q - i) / N;
 		const toEdge = Math.min(i, j, WORLD_SIZE - i, WORLD_SIZE - j);
+		// The east portal lowers the plateau's edge lip into its opening.
+		const lip = toEdge === WORLD_SIZE - i ? 1 - portalOpening(j) : 1;
 		for (const [polygon, top] of massifs)
 			if (insidePolygon(polygon, i, j))
-				heights[q] = Math.max(heights[q], top(i) + R.edgeRise * smoothstep(R.edgeWidth, 0, toEdge));
+				heights[q] = Math.max(heights[q], top(i) + R.edgeRise * smoothstep(R.edgeWidth, 0, toEdge) * lip);
 	}
+}
+
+/** Cells of the east portal's causeway: from PORTAL.fromX to the map edge, within halfWidth of its z. */
+export const inCauseway = (i: number, j: number) =>
+	i >= PORTAL.fromX && i <= WORLD_SIZE && Math.abs(j - PORTAL.z) <= PORTAL.halfWidth;
+
+/** 1 within the portal's opening, 0 from lipBlend past its sides: how much of the plateau's edge lip it removes. */
+function portalOpening(j: number): number {
+	return 1 - smoothstep(PORTAL.halfWidth, PORTAL.halfWidth + PORTAL.lipBlend, Math.abs(j - PORTAL.z));
+}
+
+/**
+ * The east portal's causeway: the plateau's flat top carried across the edge
+ * strip to x = 160. Every other cell keeps its height, so its flanks are the
+ * same one-cell cliffs as the plateau's faces and the strip never leads up.
+ */
+function openPortal(heights: Float32Array) {
+	for (let j = 0; j < N; j++)
+		for (let i = PORTAL.fromX; i < N; i++) if (inCauseway(i, j)) heights[j * N + i] = RELIEF.plateauY;
 }
 
 /** Cuts the cliff back under a ledge, so the ledge juts out of the face. */
@@ -1003,6 +1025,43 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		landmark('borboletas', 'butterflies', at(BUTTERFLIES, 1), [1, 0])
 	];
 
+	// The east portal: data only, the runtime draws it and keeps the gate shut until its mission is done.
+	const opener = missions.find((m) => m.key === PORTAL.requires);
+	if (!opener) throw new Error(`portal requires unknown mission ${PORTAL.requires}`);
+	const [postA, postB] = PORTAL.posts.map((p) => ({
+		...at(p),
+		radius: PORTAL.postRadius,
+		height: PORTAL.postHeight
+	}));
+	const portal: Portal = {
+		id: 'leste',
+		requires: PORTAL.requires,
+		mission: opener.id,
+		gap: {
+			x: WORLD_SIZE,
+			z0: PORTAL.z - PORTAL.halfWidth,
+			z1: PORTAL.z + PORTAL.halfWidth,
+			y: RELIEF.plateauY
+		},
+		posts: [postA, postB],
+		sign: landmark(
+			'placa-serra',
+			'portal-sign',
+			at(PORTAL.sign),
+			HEADING.west,
+			PORTAL.label,
+			PORTAL.signHeight
+		),
+		gate: {
+			from: { x: postA.x, y: postA.y, z: postA.z },
+			to: { x: postB.x, y: postB.y, z: postB.z },
+			height: PORTAL.gateHeight
+		},
+		inside: { ...at(PORTAL.inside), yaw: FACING.west },
+		outside: { x: PORTAL.outside[0], y: RELIEF.plateauY, z: PORTAL.outside[1] },
+		trail: 'mirante-leste'
+	};
+
 	const trails: Trail[] = Object.entries(TRAILS).map(([id, points]) => ({
 		id,
 		halfWidth: TRAIL_HALF_WIDTH,
@@ -1048,6 +1107,7 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		pool: stones.pool,
 		mirante,
 		handholds: handholds(heights),
+		portal,
 		checksum: 0
 	};
 }
@@ -1085,7 +1145,14 @@ export function reachTargets(level: StoryLevel): { id: string; x: number; z: num
 		})),
 		...level.collectibles.map((c) => ({ id: c.id, x: c.x, z: c.z, onObby: c.on === '' ? '' : 'stones' })),
 		...level.planting.map((p) => ({ id: p.id, x: p.x, z: p.z, onObby: '' })),
-		{ id: 'mirante', x: level.mirante.x, z: level.mirante.z, onObby: '' }
+		{ id: 'mirante', x: level.mirante.x, z: level.mirante.z, onObby: '' },
+		{ id: 'portal', x: level.portal.inside.x, z: level.portal.inside.z, onObby: '' },
+		{
+			id: 'portal-borda',
+			x: level.portal.gap.x,
+			z: (level.portal.gap.z0 + level.portal.gap.z1) / 2,
+			onObby: ''
+		}
 	];
 }
 
@@ -1104,6 +1171,10 @@ function reserveGameplay(clear: Uint8Array, level: StoryLevel, stones: Stones, l
 	for (const p of [stones.padA, stones.padB]) paint(clear, p.x, p.z, STONES.padRadius + 1.5, RESERVED);
 	paint(clear, ledges.pad.x, ledges.pad.z, LEDGES.padRadius + 2, RESERVED);
 	paint(clear, level.mirante.x, level.mirante.z, 4, RESERVED);
+	// The portal's causeway and its posts and sign: no tree, rock or ground cover in the way.
+	for (let x = PORTAL.fromX; x <= WORLD_SIZE; x += 2)
+		paint(clear, x, PORTAL.z, PORTAL.halfWidth + 1.5, RESERVED);
+	for (const p of [...level.portal.posts, level.portal.sign]) paint(clear, p.x, p.z, 2, RESERVED);
 	for (const [x, z] of [PLACES.bridgeFrom, PLACES.bridgeTo]) paint(clear, x, z, 4, RESERVED);
 }
 

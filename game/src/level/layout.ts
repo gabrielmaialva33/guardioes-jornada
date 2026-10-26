@@ -13,8 +13,8 @@ export type XZ = readonly [number, number];
 
 /** Fixed seed of the story map's noise and vegetation streams; it never changes per player. */
 export const STORY_SEED = 0x1a8a2026;
-/** Bump on any change that alters the built map; saves and the golden test record it. */
-export const STORY_VERSION = 1;
+/** Bump on any change that alters the built map; saves and the golden test record it. 2: the east portal (F1). */
+export const STORY_VERSION = 2;
 
 /** Facing angles about +y, 0 = +z (south), the engine's convention (atan2(x, z)). */
 // biome-ignore lint/suspicious/noApproximativeNumericConstant: the determinism scan allows no Math member but the exact operations; this literal is Math.PI's exact double.
@@ -283,6 +283,13 @@ export const TRAILS: Record<string, readonly TrailPoint[]> = {
 		[64, 132],
 		[82, 128],
 		[100, 120]
+	],
+	/** The spur from the mirante top across the plateau to the east portal (WORLD.md §3, F1). */
+	'mirante-leste': [
+		[134, 72],
+		[146, 71],
+		[156, 70],
+		[160, 70]
 	]
 };
 export const TRAIL_HALF_WIDTH = 2;
@@ -339,6 +346,38 @@ export const LANE_CLEARANCE = 3;
 // --- Missions, checkpoints, collectibles (LEVEL.md §5, §8, level-plan.py) ----
 
 export const MIRANTE_TOP: XZ = [134, 72];
+
+/**
+ * The east portal (WORLD.md §3, F1 "rumo à serra"): an opening in the east
+ * edge at the mirante, `halfWidth` u either side of z, where a causeway keeps
+ * the plateau's height from `fromX` across the edge strip to the map edge.
+ * The plateau's edge lip is lowered into it over `lipBlend` u along z. Its
+ * flanks are one-cell cliffs down to the strip, like the plateau's faces, so
+ * the strip below never leads up: the mirante (mission 6, by the ledges)
+ * stays the only way to the portal, and its gate stays closed until then.
+ * Posts stand inside the opening's edges; the sign faces the trail.
+ */
+export const PORTAL = {
+	z: 70,
+	halfWidth: 4,
+	fromX: 148,
+	lipBlend: 4,
+	requires: 'mirante',
+	label: 'Rumo à serra',
+	posts: [
+		[159.5, 66.4],
+		[159.5, 73.6]
+	] as readonly XZ[],
+	postHeight: 3.2,
+	postRadius: 0.3,
+	sign: [153, 66.6] as XZ,
+	signHeight: 2.2,
+	gateHeight: 2.4,
+	/** Where "voltar" lands: on the causeway, facing home. */
+	inside: [156, 70] as XZ,
+	/** The first step past the edge, into the generated world. */
+	outside: [163, 70] as XZ
+} as const;
 /** Checkpoints besides spawn, the stone banks and the two on the ledges (derived). */
 export const CHECKPOINTS = {
 	pasture: [55, 52],

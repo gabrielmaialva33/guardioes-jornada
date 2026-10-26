@@ -149,4 +149,29 @@ describe('story map reachability', () => {
 		}
 		expect(polylineDistance(RIVER, level.spawn.x, level.spawn.z)).toBeGreaterThan(20);
 	});
+
+	it('walks to the east portal from the spawn, but only over the mirante (the ledges)', () => {
+		const { gap, inside } = level.portal;
+		const without = reachable(world, level, { ...all, ledges: false });
+		expect(at(inside)).toBe(true);
+		let cells = 0;
+		for (let z = gap.z0; z <= gap.z1; z++)
+			for (let x = 148; x <= gap.x; x++) {
+				const q = cell(x, z);
+				expect(reach[q], `${x},${z}`).toBe(1);
+				expect(without[q], `${x},${z} without the ledges`).toBe(0);
+				cells++;
+			}
+		expect(cells).toBeGreaterThan(100);
+	});
+
+	it('opens the east fence only in the portal’s gap', () => {
+		const { gap } = level.portal;
+		for (let z = 2; z < n - 2; z++)
+			for (const x of [n - 2, n - 1]) {
+				const open = (world.flags[cell(x, z)] & FLAG.walkable) !== 0;
+				expect(open, `${x},${z}`).toBe(z >= gap.z0 && z <= gap.z1);
+				if (open) expect(reach[cell(x, z)]).toBe(1);
+			}
+	});
 });

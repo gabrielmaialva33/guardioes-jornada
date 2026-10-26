@@ -120,7 +120,8 @@ export type LandmarkKind =
 	| 'jequitiba'
 	| 'waterfall'
 	| 'mirante'
-	| 'butterflies';
+	| 'butterflies'
+	| 'portal-sign';
 
 export interface Landmark extends Placed {
 	id: string;
@@ -159,6 +160,36 @@ export interface Pool {
 	halfWidth: number;
 }
 
+/** One portal post: an upright cylinder from the ground. */
+export interface PortalPost extends Point {
+	radius: number;
+	height: number;
+}
+
+/**
+ * The east portal (F1, WORLD.md §3): data only, the runtime draws the posts,
+ * the sign and the gate, opens its edge rail inside `gap`, and keeps the gate
+ * closed until the mission named by `requires` is done.
+ */
+export interface Portal {
+	id: 'leste';
+	/** The mission that opens the gate ('mirante', mission 6), and its id. */
+	requires: MissionKey;
+	mission: number;
+	/** The opening in the east edge rail: x = 160, z from z0 to z1, its floor at y. */
+	gap: { x: number; z0: number; z1: number; y: number };
+	posts: [PortalPost, PortalPost];
+	/** "Rumo à serra", facing the trail that leads here. */
+	sign: Landmark;
+	/** The closed gate, between the posts, until `requires` is done. */
+	gate: { from: Point; to: Point; height: number };
+	/** On the causeway facing home (yaw as the engine's), and the first step out of the map. */
+	inside: Point & { yaw: number };
+	outside: Point;
+	/** The trail spur that leads here from the mirante top. */
+	trail: string;
+}
+
 export interface StoryLevel {
 	version: number;
 	spawn: Placed & { yaw: number };
@@ -178,6 +209,8 @@ export interface StoryLevel {
 	mirante: Point;
 	/** Muriqui branch handholds along the canopy row by the cutting, in order. */
 	handholds: Point[];
+	/** The east portal to the generated world. */
+	portal: Portal;
 	/** Stable hash of everything above. */
 	checksum: number;
 }
