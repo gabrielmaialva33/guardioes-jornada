@@ -1,17 +1,20 @@
 import type { createLocalSave } from '../data/local-save.ts';
 import type { StoryLevel } from '../level/types.ts';
+import { loadStoryProps } from '../missions/props.ts';
+import type { StoryGame } from '../missions/story.ts';
 import { BlockGrid } from '../render/index.ts';
 import type { SceneEnvironment } from '../scene/environment.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { buildMapCollision, prefabProxies } from './collision.ts';
 import { MapCheckpoints } from './navigation.ts';
-import { loadWorldPlacements } from './placements.ts';
+import { loadWorldPlacements, withoutPlacement } from './placements.ts';
 import { createMapVisual } from './visual.ts';
 
 export function createMapEnvironment(
 	world: SurvivalWorld,
 	level: StoryLevel | undefined,
-	save: ReturnType<typeof createLocalSave>
+	save: ReturnType<typeof createLocalSave>,
+	story?: StoryGame
 ) {
 	const start = level?.start ?? {
 		id: 'start',
@@ -40,21 +43,36 @@ export function createMapEnvironment(
 		level?.missions.map((m) => ({ ...m.target, name: m.name })) ??
 		world.pois.map((p, i) => ({ ...p, name: `Explore o ponto ${i + 1}` }));
 	let targetIndex = 0;
+	const observed = level?.landmarks.find((l) => l.kind === 'observation-rock');
+	const replacedRock =
+		story && observed
+			? Array.from({ length: world.rocks.count }, (_, i) => i).find(
+					(i) => Math.hypot(world.rocks.x[i] - observed.x, world.rocks.z[i] - observed.z) < 0.1
+				)
+			: undefined;
+	const renderWorld =
+		replacedRock === undefined ? world : { ...world, rocks: withoutPlacement(world.rocks, replacedRock) };
 	const grid = BlockGrid.covering(0, 0, world.size, world.size);
 	const environment: SceneEnvironment = {
 		kind: 'map',
+		story,
+		loadStoryAssets:
+			level && story ? (signal) => loadStoryProps(level, story, signal, world.crossings) : undefined,
 		start,
 		checkpoints,
 		grid,
 		collision: buildMapCollision(world, prefabProxies(world, level)),
-		placements: world.trees.count + world.rocks.count + world.decorations.count,
+		placements: renderWorld.trees.count + renderWorld.rocks.count + renderWorld.decorations.count,
 		createVisual: () => {
-			const visual = createMapVisual(world, level, [start, ...checkpoints]);
+			const visual = createMapVisual(world, level, [start, ...checkpoints], !!story);
 			return visual;
 		},
-		loadPlacements: (quality, signal) => loadWorldPlacements(grid, quality, world, signal),
+		loadPlacements: (quality, signal) =>
+			loadWorldPlacements(grid, quality, renderWorld, signal, level?.trails),
 		get target() {
-			return targets[targetIndex] ?? { ...world.base.spawn, name: 'Volte à base' };
+			return (
+				story?.target(story.position) ?? targets[targetIndex] ?? { ...world.base.spawn, name: 'Volte à base' }
+			);
 		},
 		nextTarget() {
 			targetIndex = (targetIndex + 1) % Math.max(1, targets.length);
@@ -67,6 +85,7 @@ export function createMapEnvironment(
 	const mirante = level?.mirante ?? world.pois.find((p) => p.kind === 'lookout') ?? start.spawn;
 	const debugPoses: Record<string, typeof checkpoint> = {
 		spawn: start,
+		ledges: { ...start, spawn: level?.obbies.find((o) => o.id === 'ledges')?.takeoff ?? start.spawn, yaw: 0 },
 		edge: {
 			...start,
 			spawn: { x: 2, y: world.heights[Math.floor(world.size / 2) * world.grid + 2], z: world.size / 2 },
