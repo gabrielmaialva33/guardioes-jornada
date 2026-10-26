@@ -29,7 +29,7 @@ import {
  * meant (a control point moved), bump STORY_VERSION and re-pin.
  */
 const GOLDEN_WORLD = 0x58158de7;
-const GOLDEN_LEVEL = 0x4e8295c1;
+const GOLDEN_LEVEL = 0xa6c086b1;
 
 const { world, level } = buildStoryWorld();
 

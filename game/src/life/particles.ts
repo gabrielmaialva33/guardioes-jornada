@@ -243,8 +243,16 @@ export class AmbientParticles {
 		this.mesh = mesh;
 	}
 
+	/**
+	 * A new tier limit. When it drops below the live count, the particles over it fade out in
+	 * 120 ms (no pop) and nothing spawns until the count is under the limit again.
+	 */
 	setLimit(limit: number) {
 		this.limit = Math.min(this.capacity, Math.max(0, Math.floor(limit)));
+		for (let i = this.limit; i < this.live; i++) {
+			const end = this.#age[i] + REDUCED_MOTION_DURATION;
+			if (this.#life[i] > end) this.#life[i] = end;
+		}
 	}
 
 	/** One frame. Reads this.frame. Allocates nothing. */

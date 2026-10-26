@@ -60,9 +60,11 @@ describe('ambient particles: the ART.md §8 cap', () => {
 				expect(system.mesh.count).toBe(system.live);
 			});
 			expect(system.peak).toBe(limit);
+			// A tier drop: the particles over the new limit fade out in 120 ms, and it holds after.
 			system.setLimit(20);
-			run(system, 10);
+			run(system, 0.15);
 			expect(system.live).toBeLessThanOrEqual(20);
+			run(system, 5, 60, () => expect(system.live).toBeLessThanOrEqual(20));
 			system.dispose();
 		}
 	});

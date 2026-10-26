@@ -241,8 +241,8 @@ export const MURIQUI_HANDHOLDS = {
 	spacingMax: MURIQUI_HOLDS.max,
 	/** Longest swing between two handholds; no spacing may exceed it. */
 	maxReach: MURIQUI_HOLDS.reach,
-	/** Handhold height above the ground (the canopy of 10–14 u trees). */
-	height: 10
+	/** Handhold height above the ground: low in the canopy, under the palm fronds that hid a 10 u row. */
+	height: 8
 } as const;
 export const BRIDGE_HALF_WIDTH = 1.5;
 

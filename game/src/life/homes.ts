@@ -6,8 +6,7 @@
  *
  * Trees are the world's placements; their crowns come from the measured GLBs
  * (CROWNS, model units × the placement scale). Animals only use species that
- * render as a real model today: pau-brasil, jerivá and mangue-vermelho are
- * still grey pillars in world-runtime, so nothing perches on them.
+ * render as a real model (Crown.model).
  */
 import { MURIQUI_HOLDS, type Perch, type SpeciesId } from '../animation/animals/index.ts';
 import type { StoryLevel } from '../level/types.ts';
@@ -20,29 +19,40 @@ export const LIFE_SEED = 20261025;
 
 const TAU = Math.PI * 2;
 
-/** One crown, model units (measured from game/src/assets/models/custom-*.glb, vertex radius per height band). */
+/**
+ * One crown, model units. The seven staging-v2 trees (game/src/assets/models/trees/tree-<species>.glb,
+ * edited CC BY models, REPORT-trees.md §1) were measured on their lod0 node: the foliage is the
+ * geometry whose UVs fall in the trees atlas' leaf and frond cells, `base` is its 5th height
+ * percentile (a few drooping cards aside), `top` the tree's height and `radius` the 95th percentile of
+ * the foliage's distance from the trunk axis. Araucária, embaúba and xaxim keep the custom-*.glb
+ * measures (vertex radius per height band).
+ */
 export interface Crown {
 	/** Height where the leaf mass starts (the lowest branches) and its top. */
 	readonly base: number;
 	readonly top: number;
-	/** Widest leaf radius. */
+	/** Leaf radius around the trunk. */
 	readonly radius: number;
 	/** True when world-runtime draws the species as its model (false: a grey placeholder pillar). */
 	readonly model: boolean;
 }
 
 export const CROWNS: Readonly<Record<TreeSpecies, Crown>> = {
-	jequitiba: { base: 13, top: 18, radius: 6.5, model: true },
+	// Emergent umbrella crown at 13.6–18 (its widest cards reach 10 u out at 15 u up).
+	jequitiba: { base: 13.6, top: 18, radius: 7.1, model: true },
 	// Two tiers: a first ring of branches at 9–10 (radius 3), the main platter at 11–13 (radius 5.5).
 	araucaria: { base: 9.3, top: 13.4, radius: 5.4, model: true },
 	embauba: { base: 7, top: 10.5, radius: 4, model: true },
-	jucara: { base: 4, top: 8, radius: 3.8, model: true },
-	'ipe-rosa': { base: 6.3, top: 10.2, radius: 5.4, model: true },
-	'ipe-amarelo': { base: 6.3, top: 10.2, radius: 5.4, model: true },
+	// Palm: fronds from 7.5 u, fruit bunches hanging below them.
+	jucara: { base: 7.5, top: 10, radius: 4.2, model: true },
+	// A low, wide blossom crown: leaf cards from about 3.4 u.
+	'ipe-rosa': { base: 3.4, top: 10.5, radius: 4.8, model: true },
+	'ipe-amarelo': { base: 5, top: 11, radius: 4.8, model: true },
 	xaxim: { base: 2.5, top: 5.8, radius: 3.4, model: true },
-	'pau-brasil': { base: 6.4, top: 10.9, radius: 5.5, model: false },
-	jeriva: { base: 6.8, top: 10.7, radius: 3.9, model: false },
-	'mangue-vermelho': { base: 5, top: 8.5, radius: 4.3, model: false }
+	'pau-brasil': { base: 3.6, top: 10, radius: 4.4, model: true },
+	jeriva: { base: 6.6, top: 11, radius: 3.8, model: true },
+	// Stilt roots below, a small crown from 4.2 u.
+	'mangue-vermelho': { base: 4.2, top: 8, radius: 2.6, model: true }
 };
 
 /** World.animals species (the survival album) to the fauna module's species. */
@@ -191,8 +201,15 @@ const flagAt = (world: SurvivalWorld, x: number, z: number) => {
 
 // --- species ---------------------------------------------------------------------------
 
-const BROADLEAF: readonly TreeSpecies[] = ['jequitiba', 'ipe-rosa', 'ipe-amarelo', 'embauba'];
-const MICO_TREES: readonly TreeSpecies[] = ['jequitiba', 'ipe-rosa', 'ipe-amarelo', 'embauba', 'jucara'];
+const BROADLEAF: readonly TreeSpecies[] = ['jequitiba', 'ipe-rosa', 'ipe-amarelo', 'embauba', 'pau-brasil'];
+const MICO_TREES: readonly TreeSpecies[] = [
+	'jequitiba',
+	'ipe-rosa',
+	'ipe-amarelo',
+	'embauba',
+	'pau-brasil',
+	'jucara'
+];
 
 /** Branch tops in the crowns near a home, round-robin over the nearest trees, a new bearing each time. */
 function canopyRoutes(
