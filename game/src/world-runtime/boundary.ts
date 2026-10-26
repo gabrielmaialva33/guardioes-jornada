@@ -1,6 +1,6 @@
 import { BufferGeometry, Color, Float32BufferAttribute } from 'three';
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
-import { terrainColor } from './terrain.ts';
+import { smooth, terrainColor } from './terrain.ts';
 
 /** Non-playable continuation, split in 40 u edge segments for ordinary frustum culling. */
 export function boundaryTerrain(world: SurvivalWorld): BufferGeometry[] {
@@ -19,9 +19,12 @@ export function boundaryTerrain(world: SurvivalWorld): BufferGeometry[] {
 					const x = side === 0 ? t : side === 1 ? world.size : side === 2 ? world.size - t : 0;
 					const z = side === 0 ? 0 : side === 1 ? t : side === 2 ? world.size : world.size - t;
 					const expansion = 1 + distance / half;
-					const y = world.heights[z * world.grid + x] + 18 * (distance / 160) ** 1.4;
+					const outerX = half + (x - half) * expansion,
+						coast = smooth(0, 36, -outerX);
+					const raised = world.heights[z * world.grid + x] + 18 * (distance / 160) ** 1.4;
+					const y = raised * (1 - coast) + world.waterLevel * coast;
 					positions.push(half + (x - half) * expansion, y, half + (z - half) * expansion);
-					const c = new Color(terrainColor(world, x, z));
+					const c = new Color(terrainColor(world, x, z)).lerp(new Color('#73cbf0'), coast * 0.85);
 					colors.push(c.r, c.g, c.b);
 				}
 			for (let r = 0; r < rings.length - 1; r++)

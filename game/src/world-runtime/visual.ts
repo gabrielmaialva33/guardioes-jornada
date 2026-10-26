@@ -1,3 +1,4 @@
+import type { PerspectiveCamera } from 'three';
 import {
 	BoxGeometry,
 	BufferGeometry,
@@ -13,11 +14,14 @@ import {
 } from 'three';
 import type { Checkpoint } from '../engine/checkpoints.ts';
 import type { StoryLevel } from '../level/types.ts';
+import type { Quality } from '../render/index.ts';
 import { mergePieces } from '../render/index.ts';
+import { lighting, visualStep } from '../render/stylized.ts';
 import { ensureVertexColors } from '../scene/materials.ts';
-
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
+import { createAtmosphere } from './atmosphere.ts';
 import { boundaryTerrain } from './boundary.ts';
+import { bakeCanopy } from './canopy.ts';
 import { deckGeometry, prefabProxies, propGeometry } from './collision.ts';
 import { createMapMaterials } from './materials.ts';
 import { terrainChunk } from './terrain.ts';
@@ -25,21 +29,37 @@ import { terrainChunk } from './terrain.ts';
 export function createMapVisual(
 	world: SurvivalWorld,
 	level?: StoryLevel,
-	pads: readonly Checkpoint[] = level ? [level.start, ...level.checkpoints] : []
+	pads: readonly Checkpoint[] = level ? [level.start, ...level.checkpoints] : [],
+	storyProps = false
 ) {
 	const object = new Group();
 	const ownedGeometries: BufferGeometry[] = [];
 	const materials = createMapMaterials();
+	const canopy = bakeCanopy(world);
+	lighting.uShadeMap.value = canopy.texture;
+	lighting.uShadeSize.value = world.size;
+	lighting.uShadeEnabled.value = visualStep() >= 3 ? 1 : 0;
+	lighting.uHeightFog.value = visualStep() >= 4 ? 1 : 0;
+	const atmosphere = visualStep() >= 4 ? createAtmosphere(world.size) : undefined;
+	if (atmosphere) object.add(atmosphere.object);
 	const { ground: groundMaterial, rock, wood, proxy: gray, checkpoint: gold } = materials;
 	const add = (geometry: BufferGeometry, m: MeshLambertMaterial) => {
 		ensureVertexColors(geometry);
+		if (m === groundMaterial && !geometry.getAttribute('shore')) {
+			const shore = new Float32Array(geometry.getAttribute('position').count * 2);
+			for (let i = 0; i < shore.length; i += 2) {
+				shore[i] = -10000;
+				shore[i + 1] = 10000;
+			}
+			geometry.setAttribute('shore', new Float32BufferAttribute(shore, 2));
+		}
 		ownedGeometries.push(geometry);
 		const mesh = new Mesh(geometry, m);
 		object.add(mesh);
 		return mesh;
 	};
 	for (const b of world.blocks) {
-		const mesh = add(terrainChunk(world, b, level?.trails), groundMaterial);
+		const mesh = add(terrainChunk(world, b, level?.trails, level?.pool), groundMaterial);
 		mesh.name = `terrain-${b.index}`;
 	}
 	for (const geometry of boundaryTerrain(world)) {
@@ -90,14 +110,14 @@ export function createMapVisual(
 	}
 	// Every bridge/stone is drawn at the same authored top as its collider.
 	for (const c of world.crossings) {
-		if (c.kind !== 'stepping-stones')
+		if (!storyProps && c.kind !== 'stepping-stones')
 			add(deckGeometry([c.from.x, c.from.y, c.from.z, c.to.x, c.to.y, c.to.z, c.halfWidth, 0.3]), wood);
-		for (const s of c.stones) {
+		for (const s of storyProps ? [] : c.stones) {
 			const height = s.y - (c.water - world.river.depth);
 			add(new CylinderGeometry(s.r, s.r * 1.1, height, 8).translate(s.x, s.y - height / 2, s.z), rock);
 		}
 	}
-	if (level)
+	if (level && !storyProps)
 		for (const obby of level.obbies)
 			if (obby.id === 'ledges')
 				for (const p of obby.pieces) {
@@ -111,13 +131,13 @@ export function createMapVisual(
 				}
 	const grayByBlock = new Map<number, BufferGeometry[]>();
 	const props = prefabProxies(world, level);
-	for (const p of props) {
+	for (const p of storyProps ? [] : props) {
 		const b = Math.floor(p.z / BLOCK_SIZE) * 4 + Math.floor(p.x / BLOCK_SIZE),
 			bucket = grayByBlock.get(b) ?? [];
 		bucket.push(propGeometry(p));
 		grayByBlock.set(b, bucket);
 	}
-	if (level) {
+	if (level && !storyProps) {
 		for (const t of level.triggers)
 			if (t.kind === 'trap' || t.kind === 'logger') {
 				const b = Math.floor(t.z / BLOCK_SIZE) * 4 + Math.floor(t.x / BLOCK_SIZE),
@@ -161,7 +181,20 @@ export function createMapVisual(
 			arrow.position.set(x, y + 0.08, z);
 			arrow.rotation.y = Math.atan2(target.x - x, target.z - z) + Math.PI;
 		},
+		setBackgroundVisible(visible: boolean) {
+			if (atmosphere) atmosphere.sky.visible = visible;
+		},
+		prepareFrame(camera: PerspectiveCamera, time: number, quality: Quality, night: boolean) {
+			lighting.uVisualTime.value = time;
+			atmosphere?.update(camera, time, quality, night ? 'night' : 'day');
+		},
 		dispose() {
+			if (lighting.uShadeMap.value === canopy.texture) {
+				lighting.uShadeEnabled.value = 0;
+				lighting.uShadeMap.value = null;
+			}
+			canopy.dispose();
+			atmosphere?.dispose();
 			for (const g of ownedGeometries) g.dispose();
 			materials.dispose();
 			object.removeFromParent();

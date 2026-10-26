@@ -1,11 +1,16 @@
 import { DoubleSide, MeshLambertMaterial } from 'three';
+import { stylize, visualStep } from '../render/stylized.ts';
 import { ACCENT, RAMPS } from '../style/palette.ts';
 
-/** Temporary look, isolated from geometry, physics and gameplay for the visual-v2 replacement. */
+/** Shared stylized Lambert lighting; geometry, physics and gameplay never depend on it. */
 export function createMapMaterials() {
-	const make = (color: string) => new MeshLambertMaterial({ color, vertexColors: true, flatShading: true });
+	const make = (color: string) =>
+		stylize(new MeshLambertMaterial({ color, vertexColors: true, flatShading: true }));
 	const materials = {
-		ground: make('#ffffff'),
+		ground: stylize(new MeshLambertMaterial({ color: '#ffffff', vertexColors: true }), {
+			vegetation: true,
+			terrain: visualStep() >= 2
+		}),
 		rock: make(RAMPS.rock[2]),
 		wood: make(RAMPS.wood[2]),
 		proxy: make(RAMPS.rock[1]),

@@ -183,3 +183,18 @@ describe('BlobShadows', () => {
 		expect(alpha(16, 8)).toBeGreaterThan(alpha(16, 4));
 	});
 });
+it('never casts or receives horizon and sky shadows even when their parent is registered', () => {
+	const rig = new ShadowRig(mockRenderer()),
+		parent = new Group(),
+		sky = new Mesh(new BoxGeometry(), new MeshLambertMaterial());
+	sky.userData.noShadow = true;
+	parent.add(sky);
+	rig.addCaster(parent, 'static');
+	rig.addReceiver(parent);
+	rig.setTier('high');
+	expect(sky.castShadow).toBe(false);
+	expect(sky.receiveShadow).toBe(false);
+	rig.dispose();
+	sky.geometry.dispose();
+	sky.material.dispose();
+});

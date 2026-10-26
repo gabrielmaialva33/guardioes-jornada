@@ -14,8 +14,8 @@ describe('world terrain and physics adapter', () => {
 			const g = terrainChunk(world, b);
 			const p = g.getAttribute('position'),
 				n = g.getAttribute('normal');
-			triangles += p.count / 3;
-			expect(p.count).toBe(40 * 40 * 6);
+			triangles += (g.index?.count ?? p.count) / 3;
+			expect(p.count).toBe(41 * 41);
 			for (let i = 0; i < p.count; i++) {
 				expect(p.getX(i)).toBeGreaterThanOrEqual(b.x0);
 				expect(p.getX(i)).toBeLessThanOrEqual(b.x0 + 40);

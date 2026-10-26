@@ -60,7 +60,9 @@ it('the exterior terrain continues every exact border sample into a rising skirt
 				outer++;
 				const bx = (x + 160) / 3,
 					bz = (z + 160) / 3;
-				expect(p.getY(i)).toBeGreaterThan(world.heights[Math.round(bz) * world.grid + Math.round(bx)] + 17);
+				if (x < -36) expect(p.getY(i)).toBeCloseTo(world.waterLevel);
+				else if (x >= 0)
+					expect(p.getY(i)).toBeGreaterThan(world.heights[Math.round(bz) * world.grid + Math.round(bx)] + 17);
 			}
 		}
 		g.dispose();
