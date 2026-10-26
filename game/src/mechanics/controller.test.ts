@@ -25,6 +25,7 @@ it('controller uses the same bounded fixed ticks for climbing and consumes jump 
 	for (let i = 0; i < 60; i++) p.update(1 / 60, input.sample(1 / 60));
 	expect(p.character.position.y).toBeCloseTo(4.8);
 	expect(drive.mode).toBe('ladder');
+	expect(p.character.velocity.y).toBeCloseTo(4.8);
 	input.keyDown('Space');
 	p.update(1 / 60, input.sample(1 / 60));
 	expect(drive.mode).toBe('walk');
@@ -33,7 +34,7 @@ it('controller uses the same bounded fixed ticks for climbing and consumes jump 
 });
 it('queues contextual action and jump across a render frame without a physics tick', () => {
 	const z = new Zipline({ id: 'z', start: { x: 0, y: 8, z: 0 }, end: { x: 0, y: 0, z: 40 } }),
-		drive = new ParkTraversal({ ziplines: [z] }),
+		drive = new ParkTraversal({ ziplines: [z], ziplineUnlocked: () => true }),
 		p = new PlayerController(world, z.spec.start, { traversal: drive }),
 		input = new InputModel();
 	input.tapButton('action');
@@ -56,7 +57,7 @@ it('queues contextual action and jump across a render frame without a physics ti
 });
 it('zipline is locked until the host unlocks it', () => {
 	const z = new Zipline({ id: 'z', start: { x: 0, y: 8, z: 0 }, end: { x: 0, y: 0, z: 40 } }),
-		drive = new ParkTraversal({ ziplines: [z], ziplineUnlocked: () => false }),
+		drive = new ParkTraversal({ ziplines: [z], ziplineUnlocked: undefined }),
 		p = new PlayerController(world, z.spec.start, { traversal: drive }),
 		input = new InputModel();
 	input.tapButton('action');

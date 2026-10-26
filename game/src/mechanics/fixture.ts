@@ -1,5 +1,6 @@
 /** Standalone original park fixture; never imports the live maps, story, or renderer. */
-import { CylinderGeometry, Group, SphereGeometry } from 'three';
+import { BoxGeometry, CylinderGeometry, Group, SphereGeometry } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CompoundWorld } from '../engine/compound-world.ts';
 import { Boardwalk } from './boardwalk.ts';
 import { SuspensionBridge } from './bridge.ts';
@@ -108,6 +109,20 @@ export function createMechanicsFixture() {
 		ground.box(s.position.x, s.position.y + 0.15, s.position.z - 0.7, 0.4, 0.27, 0.65, 0xf2c94c);
 	}
 	ground.box(trapPosition.x, trapPosition.y + 0.7, trapPosition.z, 1.1, 0.15, 0.1, 0xf3d75c);
+	// Original block proxies for the trap's mother and baby; animation/ supplies the final animals.
+	const familyParts = [
+		new BoxGeometry(0.7, 1, 0.5),
+		new BoxGeometry(0.5, 0.5, 0.5).translate(0, 0.8, 0),
+		new BoxGeometry(0.18, 1.3, 0.2).translate(-0.5, 0, 0),
+		new BoxGeometry(0.18, 1.3, 0.2).translate(0.5, 0, 0),
+		new BoxGeometry(0.35, 0.5, 0.3).translate(0.55, 0.1, -0.25),
+		new BoxGeometry(0.28, 0.28, 0.28).translate(0.55, 0.45, -0.25)
+	];
+	const familyGeometry = mergeGeometries(familyParts);
+	if (!familyGeometry) throw new Error('Invalid trap fixture geometry');
+	for (const part of familyParts) part.dispose();
+	ground.add(familyGeometry, 0xb48a63, 39, 4.7, 6);
+
 	const ladderMesh = createLadderMesh(ladder),
 		ziplineMesh = createZiplineMesh(zipline),
 		bridgeMesh = createBridgeMesh(bridge),
@@ -144,6 +159,7 @@ export function createMechanicsFixture() {
 	const traversal = new ParkTraversal({
 		ladders: [ladder],
 		ziplines: [zipline],
+		ziplineUnlocked: () => true,
 		canoes: [canoe],
 		beforeStep(dt, c) {
 			bridge.step(dt, c.position, c.planarSpeed, reducedMotion);

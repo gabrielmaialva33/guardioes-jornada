@@ -64,7 +64,7 @@ export class ParkTraversal implements TraversalDriver {
 				for (const z of this.options.ziplines ?? NO_ZIPLINES)
 					if (
 						distance(c.position, z.spec.start) <= 2.5 &&
-						z.start(this.options.ziplineUnlocked?.(z.spec.id) ?? true)
+						z.start(this.options.ziplineUnlocked?.(z.spec.id) ?? false)
 					) {
 						this.active = z;
 						this.mode = 'zipline';
@@ -94,6 +94,8 @@ export class ParkTraversal implements TraversalDriver {
 				Math.atan2(l.spec.exit.x - l.spec.base.x, l.spec.exit.z - l.spec.base.z),
 				l.phase === 'top' || l.phase === 'bottom'
 			);
+			// The existing animator advances climb by actual vertical distance.
+			if (l.phase === 'climbing') c.velocity.y = (c.position.y - c.previousPosition.y) / dt;
 			if (l.phase !== 'climbing') {
 				if (l.phase === 'detached') {
 					c.velocity.y = c.options.jumpSpeed;
@@ -109,11 +111,14 @@ export class ParkTraversal implements TraversalDriver {
 			z.step(dt);
 			const yaw = Math.atan2(z.spec.end.x - z.spec.start.x, z.spec.end.z - z.spec.start.z);
 			c.constrain(z.position, yaw, z.phase === 'arrived');
-			this.cameraBehind = yaw;
+			// A small shoulder angle keeps the cable out of the near plane.
+			this.cameraBehind = yaw + 0.22;
+			this.cameraLift = 1.5;
 			if (z.phase === 'arrived') {
 				this.active = null;
 				this.mode = 'walk';
 				this.cameraBehind = null;
+				this.cameraLift = 0;
 			}
 			return true;
 		}

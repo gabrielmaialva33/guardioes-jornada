@@ -93,6 +93,34 @@ const rings = fixture.photo.subjects.map(() => {
 });
 const speciesLabels: Record<string, string> = { tucano: 'tucano', saira: 'saíra', muriqui: 'muriqui' };
 const discoveries = new Set<string>();
+const postcard = document.createElement('aside');
+postcard.id = 'postcard';
+postcard.hidden = true;
+const postcardImage = document.createElement('img');
+postcardImage.alt = 'Registro da fauna no parque';
+const postcardCaption = document.createElement('p');
+const closePhoto = document.createElement('button');
+closePhoto.type = 'button';
+closePhoto.textContent = 'Fechar foto';
+closePhoto.addEventListener('click', () => {
+	postcard.hidden = true;
+});
+postcard.append(postcardImage, postcardCaption, closePhoto);
+app.append(postcard);
+const trapCamera = new PerspectiveCamera(60, 1, 0.1, 100);
+trapCamera.position.set(39, 5.2, 2.8);
+trapCamera.lookAt(39, 5, 6);
+function showPhoto(caption: string, trap = false) {
+	if (trap) {
+		trapCamera.aspect = camera.aspect;
+		trapCamera.updateProjectionMatrix();
+		renderer.render(scene, trapCamera);
+	}
+	postcardImage.src = renderer.domElement.toDataURL('image/png');
+	postcardCaption.textContent = caption;
+	postcard.hidden = false;
+}
+
 let shot: Shot = 'ladder',
 	last = performance.now(),
 	raf = 0,
@@ -117,6 +145,7 @@ for (const role of ['action', 'jump'] as const)
 	});
 function select(name: Shot) {
 	shot = name;
+	postcard.hidden = true;
 	fixture.traversal.reset();
 	fixture.photo.cancel();
 	fixture.boardwalk.cancel();
@@ -135,7 +164,13 @@ function select(name: Shot) {
 		player.camera.pitch = 0;
 	}
 	if (name === 'bridge') spawn = { x: -12, y: 3, z: -0.6 };
-	if (name === 'canoe') spawn = fixture.canoe.spec.landings[0].exit;
+	if (name === 'canoe') {
+		let nearest = fixture.canoe.spec.landings[0];
+		for (const landing of fixture.canoe.spec.landings)
+			if (distance(fixture.canoe.position, landing.water) < distance(fixture.canoe.position, nearest.water))
+				nearest = landing;
+		spawn = nearest.exit;
+	}
 	if (name === 'trap') spawn = { x: 39, y: 0, z: -1 };
 	if (name === 'boardwalk') spawn = { x: -24, y: 4, z: 11 };
 	player.character.teleport(spawn);
@@ -154,7 +189,12 @@ function contextualAction() {
 		} else if (fixture.trap.collect()) {
 			discoveries.add(fixture.trap.species);
 			notice = 'Foto dos muriquis revelada!';
-		} else notice = 'A câmera aguarda outra missão.';
+			showPhoto('Muriquis · mãe e filhote', true);
+		} else
+			notice =
+				fixture.trap.phase === 'collected'
+					? 'O registro já está no Guia da Mata.'
+					: 'A câmera aguarda outra missão.';
 	} else if (fixture.boardwalk.action(p, fixture.reducedMotion)) {
 		fixture.complete('lookout');
 		notice = 'Olhe a floresta do alto.';
@@ -166,6 +206,7 @@ function contextualAction() {
 				if (s) discoveries.add(s.species);
 			}
 			fixture.complete('photo');
+			showPhoto('Registro salvo no Guia da Mata desta prévia');
 			notice = `${fixture.photo.savedCount} espécies registradas no Guia da Mata.`;
 		} else notice = 'Enquadre os anéis e use a ação para fotografar.';
 	}
@@ -182,6 +223,7 @@ function renderFrame(dt: number) {
 	const mode = fixture.traversal.mode;
 	// Neutral block proxy only; production climb/sit/hang/row belongs to animation/.
 	armLeft.rotation.x = armRight.rotation.x = mode === 'zipline' ? Math.PI : mode === 'ladder' ? -1.8 : 0;
+	armLeft.position.y = armRight.position.y = mode === 'zipline' ? 2.65 : mode === 'ladder' ? 2.1 : 1.65;
 	legLeft.rotation.x = legRight.rotation.x = mode === 'canoe' ? -Math.PI / 2 : 0;
 	avatar.root.visible = fixture.photo.phase !== 'framing';
 	applyCameraPose(camera, frame.pose);
@@ -214,14 +256,16 @@ function renderFrame(dt: number) {
 	else if (mode === 'zipline') label = 'Aproveite a vista';
 	else if (mode === 'canoe') label = 'Desembarcar · E';
 	else if (shot === 'canoe') label = 'Embarcar · E';
-	else if (shot === 'zipline') label = 'Deslizar · E';
+	else if (shot === 'zipline') label = fixture.zipline.phase === 'arrived' ? 'Chegamos!' : 'Deslizar · E';
 	else if (shot === 'trap')
 		label =
 			fixture.trap.phase === 'unplaced'
 				? 'Instalar câmera · E'
 				: fixture.trap.phase === 'ready'
 					? 'Revelar foto · E'
-					: 'Aguardando missão';
+					: fixture.trap.phase === 'collected'
+						? 'Foto registrada'
+						: 'Aguardando missão';
 	else if (shot === 'boardwalk') label = 'Observar · E';
 	else if (shot === 'photo') label = fixture.photo.phase === 'framing' ? 'Fotografar · E' : 'Enquadrar · E';
 	if (label !== lastAction) {
