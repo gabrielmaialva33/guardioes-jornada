@@ -3,14 +3,14 @@
 The visual regression gate of ART.md §9 and a-visual.md §6: the same ten poses captured after every visual
 change, compared against the last approved baseline, measured, and laid next to their references.
 
-| File              | What it does                                                                                                      |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `poses.json`      | The poses: id, what each one covers, how the runtime reaches it, camera/avatar targets, references                |
-| `capture.ts`      | Playwright with the system Chrome: one PNG, one sky mask and one JSON of `__gameDebug` counters per pose and tier |
-| `compare.ts`      | Changed pixels against the baseline (gate 0.5%), diff images, metric deltas; `--approve` promotes a set           |
-| `sheet.ts`        | Per pose: `before \| after \| ref 1 \| ref 2`, plus one page per configuration                                    |
-| `lib.ts`          | Shared paths, argument parsing, ImageMagick calls and the image metrics                                           |
-| `avatar-sheet.ts` | Contact sheet of the avatar's contexts and gestures (P10), 4 phases each, real `avatar.glb` in Chrome; no server  |
+| File               | What it does                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `poses.json`       | The poses: id, what each one covers, how the runtime reaches it, camera/avatar targets, references                                 |
+| `capture.ts`       | Playwright with the system Chrome: one PNG, one sky mask and one JSON of `__gameDebug` counters per pose and tier                  |
+| `compare.ts`       | Changed pixels against the baseline (gate 0.5%), diff images, metric deltas; `--approve` promotes a set                            |
+| `sheet.ts`         | Per pose: `before \| after \| ref 1 \| ref 2`, plus one page per configuration                                                     |
+| `lib.ts`           | Shared paths, argument parsing, ImageMagick calls and the image metrics                                                            |
+| `avatar-sheet.ts`  | Contact sheet of the avatar's contexts and gestures (P10), 4 phases each, real `avatar.glb` in Chrome; no server                   |
 | `loading-sheet.ts` | Loading screen (P11) at 0/40/90 % on phone portrait, landscape and desktop, error states, reduced motion, layout checks; no server |
 
 No npm dependency beyond `@playwright/test` and `vite` (already in the repo); images go through the system `magick` (7.x).

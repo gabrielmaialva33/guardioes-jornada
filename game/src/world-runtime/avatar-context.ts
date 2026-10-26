@@ -120,7 +120,11 @@ export class AvatarGroundContext {
 		}
 		const x = p.x + dx * 0.4,
 			z = p.z + dz * 0.4;
-		this.#probe.x=x; this.#probe.y=p.y+.3; this.#probe.z=z; this.#probe.depth=1.31; this.#probe.sample();
+		this.#probe.x = x;
+		this.#probe.y = p.y + 0.3;
+		this.#probe.z = z;
+		this.#probe.depth = 1.31;
+		this.#probe.sample();
 		if (p.y - this.#probe.height > 1) input.edgeAhead = 0.39;
 	}
 }

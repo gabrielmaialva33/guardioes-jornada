@@ -43,7 +43,7 @@ export class DownProbe {
 		this.#counts = Int32Array.from(counts);
 	}
 	sample() {
-		const {x,y,z,depth}=this;
+		const { x, y, z, depth } = this;
 		this.height = -Infinity;
 		this.#ray.origin.set(x, y, z);
 		const bounds = this.#bounds,

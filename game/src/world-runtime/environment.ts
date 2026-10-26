@@ -10,7 +10,7 @@ import { testing } from '../scene/testing.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { AvatarGroundContext } from './avatar-context.ts';
 import { buildMapCollision, prefabProxies } from './collision.ts';
-import { MapCheckpoints } from './navigation.ts';
+import { MapCheckpoints, riverSurfaceAt } from './navigation.ts';
 import { loadWorldPlacements, withoutPlacement } from './placements.ts';
 import { createMapVisual } from './visual.ts';
 
@@ -117,5 +117,32 @@ export function createMapEnvironment(
 			yaw: Math.PI / 2
 		}
 	};
+	if (import.meta.env.DEV) {
+		const stone = stones?.pieces[0] ?? crossing?.stones[0];
+		if (stone) debugPoses['stone-top'] = { ...start, spawn: { x: stone.x, y: stone.y, z: stone.z }, yaw: 0 };
+		if (
+			level &&
+			typeof location !== 'undefined' &&
+			new URLSearchParams(location.search).get('pose') === 'wading'
+		) {
+			outer: for (
+				let z = Math.max(1, Math.floor(level.pool.z - 20));
+				z < Math.min(world.size, level.pool.z + 20);
+				z++
+			)
+				for (
+					let x = Math.max(1, Math.floor(level.pool.x - 20));
+					x < Math.min(world.size, level.pool.x + 20);
+					x++
+				) {
+					const y = world.heights[z * world.grid + x],
+						water = riverSurfaceAt(world, x, z, level.pool);
+					if (water !== null && water - y > 0.2 && water - y < 0.35) {
+						debugPoses.wading = { ...start, spawn: { x, y, z }, yaw: 0 };
+						break outer;
+					}
+				}
+		}
+	}
 	return { environment, tracker, checkpoint, debugPoses };
 }

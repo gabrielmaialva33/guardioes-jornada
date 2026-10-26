@@ -139,9 +139,15 @@ export class LivingWorldRuntime implements LivingWorld {
 		this.fauna = new Fauna(plan, world.heights, parts.quality);
 		const fauna = this.fauna;
 		this.actors = fauna.animals.map((animal, id) => ({
-			id, position: animal.motion, eyeHeight: animal.species.eyeHeight,
-			get companion() { return id === fauna.companion && fauna.companionActive; },
-			get active() { return id === fauna.companion ? fauna.companionActive : true; }
+			id,
+			position: animal.motion,
+			eyeHeight: animal.species.eyeHeight,
+			get companion() {
+				return id === fauna.companion && fauna.companionActive;
+			},
+			get active() {
+				return true;
+			}
 		}));
 		this.fauna.onHowl = parts.onHowl ?? null;
 		this.pets = this.fauna.animals.map((animal) => {

@@ -1,3 +1,4 @@
+import { getHeapStatistics } from 'node:v8';
 import { BoxGeometry, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { createAvatarInput } from '../animation/avatar-animator.ts';
@@ -70,3 +71,25 @@ it('uses facing-relative ground normals and a real down-probe at a ledge', () =>
 	sample.update(input, character);
 	expect(input.edgeAhead).toBe(Infinity);
 });
+function allocated() {
+	const h = getHeapStatistics();
+	return 'total_allocated_bytes' in h && typeof h.total_allocated_bytes === 'number'
+		? h.total_allocated_bytes
+		: null;
+}
+it.skipIf(allocated() === null)(
+	'reuses the complete grounded sampler without steady-state allocations',
+	() => {
+		character.position.set(0, 0, 0);
+		character.previousPosition.copy(character.position);
+		input.speed = 0;
+		for (let i = 0; i < 200000; i++) sample.update(input, character);
+		let best = Infinity;
+		for (let run = 0; run < 5; run++) {
+			const before = allocated() ?? 0;
+			for (let i = 0; i < 100000; i++) sample.update(input, character);
+			best = Math.min(best, ((allocated() ?? 0) - before) / 100000);
+		}
+		expect(best).toBeLessThan(4);
+	}
+);

@@ -413,6 +413,7 @@
 	}
 	function animateAvatar(delta: number, intent = 0) {
 		readCharacter(animationInput, controller.character, delta);
+		animationInput.jumped = controller.frame.jumped;
 		animationInput.yaw = controller.frame.yaw;
 		animationInput.intent = intent;
 		animationInput.reducedMotion = motion.matches;

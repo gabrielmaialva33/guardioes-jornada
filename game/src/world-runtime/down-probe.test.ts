@@ -14,12 +14,20 @@ it('matches the existing BVH for terrain, elevated stones, decks and the mirante
 		for (let x = 1; x < world.size; x += 7) {
 			ray.origin.set(x, 30, z);
 			const distance = collision.raycast(ray, 60);
-			probe.x=x;probe.y=30;probe.z=z;probe.depth=60;probe.sample();
+			probe.x = x;
+			probe.y = 30;
+			probe.z = z;
+			probe.depth = 60;
+			probe.sample();
 			expect(probe.height).toBeCloseTo(distance === null ? -Infinity : 30 - distance, 5);
 		}
 	for (const o of level.obbies)
 		for (const p of o.pieces) {
-			probe.x=p.x;probe.y=p.y+1;probe.z=p.z;probe.depth=1.1;probe.sample();
+			probe.x = p.x;
+			probe.y = p.y + 1;
+			probe.z = p.z;
+			probe.depth = 1.1;
+			probe.sample();
 			expect(probe.height).toBeCloseTo(p.y, 4);
 		}
 });
@@ -30,12 +38,20 @@ function allocated() {
 		: null;
 }
 it.skipIf(allocated() === null)('allocates no hit objects during repeated probes', () => {
-	probe.y=3;probe.z=92;probe.depth=2;
-	for (let i = 0; i < 200000; i++){probe.x=34+(i&7)*.03;probe.sample();}
+	probe.y = 3;
+	probe.z = 92;
+	probe.depth = 2;
+	for (let i = 0; i < 200000; i++) {
+		probe.x = 34 + (i & 7) * 0.03;
+		probe.sample();
+	}
 	let best = Infinity;
 	for (let run = 0; run < 5; run++) {
 		const before = allocated() ?? 0;
-		for (let i = 0; i < 100000; i++){probe.x=34+(i&7)*.03;probe.sample();}
+		for (let i = 0; i < 100000; i++) {
+			probe.x = 34 + (i & 7) * 0.03;
+			probe.sample();
+		}
 		best = Math.min(best, ((allocated() ?? 0) - before) / 100000);
 	}
 	expect(best).toBeLessThan(4);
