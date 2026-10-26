@@ -37,8 +37,16 @@ describe('fauna: spawning', () => {
 			const m = animal.motion;
 			for (const v of [m.x, m.y, m.z, m.yaw]) expect(Number.isFinite(v), p.key).toBe(true);
 			expect(Math.hypot(m.x - p.homeX, m.z - p.homeZ), p.key).toBeLessThan(26);
-			if (p.arboreal) expect(m.y - ground(m.x, m.z), p.key).toBeGreaterThan(3);
-			else expect(m.y, p.key).toBeCloseTo(ground(m.x, m.z), 2);
+			if (p.arboreal) {
+				// The sabiá's lawn perches are on the ground; every other perch is up a tree.
+				if (!p.perches?.some((perch) => perch.ground))
+					expect(m.y - ground(m.x, m.z), p.key).toBeGreaterThan(3);
+			} else if (p.water) {
+				// Bank animals start on land or afloat, never under the bed.
+				expect(m.y - ground(m.x, m.z), p.key).toBeGreaterThan(-0.06);
+			} else if (p.species === 'onca-pintada') expect(m.y, p.key).toBeCloseTo(ground(m.x, m.z), 2);
+			// P23 routes follow the ground in straight pieces of up to 1 u: within a few centimetres.
+			else expect(Math.abs(m.y - ground(m.x, m.z)), p.key).toBeLessThan(0.06);
 		});
 	});
 });
@@ -324,5 +332,48 @@ describe('fauna: determinism', () => {
 		const b = replay(LIFE_SEED);
 		expect(b).toEqual(a);
 		expect(replay(LIFE_SEED + 1).state).not.toEqual(a.state);
+	});
+});
+
+describe('fauna: the P23 species on the map', () => {
+	it('the veado-mateiro flees a child inside 15 u and not before', () => {
+		const at = (d: number) => {
+			const fauna = new Fauna(plan, world.heights);
+			const i = plan.animals.findIndex((a) => a.species === 'veado-mateiro');
+			const deer = fauna.animals[i];
+			const m = deer.motion;
+			setPlayer(fauna, m.x + d, m.z);
+			let fled = false;
+			run(fauna, 3, 60, () => {
+				// The child keeps its distance from where the deer is.
+				setPlayer(fauna, deer.motion.x + d, deer.motion.z);
+				fled ||= deer.state === 'flee';
+			});
+			return fled;
+		};
+		expect(at(16)).toBe(false);
+		expect(at(14)).toBe(true);
+	});
+
+	it('the cateto band stays together on its loop', () => {
+		const fauna = new Fauna(plan, world.heights);
+		const band = plan.animals.flatMap((a, i) => (a.species === 'cateto' ? [i] : []));
+		// The child watches from 20 u, outside the band's 12 u alert radius but near enough to be animated.
+		const home = plan.animals[band[0]];
+		setPlayer(fauna, home.homeX + 20, home.homeZ);
+		const start = band.map((i) => ({ x: fauna.animals[i].motion.x, z: fauna.animals[i].motion.z }));
+		let worst = 0;
+		run(fauna, 90, 30, () => {
+			const xs = band.map((i) => fauna.animals[i].motion);
+			for (const a of xs) for (const b of xs) worst = Math.max(worst, Math.hypot(a.x - b.x, a.z - b.z));
+		});
+		// They moved along the loop (the leader's walks), and stayed a tight band: five animals on
+		// concentric loops 0.8 u apart, 1.4 u apart along them.
+		const moved = band.map((i, k) =>
+			Math.hypot(fauna.animals[i].motion.x - start[k].x, fauna.animals[i].motion.z - start[k].z)
+		);
+		expect(Math.max(...moved)).toBeGreaterThan(1);
+		expect(fauna.animals[band[0]].lod.tier).not.toBe('frozen');
+		expect(worst).toBeLessThan(12);
 	});
 });

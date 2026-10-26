@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="data:," />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Bichos da Mata · lineup</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				background: #cfe8f2;
+				overflow: hidden;
+				font-family: system-ui, sans-serif;
+			}
+			canvas {
+				display: block;
+			}
+			#labels {
+				position: fixed;
+				inset: 0;
+				pointer-events: none;
+			}
+			#labels div {
+				position: absolute;
+				transform: translateX(-50%);
+				font: 600 12px/1.15 system-ui, sans-serif;
+				color: #1e4d36;
+				text-align: center;
+				white-space: nowrap;
+			}
+			#labels div i {
+				display: block;
+				font-weight: 400;
+				font-size: 10px;
+				color: #2d6a4f;
+			}
+			#title {
+				position: fixed;
+				left: 10px;
+				top: 8px;
+				font: 600 14px system-ui, sans-serif;
+				color: #1e4d36;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="title"></div>
+		<div id="labels"></div>
+		<script type="module" src="./lineup.ts"></script>
+	</body>
+</html>

@@ -51,31 +51,48 @@ const story = (done: number[], planted = 0): LifeStoryState => ({
 });
 
 describe('living world: assembly and budgets', () => {
-	it('builds one mesh per animal, two flocks and one particle system, within 20 draws and 25k triangles', async () => {
+	it('draws the animals in at most four pools (one per map quadrant), with two flocks and one particle system: within 7 draws and 40k triangles', async () => {
 		const life = await create('high');
 		const meshes: Mesh[] = [];
 		life.object3d.traverse((o) => {
 			if (o instanceof Mesh) meshes.push(o);
 		});
-		const pets = meshes.filter((m) => m instanceof SkinnedMesh);
-		expect(pets).toHaveLength(life.fauna.animals.length);
-		expect(meshes).toHaveLength(life.fauna.animals.length + 3);
+		const pets = meshes.filter((m) => m instanceof SkinnedMesh) as SkinnedMesh[];
+		expect(pets.length).toBeLessThanOrEqual(4);
+		expect(pets).toHaveLength(life.pools.length);
+		expect(meshes).toHaveLength(pets.length + 3);
+		// One material and one palette atlas for every pool: same program, same texture.
+		expect(new Set(pets.map((pet) => pet.material)).size).toBe(1);
+		let animals = 0;
 		for (const pet of pets) {
 			expect(Array.isArray(pet.material)).toBe(false);
-			expect(pet.geometry.getAttribute('skinIndex')).toBeDefined();
+			// Each animal is skinned to its own bones: the pool's skeleton holds every animal in it.
+			const skin = pet.geometry.getAttribute('skinIndex');
+			let most = 0;
+			for (let i = 0; i < skin.count; i++) most = Math.max(most, skin.getX(i));
+			expect(most).toBe(pet.skeleton.bones.length - 1);
+			// Palette UVs stay inside the atlas.
+			const uv = pet.geometry.getAttribute('uv');
+			for (let i = 0; i < uv.count; i++) {
+				expect(uv.getX(i)).toBeGreaterThanOrEqual(0);
+				expect(uv.getX(i)).toBeLessThanOrEqual(1);
+			}
 		}
+		for (const pool of life.pools) animals += pool.instances.length;
+		expect(animals).toBe(life.fauna.animals.length);
+		expect(life.pets.every((pet) => pet !== null)).toBe(true);
 		const frame = frameAt(80, 80);
 		run(life, frame, 2);
 		life.onStory(story([1, 2, 3, 4, 5], 6));
 		run(life, frame, 1);
 		const debug = life.debug();
-		// Every animal in view from high above the map: the worst case.
+		// Every animal in view from high above the map: the worst case, every pool drawn.
 		expect(debug.visible).toBe(life.fauna.animals.length);
-		expect(debug.draws).toBeLessThanOrEqual(20);
-		expect(debug.triangles).toBeLessThanOrEqual(25_000);
+		expect(debug.draws).toBeLessThanOrEqual(7);
+		expect(debug.triangles).toBeLessThanOrEqual(40_000);
 		let triangles = 0;
 		for (const pet of pets) triangles += (pet.geometry.index?.count ?? 0) / 3;
-		expect(triangles).toBeLessThan(13_000);
+		expect(triangles).toBeLessThan(36_000);
 		life.dispose();
 	});
 
@@ -219,8 +236,9 @@ describe('living world: dispose', () => {
 			loadTexture: stubTexture,
 			releaseGlb: (model) => released.add(model)
 		});
-		expect(loaded.length).toBe(7);
-		expect(released.size).toBe(7);
+		// The 4 original Cube Pets, the 3 attachments and the 15 P23 models (bichos_mata.py).
+		expect(loaded.length).toBe(22);
+		expect(released.size).toBe(22);
 		life.dispose();
 
 		const controller = new AbortController();

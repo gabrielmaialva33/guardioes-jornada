@@ -4,13 +4,15 @@
  * It owns one Group (`object3d`) the scene adds once, and it has no renderer
  * and no loop of its own: the game calls update() once per frame.
  *
- * Budget (ART.md §4/§8, measured in p8-life.md): at most one draw per visible
- * animal (≤ 13 on the story map) + butterflies + birds + particles ≤ 16 draws,
- * about 11.8k triangles with everything in view, and well under 1 ms of CPU per
- * frame on a mid phone. update() allocates nothing.
+ * Budget (ART.md §4/§8, measured in p8-life.md and p23-bichos.md): the animals
+ * are drawn in at most four pools, one per map quadrant of their homes, every
+ * species' palette in one atlas (pets.ts), so they cost at most 4 draws however
+ * many there are (44 animals of 23 species on the story map), + butterflies +
+ * birds + particles; about 34k triangles with every pool in view, and well
+ * under 1 ms of CPU per frame on a mid phone. update() allocates nothing.
  */
-import { type Camera, Group, type Texture } from 'three';
-import { type AnyAnimal, OncaBehaviour, type SpeciesId } from '../animation/animals/index.ts';
+import { type Camera, Group, type Material, type Texture } from 'three';
+import { type AnyAnimal, type Light, OncaBehaviour, type SpeciesId } from '../animation/animals/index.ts';
 import type { StoryLevel } from '../level/types.ts';
 import type { Quality } from '../render/quality.ts';
 import type { StudyFauna } from '../study/index.ts';
@@ -19,7 +21,14 @@ import { Fauna, type HowlEvent, LIFE_TIERS, type LifeBlobs } from './fauna.ts';
 import { BIRD_COUNT, LifeFlocks } from './flocks.ts';
 import type { LifePlan } from './homes.ts';
 import { AmbientParticles } from './particles.ts';
-import { createPet, type PetInstance, type PetTemplate } from './pets.ts';
+import {
+	createPetPool,
+	type PetInstance,
+	type PetPool,
+	type PetTemplate,
+	paletteAtlas,
+	petMaterial
+} from './pets.ts';
 import { subSeed } from './rng.ts';
 import { windClock } from './wind.ts';
 
@@ -42,6 +51,8 @@ export interface LifeFrame {
 	time: number;
 	/** prefers-reduced-motion or the in-game toggle (ART.md §7). */
 	reducedMotion: boolean;
+	/** Optional: day (default), dusk or night (the survival night): nocturnal species rest by day. */
+	light?: Light;
 	/** Optional: the player is on the ground (default true), and jumped this frame (the companion hops). */
 	playerGrounded?: boolean;
 	playerJumped?: boolean;
@@ -121,6 +132,12 @@ export class LivingWorldRuntime implements LivingWorld {
 	readonly flocks: LifeFlocks;
 	readonly particles: AmbientParticles;
 	readonly pets: (PetInstance | null)[];
+	/** The animal pools: one draw each, by map quadrant of the animals' homes. */
+	readonly pools: PetPool[] = [];
+	/** Animal indices of each pool. */
+	readonly #members: number[][] = [];
+	readonly #atlas: Texture | null = null;
+	readonly #material: Material | null = null;
 	readonly #templates: ReadonlyMap<SpeciesId, PetTemplate>;
 	readonly #textures: readonly Texture[];
 	readonly #cpu = new Float64Array(CPU_WINDOW);
@@ -153,18 +170,51 @@ export class LivingWorldRuntime implements LivingWorld {
 			}
 		}));
 		this.fauna.onHowl = parts.onHowl ?? null;
-		this.pets = this.fauna.animals.map((animal) => {
-			const template = parts.templates.get(animal.species.id);
-			if (!template) return null;
-			const pet = createPet(template);
-			this.object3d.add(pet.group);
-			return pet;
-		});
+		// Pools: the animals whose homes share a map quadrant in one SkinnedMesh (one draw),
+		// every species' palette in one atlas so one material serves every pool.
+		this.pets = this.fauna.animals.map(() => null);
+		const species = [...new Set(this.fauna.animals.map((a) => a.species.id))].filter((id) =>
+			parts.templates.has(id)
+		);
+		if (species.length > 0) {
+			const atlas = paletteAtlas(species.map((id) => parts.templates.get(id)?.material.map ?? null));
+			const material = petMaterial(atlas.texture);
+			this.#atlas = atlas.texture;
+			this.#material = material;
+			const half = plan.size / 2;
+			const regions = new Map<number, Map<SpeciesId, number[]>>();
+			plan.animals.forEach((home, i) => {
+				const id = this.fauna.animals[i].species.id;
+				if (!parts.templates.has(id)) return;
+				const region = (home.homeX >= half ? 1 : 0) + (home.homeZ >= half ? 2 : 0);
+				const bySpecies = regions.get(region) ?? new Map<SpeciesId, number[]>();
+				regions.set(region, bySpecies);
+				bySpecies.set(id, [...(bySpecies.get(id) ?? []), i]);
+			});
+			for (const [region, bySpecies] of [...regions].sort(([a], [b]) => a - b)) {
+				const entries = [...bySpecies].map(([id, list]) => ({
+					template: parts.templates.get(id) as PetTemplate,
+					count: list.length,
+					slot: species.indexOf(id)
+				}));
+				const pool = createPetPool(entries, material, atlas, `life-pool-${region}`);
+				const members = [...bySpecies.values()].flat();
+				this.pools.push(pool);
+				this.#members.push(members);
+				this.object3d.add(pool.mesh);
+				members.forEach((animal, k) => {
+					const pet = pool.instances[k];
+					this.object3d.add(pet.group);
+					this.pets[animal] = pet;
+				});
+			}
+		}
 		this.pets.forEach((pet, i) => {
 			if (pet) this.fauna.bodies[i] = pet;
 		});
 		this.fauna.attachBlobs(parts.blobs ?? null);
 		this.fauna.placeAll();
+		for (const pool of this.pools) pool.updateBounds();
 		this.flocks = new LifeFlocks(plan);
 		this.object3d.add(this.flocks.butterflyMesh.mesh, this.flocks.birdMesh.mesh);
 		this.particles = new AmbientParticles({
@@ -209,8 +259,10 @@ export class LivingWorldRuntime implements LivingWorld {
 		f.playerGrounded = frame.playerGrounded !== false;
 		f.playerJumped = frame.playerJumped === true;
 		f.reducedMotion = reduced;
+		f.light = frame.light ?? 'day';
 		f.camera = frame.camera;
 		this.fauna.update();
+		for (let i = 0; i < this.pools.length; i++) this.pools[i].updateBounds();
 		this.#study?.update(frame);
 
 		const flock = this.flocks.frame;
@@ -261,22 +313,25 @@ export class LivingWorldRuntime implements LivingWorld {
 	debug(): LifeDebug {
 		this.#profile = true;
 		const fauna = this.fauna;
+		// A pool is drawn (all its animals) when any of its animals is in view (the fauna's
+		// frustum pass; animals beyond the fog are culled by the far plane).
 		let triangles = 0;
-		let visible = 0;
-		this.pets.forEach((pet, i) => {
-			if (!pet) return;
-			const sphere = pet.mesh.boundingSphere;
-			// Same test as the fauna's frustum pass; animals beyond the fog are culled by the far plane.
-			if (sphere && fauna.isVisible(i)) {
-				visible++;
-				triangles += this.#templates.get(fauna.animals[i].species.id)?.triangles ?? 0;
-			}
-		});
+		let poolsDrawn = 0;
+		for (let b = 0; b < this.pools.length; b++) {
+			const members = this.#members[b];
+			let drawn = false;
+			for (let k = 0; k < members.length && !drawn; k++) drawn = fauna.isVisible(members[k]);
+			if (!drawn) continue;
+			poolsDrawn++;
+			triangles += this.pools[b].triangles;
+		}
 		const butterflies = this.flocks.active;
 		triangles += butterflies * 10 + BIRD_COUNT * 6 + this.particles.live * 2;
-		const draws = visible + (butterflies > 0 ? 1 : 0) + 1 + (this.particles.live > 0 ? 1 : 0);
+		const draws = poolsDrawn + (butterflies > 0 ? 1 : 0) + 1 + (this.particles.live > 0 ? 1 : 0);
 		const companion = fauna.companion >= 0 ? fauna.animals[fauna.companion] : null;
-		const onca = fauna.animals.find((a: AnyAnimal) => a.behaviour instanceof OncaBehaviour);
+		const onca = fauna.animals.find(
+			(a: AnyAnimal) => a.behaviour instanceof OncaBehaviour && a.species.id === 'onca-pintada'
+		);
 		const n = this.#cpuCount;
 		this.#sorted.set(this.#cpu);
 		const window = this.#sorted.subarray(0, n).sort();
@@ -324,7 +379,9 @@ export class LivingWorldRuntime implements LivingWorld {
 		this.#disposed = true;
 		this.fauna.dispose();
 		this.#study?.dispose();
-		for (const pet of this.pets) pet?.dispose();
+		for (const pool of this.pools) pool.dispose();
+		this.#material?.dispose();
+		this.#atlas?.dispose();
 		for (const template of this.#templates.values()) {
 			template.geometry.dispose();
 			template.material.dispose();

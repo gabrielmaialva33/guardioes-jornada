@@ -80,6 +80,9 @@ const FRAGMENT_PREFIX = (defines: string[]) =>
 		'uniform vec3 cameraPosition;',
 		'uniform bool isOrthographic;',
 		'vec4 linearToOutputTexel( vec4 value ) { return value; }',
+		// three's WebGLProgram prepends this to every fragment program (sRGBTransferEOTF/OETF,
+		// which the stylized look's fog grade uses).
+		(ShaderChunk as Record<string, string>).colorspace_pars_fragment,
 		''
 	].join('\n');
 

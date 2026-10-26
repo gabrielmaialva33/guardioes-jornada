@@ -15,7 +15,13 @@
  *   itself by that ratio. The direction is unchanged, so it still watches the
  *   player and still always walks away, never toward;
  * - the bugios' howls: every start of a howl and every chorus (a seeded clock
- *   of 45–100 s, or howl()) calls onHowl, for the audio landmark.
+ *   of 45–100 s, or howl()) calls onHowl, for the audio landmark;
+ * - the P23 herds (capivaras, the anta and her calf, the cateto band, the
+ *   guarás) share one Herd each, and every member updates in its leader's LOD
+ *   slot, so the band steps together; the puma and the ocelot share the onça's
+ *   behaviour and its LEVEL.md 15 u;
+ * - the time of day (FaunaFrame.light) reaches every behaviour: nocturnal and
+ *   crepuscular species mostly rest by day.
  *
  * update() allocates nothing: scratch arrays are sized at construction and
  * numbers travel through object fields (p3-animals.md, V8 rules).
@@ -27,6 +33,8 @@ import {
 	BugioBehaviour,
 	createAnimal,
 	createAnimalWorld,
+	Herd,
+	type Light,
 	MicoBehaviour,
 	ONCA,
 	OncaBehaviour,
@@ -40,13 +48,19 @@ import { DT_MAX, DT_STEPS, DT_TAGGED } from './tagged.ts';
 
 /** Per-tier limits [engine]: animals animated at once, and live leaves + pollen (butterflies come on top, ≤ 15). */
 export const LIFE_TIERS: Readonly<Record<Quality, { animated: number; particles: number }>> = {
-	low: { animated: 7, particles: 80 },
-	medium: { animated: 10, particles: 150 },
-	high: { animated: 16, particles: 150 }
+	// P23 raised the caps with the population (13 → 44 animals; a cateto band alone is 5):
+	// about 10 µs per animal per frame on a phone (p3-animals.md), so 10 is ~0.1 ms.
+	low: { animated: 10, particles: 80 },
+	medium: { animated: 14, particles: 150 },
+	high: { animated: 20, particles: 150 }
 };
 
 /** Seconds the companion takes to climb down from the canopy when it joins the player. */
 export const DESCENT = 1.4;
+
+/** Most blob shadows the animals take from the shadow rig's shared slots, and the smallest animal that gets one (u). */
+export const BLOB_LIMIT = 16;
+const BLOB_MIN_SIZE = 0.5;
 
 /** Seconds between bugio choruses (the north-west's sound landmark). */
 const CHORUS = [45, 100] as const;
@@ -85,10 +99,12 @@ export class FaunaFrame {
 	playerGrounded = true;
 	playerJumped = false;
 	reducedMotion = false;
+	/** Day, dusk or night (the survival mode's night): nocturnal species rest by day. */
+	light: Light = 'day';
 	camera: Camera | null = null;
 }
 
-export function createPlannedAnimal(plan: AnimalPlan, slot: number): AnyAnimal {
+export function createPlannedAnimal(plan: AnimalPlan, slot: number, herd: Herd | null = null): AnyAnimal {
 	// x, y, z: the mico starts at its route's first point (it places only x and z until its first update).
 	const route = plan.route;
 	return createAnimal(plan.species, {
@@ -100,6 +116,9 @@ export function createPlannedAnimal(plan: AnimalPlan, slot: number): AnyAnimal {
 		loop: plan.loop,
 		perches: plan.perches ?? undefined,
 		start: plan.start,
+		water: plan.water ?? null,
+		herd,
+		offset: plan.offset ?? 0,
 		lod: { slot }
 	});
 }
@@ -152,7 +171,14 @@ export class Fauna {
 
 	constructor(plan: LifePlan, heights: Float32Array, quality: Quality = 'low') {
 		this.plan = plan;
-		this.animals = plan.animals.map((p, i) => createPlannedAnimal(p, i));
+		// One Herd per planned herd; its members take the first member's LOD slot so they update together.
+		const herds = Array.from({ length: plan.herds ?? 0 }, () => new Herd());
+		const leaders = new Map<number, number>();
+		this.animals = plan.animals.map((p, i) => {
+			const h = p.herd ?? -1;
+			if (h >= 0 && !leaders.has(h)) leaders.set(h, i);
+			return createPlannedAnimal(p, h >= 0 ? (leaders.get(h) ?? i) : i, h >= 0 ? herds[h] : null);
+		});
 		this.bodies = this.animals.map(() => null);
 		const n = this.animals.length;
 		this.cap = LIFE_TIERS[quality].animated;
@@ -181,13 +207,28 @@ export class Fauna {
 		this.#companionWanted = on && this.companion >= 0;
 	}
 
-	/** Attaches blob shadows for the animals that walk on the ground (the onça, the companion). */
+	/**
+	 * Attaches blob shadows for the animals that walk on the ground (the onça, the companion,
+	 * the P23 ground species): the largest first, at most BLOB_LIMIT of the rig's shared slots
+	 * (the avatar and the items use them too), none for the very small (a crab, a toad).
+	 */
 	attachBlobs(blobs: LifeBlobs | null) {
 		this.detachBlobs();
 		this.#blobs = blobs;
 		if (!blobs) return;
+		const wanted: number[] = [];
 		for (let i = 0; i < this.animals.length; i++) {
 			if (this.plan.animals[i].arboreal && i !== this.companion) continue;
+			if (this.animals[i].species.size < BLOB_MIN_SIZE && i !== this.companion) continue;
+			wanted.push(i);
+		}
+		// The companion and the onça first (they had blobs before P23), then by size.
+		const first = (i: number) =>
+			i === this.companion || this.animals[i].species.id === 'onca-pintada' ? 1 : 0;
+		wanted.sort(
+			(a, b) => first(b) - first(a) || this.animals[b].species.size - this.animals[a].species.size || a - b
+		);
+		for (const i of wanted.slice(0, BLOB_LIMIT)) {
 			this.#blobIds[i] = blobs.add('actor');
 			this.#blobRadius[i] = this.animals[i].species.size * 0.42;
 			blobs.hide(this.#blobIds[i]);
@@ -231,7 +272,11 @@ export class Fauna {
 	celebrate() {
 		for (const animal of this.animals) {
 			const behaviour = animal.behaviour;
-			if (behaviour instanceof TucanoBehaviour && behaviour.perchCount > 1)
+			if (
+				behaviour instanceof TucanoBehaviour &&
+				behaviour.species.id === 'tucano-de-bico-verde' &&
+				behaviour.perchCount > 1
+			)
 				behaviour.flyTo(
 					(behaviour.perch + Math.max(1, Math.floor(behaviour.perchCount / 2))) % behaviour.perchCount
 				);
@@ -265,6 +310,7 @@ export class Fauna {
 		world.playerGrounded = frame.playerGrounded;
 		world.playerJumped = frame.playerJumped;
 		world.reducedMotion = frame.reducedMotion;
+		world.light = frame.light;
 		world.groundY = Number.NaN;
 
 		this.#applyCompanion();
@@ -471,7 +517,7 @@ export class Fauna {
 	/** Planar distance from the onça to the player in its last update, u (debug, tests). */
 	oncaDistance(): number {
 		for (const animal of this.animals) {
-			if (animal.behaviour instanceof OncaBehaviour) {
+			if (animal.behaviour instanceof OncaBehaviour && animal.species.id === 'onca-pintada') {
 				const m = animal.motion;
 				return Math.hypot(m.x - this.frame.playerX, m.z - this.frame.playerZ);
 			}
