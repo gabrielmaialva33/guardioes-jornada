@@ -370,8 +370,16 @@
 					animationInput.z = controller.character.position.z;
 					animationInput.yaw = golden.avatar?.[2] ?? initialYaw();
 					animationInput.grounded = true;
+					animationInput.reducedMotion = motion.matches;
+					environment.avatarGround?.update(animationInput, {
+						position: controller.character.position,
+						previousPosition: controller.character.previousPosition,
+						groundNormal: controller.character.groundNormal,
+						grounded: true
+					});
 					for (let i = 0; i < Math.round(golden.time * 60); i++) {
-						if (rig) applyToRig(animator.update(1 / 60, animationInput), rig);
+						avatarWiring.update(animationInput, 1 / 60);
+						applyAvatarPose(1 / 60);
 						storyAssets?.update(1 / 60);
 						lifeFrame.dt = 1 / 60;
 						lifeFrame.time = (i + 1) / 60;

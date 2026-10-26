@@ -8,7 +8,14 @@ export { DESCENT, HowlEvent, LIFE_TIERS, type LifeBlobs } from './fauna.ts';
 export { BUTTERFLY_BASE, BUTTERFLY_MAX, BUTTERFLY_PER_SEEDLING } from './flocks.ts';
 export { CROWNS, LIFE_SEED, type LifePlan, POPULATION, planLife } from './homes.ts';
 export { IARA, IaraFrame, type IaraGesture, IaraLife, type IaraOptions } from './iara.ts';
-export type { LifeDebug, LifeFrame, LifeStoryState, LivingWorld, Vec3Like } from './living-world.ts';
+export type {
+	LifeActor,
+	LifeDebug,
+	LifeFrame,
+	LifeStoryState,
+	LivingWorld,
+	Vec3Like
+} from './living-world.ts';
 export { PARTICLE_COLORS, PARTICLES } from './particles.ts';
 export {
 	applyWind,
