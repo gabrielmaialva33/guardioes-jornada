@@ -7,7 +7,7 @@
 import { buildOne } from '../../level/zones/park.ts';
 import { BUILD_ORDER, PARK_ZONES, SEAMS, ZONE_IDS, type ZoneId } from '../../level/zones/spec.ts';
 import type { ZoneBuild } from '../../level/zones/zone.ts';
-import type { CollisionBlock, Placements } from '../../survival/types.ts';
+import type { CollisionBlock, Placements, SurvivalWorld } from '../../survival/types.ts';
 import { generateArea } from '../../world-gen/chunk.ts';
 import { WORLD_SEED } from '../../world-gen/constants.ts';
 import {
@@ -250,6 +250,34 @@ function cutBasins(build: ZoneBuild, x0: number, z0: number): Float32Array {
 	return Float32Array.from(out);
 }
 
+/** Every typed array reachable from `value`, each once (plain data: objects, arrays, typed arrays). */
+export function typedArraysOf(
+	value: unknown,
+	out: ArrayBufferView[] = [],
+	seen = new Set<unknown>()
+): ArrayBufferView[] {
+	if (value === null || typeof value !== 'object' || seen.has(value)) return out;
+	seen.add(value);
+	if (ArrayBuffer.isView(value)) {
+		out.push(value);
+		return out;
+	}
+	for (const v of Array.isArray(value) ? value : Object.values(value)) typedArraysOf(v, out, seen);
+	return out;
+}
+
+/** The distinct buffers under `value`: what it holds in memory, and what a transfer list moves. */
+export function buffersOf(value: unknown): ArrayBuffer[] {
+	return [...new Set(typedArraysOf(value).map((a) => a.buffer as ArrayBuffer))];
+}
+
+/** Bytes of a world's typed arrays (heights, zones, flags, baseSteps, placements, collision blocks…). */
+export function worldBytes(world: SurvivalWorld): number {
+	let bytes = 0;
+	for (const b of buffersOf(world)) bytes += b.byteLength;
+	return bytes;
+}
+
 export interface ZoneCut {
 	id: ZoneId;
 	offsetX: number;
@@ -257,9 +285,17 @@ export interface ZoneCut {
 	width: number;
 	depth: number;
 	level: StoryRef['level'];
+	/**
+	 * A snapshot of the zone's SurvivalWorld (zone-local, the zone's own shape:
+	 * heights, zones, flags, river, animals…) on buffers of its own, for whoever
+	 * needs the whole zone on the main thread (Soundscape.setMap with origin
+	 * (offsetX, offsetZ)) without building it there. The Worker's memoised build
+	 * is never transferred: only the snapshot's buffers travel.
+	 */
+	world: SurvivalWorld;
 	/** Row-major over the zone's chunk rectangle (PARK_ZONES[id] cx0..cx1, cz0..cz1). */
 	chunks: StreamChunk[];
-	/** Bytes of every chunk. */
+	/** Bytes of every chunk and of the world snapshot. */
 	bytes: number;
 }
 
@@ -332,6 +368,9 @@ export function cutZone(
 			total += bytes;
 			chunks.push({ ...chunk, bytes });
 		}
+	// Its own copy: the memo (build.world) must keep its buffers whatever the snapshot's travel does.
+	const snapshot = structuredClone(world);
+	total += worldBytes(snapshot);
 	return {
 		id: build.id,
 		offsetX: ox,
@@ -339,6 +378,7 @@ export function cutZone(
 		width: build.width,
 		depth: build.depth,
 		level: build.level,
+		world: snapshot,
 		chunks,
 		bytes: total
 	};

@@ -109,5 +109,13 @@ export {
 	waterfallsOf
 } from './waterfalls.ts';
 export { createWindow, type FieldWindow, fillWindow, WINDOW_MARGIN, WINDOW_SIDE } from './window.ts';
-export { buildZoneOnDemand, cutZone, type ZoneCut, zoneClosure } from './zone-cut.ts';
+export {
+	buffersOf,
+	buildZoneOnDemand,
+	cutZone,
+	typedArraysOf,
+	worldBytes,
+	type ZoneCut,
+	zoneClosure
+} from './zone-cut.ts';
 export { loadZoneMap, type ZoneMap, zoneOnlySource, zoneParam, zoneSpawn } from './zone-loader.ts';

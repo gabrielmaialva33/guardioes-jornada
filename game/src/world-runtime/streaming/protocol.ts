@@ -10,7 +10,7 @@ import type { TerrainAttributes, TerrainInput } from './terrain-mesh.ts';
 import type { RibbonPiece } from './trails.ts';
 import type { StreamChunk } from './types.ts';
 import type { WaterAttributes } from './water.ts';
-import type { ZoneCut } from './zone-cut.ts';
+import { buffersOf, type ZoneCut } from './zone-cut.ts';
 
 export interface BuildRequest {
 	job: number;
@@ -67,9 +67,9 @@ function placementBuffers(chunk: StreamChunk, out: ArrayBuffer[]) {
 	}
 }
 
-/** Transfer list of a zone cut: every chunk array, each on its own buffer. */
+/** Transfer list of a zone cut: every chunk array, each on its own buffer, and the world snapshot's. */
 export function cutTransferables(cut: ZoneCut): ArrayBuffer[] {
-	const out: ArrayBuffer[] = [];
+	const out: ArrayBuffer[] = buffersOf(cut.world);
 	for (const c of cut.chunks) {
 		out.push(
 			c.heights.buffer as ArrayBuffer,

@@ -14,7 +14,7 @@ import {
 	type StreamChunk,
 	streamChunkBytes
 } from './types.ts';
-import type { ZoneCut } from './zone-cut.ts';
+import { worldBytes, type ZoneCut } from './zone-cut.ts';
 
 /** Where a zone's chunks live in its cut (row-major over the zone's chunk rectangle). */
 export function cutIndex(id: ZoneId, cx: number, cz: number): number {
@@ -74,6 +74,15 @@ export class ZoneSource implements ChunkSource {
 
 	get bytes(): number {
 		return this.#bytes;
+	}
+
+	/**
+	 * The cut of zone `id` while this source holds it (in use, or kept for a
+	 * walk back), else undefined: its world snapshot, level and offsets, as
+	 * they arrived. No copy.
+	 */
+	cut(id: ZoneId): Readonly<ZoneCut> | undefined {
+		return this.#cuts.get(id);
 	}
 
 	/** Zones whose cut is here. */
@@ -191,7 +200,7 @@ export class ZoneSource implements ChunkSource {
 					c.collision.boxes = boxes;
 					c.bytes = streamChunkBytes(c);
 				}
-			let bytes = 0;
+			let bytes = worldBytes(cut.world);
 			for (const c of cut.chunks) bytes += c.bytes;
 			cut.bytes = bytes;
 			this.#cuts.set(cut.id, cut);

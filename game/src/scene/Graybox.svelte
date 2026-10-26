@@ -203,7 +203,7 @@
 		const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
 		return {
 			...debugSnapshot(),
-			...(debug && new URLSearchParams(location.search).has('textureDebug') ? { textureBreakdown: [...collectTextures(scene), ...(proxies.textures??[]), ...(lighting.uShadeMap.value?[lighting.uShadeMap.value]:[])].map(texture=>({name:texture.name,width:texture.image?.width??0,height:texture.image?.height??0,bytes:textureBytes([texture])})) } : {}),
+			...(debug && new URLSearchParams(location.search).has('textureDebug') ? { textureBreakdown: [...collectTextures(scene), ...(proxies.textures??[]), ...(lighting.uShadeMap.value?[lighting.uShadeMap.value]:[])].map(texture=>({name:texture.name,source:texture.source.uuid,format:texture.format,dataBytes:texture.image?.data?.byteLength,mips:texture.generateMipmaps,width:texture.image?.width??0,height:texture.image?.height??0,bytes:textureBytes([texture])})) } : {}),
 			streaming: environment.streaming?.debug(),
 			goldenReady,
 			visualTime,
