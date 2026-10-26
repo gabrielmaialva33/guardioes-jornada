@@ -511,6 +511,7 @@ def main() -> None:
                                 "-vpf",
                                 "-vn",
                                 "12",
+                                "-tr",
                             ],
                             check=True,
                             stdout=subprocess.PIPE,

@@ -318,6 +318,8 @@ def recolor_custom_glb(glb_path: Path, out_path: Path, cmap: dict) -> list[dict]
     )
 
     entries = build_ramp_lookup(cmap, include_accent=True)
+    if any("foliage-atlas" in (im.get("name") or "") for im in j_obj.get("images", [])):
+        j_obj["images"] = [{"name": "foliage-atlas", "uri": "../skins/foliage-atlas.png"}]
     report = []
     for mat in j_obj.get("materials", []):
         pbr = mat.setdefault("pbrMetallicRoughness", {})

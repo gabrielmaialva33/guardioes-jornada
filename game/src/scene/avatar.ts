@@ -1,8 +1,9 @@
-import { type Group, type Material, Mesh, MeshLambertMaterial, Texture } from 'three';
+import { type Group, LoadingManager, type Material, Mesh, MeshLambertMaterial, Texture } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import modelUrl from '../assets/models/avatar.glb?url';
 import hairUrl from '../assets/models/avatar-hair.glb?url';
+import { resolveSharedImage } from '../assets/shared-images.ts';
 import { AVATAR_ATLAS } from '../avatar/catalog.ts';
 import { HairAccessories } from '../avatar/hair.ts';
 import { createAvatarTexture } from '../avatar/texture.ts';
@@ -34,7 +35,9 @@ export function disposeModel(model: Group) {
 export async function loadModel(url: string, signal: AbortSignal): Promise<Group> {
 	const response = await fetch(url, { signal });
 	if (!response.ok) throw new Error('model-download');
-	const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+	const manager = new LoadingManager();
+	manager.setURLModifier(resolveSharedImage);
+	const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
 	const model = (
 		await loader.parseAsync(await response.arrayBuffer(), new URL('.', new URL(url, location.href)).href)
 	).scene;

@@ -1647,6 +1647,9 @@ function main() {
 		const defaultAvatarSkinBytes = generateAvatarRegionsAndDefaultSkin(OUT_SKINS);
 		// Enforce ART.md lightness bounds [0.12, 0.90] on all species palettes and 128x128 skins
 		execFileSync('python3', [path.join(__dirname, 'blender', 'recolor.py')], { stdio: 'inherit' });
+		execFileSync('python3', [path.join(__dirname, 'blender', 'build_foliage_atlas.py')], {
+			stdio: 'inherit'
+		});
 		const boundedPetsPalBytes = fs.readFileSync(petsPalPath);
 
 		// 2. Avatar: character-a.glb -> strip animations, normalize head scale to [1,1,1], keep 6 named nodes

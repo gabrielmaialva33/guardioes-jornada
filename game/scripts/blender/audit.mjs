@@ -278,10 +278,15 @@ function main() {
 			const unpackedPath = unpackIfMeshopt(packedPath, workDir);
 			const { json, bin } = readGlbRaw(unpackedPath);
 
-			// Decode embedded images (deduplicating shared atlases by RGBA content hash)
+			// Decode embedded or external URI images (deduplicating shared atlases by RGBA content hash)
 			const decodedImages = (json.images || []).map((img, idx) => {
-				const bv = json.bufferViews[img.bufferView];
-				const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
+				let bytes;
+				if (img.bufferView !== undefined) {
+					const bv = json.bufferViews[img.bufferView];
+					bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
+				} else if (img.uri) {
+					bytes = fs.readFileSync(path.resolve(MODELS_DIR, img.uri));
+				}
 				const dec = decodeImageBuffer(bytes, workDir, `${mf}-${idx}`);
 				const h = crypto.createHash('sha256').update(dec.rgba).digest('hex');
 				if (!seenTextureHashes.has(h)) {

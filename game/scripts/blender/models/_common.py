@@ -536,22 +536,58 @@ def build_object(mesh: Mesh, name: str | None = None, parent=None, pivot=(0, 0, 
     return ob
 
 
+def _atlas_tile_uv(col: int, row: int, u: float, v: float, pad: float = 0.015) -> tuple[float, float]:
+    u_c = max(0.0, min(1.0, u))
+    v_c = max(0.0, min(1.0, v))
+    u0 = col * 0.25 + pad
+    u1 = (col + 1) * 0.25 - pad
+    v0 = row * 0.25 + pad
+    v1 = (row + 1) * 0.25 - pad
+    return (u0 + (u1 - u0) * u_c, v0 + (v1 - v0) * v_c)
+
+
+def foliage_atlas_material(name: str = "FoliageAtlasMat"):
+    atlas_path = GAME / "src" / "assets" / "skins" / "foliage-atlas.png"
+    mat = bpy.data.materials.new(name)
+    mat.use_backface_culling = False
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.inputs["Roughness"].default_value = 1.0
+    bsdf.inputs["Metallic"].default_value = 0.0
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(str(atlas_path), check_existing=True)
+    tex.interpolation = "Linear"
+    vc = nt.nodes.new("ShaderNodeAttribute")
+    vc.attribute_name = "Color"
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(vc.outputs["Fac"], bsdf.inputs["Roughness"])
+    nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
+
+
 def apply_v2_foliage(ob, mode: str = "tree"):
     """Apply Art Direction v2 volume normals (or 'up' normals for ground cover), smooth
-    canopy shading, flat trunk/branch/root normals, and 3-step hue-shifted vertex colour
-    gradient + baked AO in COLOR_0 (ART.md sections 1, 2, 5 & a-visual.md T3a)."""
+    canopy shading, flat trunk/branch/root normals, UV-mapped painted colour from the
+    shared 512x512 `foliage-atlas.png`, and 3-step hue-shifted lighting + AO in COLOR_0
+    (ART.md sections 1, 2, 5, 6 & a-visual.md T3a)."""
     import bmesh
     import colorsys
 
     bpy.context.view_layer.update()
     targets = [o for o in [ob, *ob.children_recursive] if o.type == "MESH"]
     foliage_hexes = {h.lower() for h in (*RAMPS["leaf"], *RAMPS["grass"], ACCENT["ipeAmarelo"], ACCENT["ipeRosa"], RAMPS["rock"][3])}
+    atlas_mat = foliage_atlas_material(f"Atlas_{ob.name}")
+    quad_corners = [(0.12, 0.10), (0.88, 0.10), (0.88, 0.90), (0.12, 0.90)]
 
     for m_obj in targets:
         me = m_obj.data
         attr = me.color_attributes.active_color or me.color_attributes[0]
+        uvl = me.uv_layers.active or me.uv_layers.new(name="UVMap")
         loops = me.loops
         co = [m_obj.matrix_world @ v.co for v in me.vertices]
+        obj_name = m_obj.name.lower()
 
         if mode == "cover":
             lo = Vector((min(v.x for v in co), min(v.y for v in co), min(v.z for v in co)))
@@ -562,25 +598,49 @@ def apply_v2_foliage(ob, mode: str = "tree"):
             normals = [None] * len(loops)
             for p in me.polygons:
                 p.use_smooth = True
-                for li in p.loop_indices:
+                li0 = p.loop_indices[0]
+                sr0, sg0, sb0, _ = attr.data[li0].color_srgb
+                h_val, _l_val, _s_val = colorsys.rgb_to_hls(sr0, sg0, sb0)
+                if "serapilheira" in obj_name:
+                    t_col, t_row, planar = 3, 1, True
+                elif "samambaia" in obj_name:
+                    t_col, t_row, planar = 0, 1, False
+                elif "bromelia" in obj_name:
+                    if h_val < 0.08 or h_val > 0.90:
+                        t_col, t_row, planar = 2, 1, False
+                    else:
+                        t_col, t_row, planar = 1, 1, False
+                else:  # flores-mata or flores-caidas
+                    if 0.18 <= h_val <= 0.48:
+                        t_col, t_row, planar = 1, 1, False
+                    elif 0.08 <= h_val < 0.18:
+                        t_col, t_row, planar = 0, 3, False
+                    else:
+                        t_col, t_row, planar = 2, 3, False
+
+                for idx_l, li in enumerate(p.loop_indices):
                     v = co[loops[li].vertex_index]
                     rad_vec = Vector((v.x - c.x, v.y - c.y, 0.0))
                     if rad_vec.length > 1e-4:
                         rad_vec.normalize()
                     # "Up" normal (0, 0, 1) in Blender Z-up -> (0, 1, 0) in glTF Y-up so ground cover never shows black edges
                     normals[li] = (Vector((0.0, 0.0, 1.0)) * 0.88 + rad_vec * 0.12).normalized()
+                    if planar:
+                        u_loc = 0.5 + (v.x - c.x) / max(0.3, hi.x - lo.x)
+                        v_loc = 0.5 + (v.y - c.y) / max(0.3, hi.y - lo.y)
+                    else:
+                        u_loc, v_loc = quad_corners[idx_l % 4]
+                    uvl.data[li].uv = _atlas_tile_uv(t_col, t_row, u_loc, v_loc)
+
                     t_z = max(0.0, min(1.0, (v.z - lo.z) / z_span))
                     t_r = max(0.0, min(1.0, math.hypot(v.x - c.x, v.y - c.y) / r_xy))
                     u = max(0.0, min(1.0, 0.65 * t_z + 0.35 * t_r))
-                    sr, sg, sb, _ = attr.data[li].color_srgb
-                    # 3-step gradient: cool shaded base -> midtone -> warm sunlit tip
-                    k = 0.68 + 0.42 * u
-                    tint_r = 0.84 + 0.24 * u
-                    tint_g = 0.94 + 0.10 * u
-                    tint_b = 1.08 - 0.18 * u
-                    nr, ng, nb = clamp_srgb_lightness(sr * k * tint_r, sg * k * tint_g, sb * k * tint_b)
+                    # 3-step lighting + AO multiplier in COLOR_0 (multiplies painted atlas colour)
+                    nr, ng, nb = clamp_srgb_lightness(0.68 + 0.24 * u, 0.74 + 0.18 * u, 0.80 + 0.10 * u)
                     attr.data[li].color_srgb = (nr, ng, nb, 1.0)
             me.normals_split_custom_set(normals)
+            me.materials.clear()
+            me.materials.append(atlas_mat)
             continue
 
         # Tree mode: classify foliage faces vs trunk/branch/root faces
@@ -649,9 +709,42 @@ def apply_v2_foliage(ob, mode: str = "tree"):
         for p in me.polygons:
             is_fol = p.index in fol_faces
             p.use_smooth = is_fol
-            for li in p.loop_indices:
+            li0 = p.loop_indices[0]
+            sr0, sg0, sb0, _ = attr.data[li0].color_srgb
+            h_val, _l_val, _s_val = colorsys.rgb_to_hls(sr0, sg0, sb0)
+
+            # Determine painted tile (t_col, t_row) in foliage-atlas.png
+            if is_fol:
+                if "ipe-amarelo" in obj_name or (0.08 <= h_val < 0.18):
+                    t_col, t_row = 0, 3
+                elif "ipe-rosa" in obj_name or h_val > 0.82 or h_val < 0.05:
+                    t_col, t_row = 2, 3
+                elif "xaxim" in obj_name:
+                    t_col, t_row = 0, 1
+                elif "jucara" in obj_name or "jeriva" in obj_name:
+                    t_col, t_row = (3, 2) if (p.loop_total == 4 and p.area < 0.9) else (0, 2)
+                elif "mangue" in obj_name:
+                    t_col, t_row = 1, 2
+                elif "jequitiba" in obj_name:
+                    t_col, t_row = (3, 2) if (p.loop_total == 4 and p.area < 1.5) else (3, 3)
+                elif "pau-brasil" in obj_name:
+                    t_col, t_row = 1, 3
+                else:  # araucaria, embauba
+                    t_col, t_row = (3, 2) if (p.loop_total == 4 and p.area < 1.1) else (2, 2)
+            else:
+                if "cacho" in obj_name:
+                    t_col, t_row = 3, 0
+                elif "xaxim" in obj_name:
+                    t_col, t_row = 3, 0
+                elif "embauba" in obj_name or "jucara" in obj_name or "jeriva" in obj_name:
+                    t_col, t_row = 2, 0
+                elif "pau-brasil" in obj_name or "mangue" in obj_name:
+                    t_col, t_row = 1, 0
+                else:
+                    t_col, t_row = 0, 0
+
+            for idx_l, li in enumerate(p.loop_indices):
                 v = co[loops[li].vertex_index]
-                sr, sg, sb, _ = attr.data[li].color_srgb
                 if is_fol:
                     g = Vector(((v.x - c_norm.x) / (r.x ** 2), (v.y - c_norm.y) / (r.y ** 2), (v.z - c_norm.z) / (r.z ** 2))).normalized()
                     ctr, rad = icent_stats[island[p.index]]
@@ -659,27 +752,38 @@ def apply_v2_foliage(ob, mode: str = "tree"):
                     l_n = l_vec.normalized() if l_vec.length > 1e-4 else g
                     normals[li] = (g * 0.58 + l_n * 0.42).normalized()
 
+                    if (t_col, t_row) in ((2, 2), (3, 3), (1, 2)) and p.loop_total >= 4 and p.area >= 1.1:
+                        u_loc = 0.5 + (v.x - ctr.x) / max(0.4, rad * 1.8)
+                        v_loc = 0.5 + (v.y - ctr.y) / max(0.4, rad * 1.8)
+                    else:
+                        u_loc, v_loc = quad_corners[idx_l % 4]
+                    uvl.data[li].uv = _atlas_tile_uv(t_col, t_row, u_loc, v_loc)
+
                     t = max(0.0, min(1.0, (v.z - lo.z) / max(0.2, hi.z - lo.z)))
                     core = max(0.15, min(1.0, (v - ctr).length / rad))
                     u = max(0.0, min(1.0, 0.62 * t + 0.38 * core))
-                    # 3-step gradient: cool teal shadow -> ramp midtone -> warm sunlit highlight + AO
-                    k = 0.58 + 0.54 * u
-                    tint_r = 0.80 + 0.28 * u
-                    tint_g = 0.92 + 0.12 * u
-                    tint_b = 1.12 - 0.24 * u
-                    nr, ng, nb = clamp_srgb_lightness(sr * k * tint_r, sg * k * tint_g, sb * k * tint_b)
+                    # 3-step lighting + AO multiplier in COLOR_0 (multiplies painted atlas colour)
+                    nr, ng, nb = clamp_srgb_lightness(0.64 + 0.28 * u, 0.72 + 0.20 * u, 0.80 + 0.10 * u)
                     attr.data[li].color_srgb = (nr, ng, nb, 1.0)
                 else:
-                    # Trunks, branches, and roots stay flat-shaded with ground & under-canopy AO
+                    # Trunks, branches, and roots stay flat-shaded with painted bark UVs + AO
                     normals[li] = p.normal.copy()
+                    ang = (math.atan2(v.y, v.x) / (2 * math.pi)) + 0.5
                     t_trunk = max(0.0, min(1.0, (v.z - tz0) / max(0.2, tz1 - tz0)))
-                    base_ao = 0.62 + 0.38 * min(1.0, t_trunk * 2.8)
-                    canopy_occ = 0.76 if (fv and v.z > lo.z + 0.15 * (hi.z - lo.z)) else 1.0
-                    k = base_ao * canopy_occ
-                    nr, ng, nb = clamp_srgb_lightness(sr * k, sg * k, sb * k)
-                    attr.data[li].color_srgb = (nr, ng, nb, 1.0)
+                    if "cacho" in obj_name:
+                        uvl.data[li].uv = _atlas_tile_uv(3, 0, 0.1 + 0.3 * (idx_l % 2), 0.88 + 0.08 * (idx_l // 2))
+                    elif "xaxim" in obj_name:
+                        uvl.data[li].uv = _atlas_tile_uv(3, 0, ang, (t_trunk * 0.45) % 0.45)
+                    else:
+                        uvl.data[li].uv = _atlas_tile_uv(t_col, t_row, ang, t_trunk)
+                    base_ao = 0.66 + 0.24 * min(1.0, t_trunk * 2.5)
+                    canopy_occ = 0.84 if (fv and v.z > lo.z + 0.15 * (hi.z - lo.z)) else 1.0
+                    k = max(0.15, min(0.88, base_ao * canopy_occ))
+                    attr.data[li].color_srgb = (k, k, k, 1.0)
 
         me.normals_split_custom_set(normals)
+        me.materials.clear()
+        me.materials.append(atlas_mat)
     return ob
 
 
