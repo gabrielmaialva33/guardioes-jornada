@@ -149,6 +149,7 @@ Frame gates on the A07 (low tier): 30 FPS, p95 ≤ 33 ms, ≤ 150 draws (200 is 
 - **Per-instance tint:** colour tints a whole instance, trunk included. Species colour that only affects part of a model (a flowering canopy, for example) belongs in the model's own vertex colours or atlas, not in instance tints.
 - **Leaf fringes and grass, by tier:**
   - **Low:** opaque geometry only, with no alpha test. Leaves are small leaf-shaped polygons and grass is single-triangle blades. Alpha test breaks early depth rejection on Mali and PowerVR GPUs.
+  - **Painted colour on every tier:** the low tier's opaque leaf polygons still take their colour from the painted foliage atlas (UV-mapped, no alpha), so canopies, ferns and leaf litter look hand-painted like the reference bushes. They never use flat per-face fills. The target render `~/.cache/agents/2026-10-25-trilha-secreta/alvo-v2/alvo-v2.png` shows why: next to the painted downloads, flat-filled canopies read as prototype.
   - **Medium and high:** cut-out leaf cards and grass clumps from one foliage atlas (section 10).
 
   The A07 decides by an A/B measurement before either version is approved.
