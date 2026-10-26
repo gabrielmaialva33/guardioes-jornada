@@ -4,6 +4,7 @@ import { testing } from '../scene/testing.ts';
 import { LIGHT } from '../style/palette.ts';
 export interface StylizedOptions {
 	vegetation?: boolean;
+	shadeReceiver?: boolean;
 	canopyBase?: number;
 	cover?: boolean;
 	rim?: boolean;
@@ -39,7 +40,9 @@ export function visualStep(): number {
 export function patchStylizedShader(shader: ShaderSource, options: StylizedOptions = {}) {
 	Object.assign(shader.uniforms, lighting, {
 		uRim: { value: options.rim ? 0.09 : 0 },
-		uShadeReceiver: { value: options.vegetation && !options.cover && !options.terrain ? 0 : 1 }
+		uShadeReceiver: {
+			value: (options.shadeReceiver ?? (!options.vegetation || !!options.cover || !!options.terrain)) ? 1 : 0
+		}
 	});
 	const world = `
  vec4 stylizedWorld = vec4( transformed, 1.0 );
@@ -152,16 +155,17 @@ export function patchTreeVisibility(shader: ShaderSource, canopyBase: number) {
 	shader.vertexShader = shader.vertexShader.replace(
 		'#include <common>',
 		`#include <common>
+varying float vCanopyFade;
+uniform float uCanopyBase,uTreeRange;
+uniform vec3 uGameEye;
 #ifdef USE_INSTANCING
 attribute float instanceFade;
-uniform float uCanopyBase,uTreeRange;
- uniform vec3 uGameEye;
-varying float vCanopyFade;
 #endif`
 	);
 	shader.vertexShader = shader.vertexShader.replace(
 		'#include <begin_vertex>',
 		`#include <begin_vertex>
+vCanopyFade=1.0;
 #ifdef USE_INSTANCING
 vCanopyFade=mix(1.0,instanceFade,smoothstep(uCanopyBase,uCanopyBase+0.7,position.y));
 vec4 treeCenter=modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
@@ -171,19 +175,15 @@ vCanopyFade*=1.0-smoothstep(uTreeRange-6.0,uTreeRange+6.0,length(treeCenter.xz-u
 	shader.fragmentShader = shader.fragmentShader.replace(
 		'#include <common>',
 		`#include <common>
-#ifdef USE_INSTANCING
-varying float vCanopyFade;
-#endif`
+varying float vCanopyFade;`
 	);
 	shader.fragmentShader = shader.fragmentShader.replace(
 		'#include <alphatest_fragment>',
 		`#include <alphatest_fragment>
-#ifdef USE_INSTANCING
 // Stable ordered dither keeps depth writing, single-pass instancing and opaque sorting.
 vec2 ditherPixel=mod(floor(gl_FragCoord.xy),4.0);
 float ditherValue=mod(ditherPixel.x*2.0+ditherPixel.y*3.0,4.0)*4.0+mod(ditherPixel.x+ditherPixel.y*2.0,4.0);
-if(vCanopyFade<(ditherValue+0.5)/16.0)discard;
-#endif`
+if(vCanopyFade<(ditherValue+0.5)/16.0)discard;`
 	);
 }
 export function stylize<T extends MeshLambertMaterial>(material: T, options: StylizedOptions = {}): T {

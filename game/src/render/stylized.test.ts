@@ -68,3 +68,14 @@ it('keeps another shader extension in the program cache key', () => {
 	expect(material.customProgramCacheKey()).toContain('wind-version-1');
 	material.dispose();
 });
+
+it('lets native understorey receive canopy shade while preserving its volume normals', () => {
+	const shader = {
+		vertexShader: ShaderLib.lambert.vertexShader,
+		fragmentShader: ShaderLib.lambert.fragmentShader,
+		uniforms: {}
+	};
+	patchStylizedShader(shader, { vegetation: true, cover: false, shadeReceiver: true });
+	expect((shader.uniforms as Record<string, { value: unknown }>).uShadeReceiver.value).toBe(1);
+	expect(shader.vertexShader).not.toContain('objectNormal = vec3(0.,1.,0.);');
+});

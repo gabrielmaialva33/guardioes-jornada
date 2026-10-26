@@ -1,7 +1,7 @@
 /**
  * The one material family of ART.md §5: MeshLambertMaterial, flat shading,
  * vertex colours (the Blender bake of AO plus sky gradient) multiplied by a
- * palette texture sampled with NearestFilter and no mipmaps. Geometry without
+ * palette texture (nearest) or a painted atlas (linear with mipmaps). Geometry without
  * a bake gets white vertex colours (see mergePieces in instancing.ts), so every
  * static mesh compiles to the same few programs: Lambert + map + vertex colours
  * + fog, with or without instancing and instance colour.
@@ -44,6 +44,8 @@ export function preparePaletteMap(texture: Texture): Texture {
 export function houseMaterial(source: Material, options: StylizedOptions = {}): MeshLambertMaterial {
 	options = {
 		vegetation: source.userData.vegetation === true,
+		shadeReceiver:
+			typeof source.userData.shadeReceiver === 'boolean' ? source.userData.shadeReceiver : undefined,
 		canopyBase: typeof source.userData.canopyBase === 'number' ? source.userData.canopyBase : undefined,
 		cover: source.userData.cover === true,
 		...options
@@ -53,7 +55,6 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 	const image: unknown = map?.image;
 	if (
 		map &&
-		options.vegetation &&
 		image !== null &&
 		typeof image === 'object' &&
 		'width' in image &&
