@@ -236,7 +236,7 @@
 		if (id !== tab) document.getElementById('avatar-editor-panel')?.scrollTo(0, 0);
 		tab = id;
 		message = '';
-		if (focus) document.getElementById(`avatar-editor-tab-${id}`)?.focus();
+		if (focus) document.getElementById(`avatar-editor-tab-${id}`)?.focus({ preventScroll: true });
 	}
 
 	function pieceKey(event: KeyboardEvent, index: number) {
@@ -450,7 +450,7 @@
 						aria-label={item.title}
 						title={item.title}
 						tabindex={tab === item.id ? 0 : -1}
-						onclick={() => selectTab(item.id, false)}
+						onclick={() => selectTab(item.id, true)}
 						onkeydown={(event) => tabKey(event, i)}
 						{@attach (node) => {
 							if (untrack(() => tab) === item.id) node.focus({ preventScroll: true });
