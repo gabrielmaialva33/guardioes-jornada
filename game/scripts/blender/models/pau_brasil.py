@@ -61,16 +61,16 @@ def build():
 
     # Central lower canopy core + 3 outer limb lobes + upper dome lobe (shrunken for fringe)
     m.chunk((0.0, 0.0, 6.2), 2.55, 2.45, 2.40, 6, CROWN_DARK, chamfer=0.34, twist=0.15)
-    m.leaf_fringe((0.0, 0.0, 7.4), 2.85, 2.75, 1.25, 18, CROWN_MID, colour_alt=CROWN_LIGHT, length=1.28, width=0.72, seed=14)
+    m.leaf_fringe((0.0, 0.0, 7.4), 2.85, 2.75, 1.25, 11, CROWN_MID, colour_alt=CROWN_LIGHT, length=1.32, width=0.74, seed=14)
 
     for idx, (a, tip) in enumerate(tips):
         c_pos = tip + Vector((0, 0, -0.55))
         m.chunk(c_pos, 2.05, 1.95, 2.20, 6, CROWN_MID, chamfer=0.34, twist=a)
-        m.leaf_fringe(c_pos + Vector((0, 0, 1.1)), 2.25, 2.15, 1.15, 14, CROWN_LIGHT, colour_alt=CROWN_MID, length=1.22, width=0.68, seed=30 + idx)
+        m.leaf_fringe(c_pos + Vector((0, 0, 1.1)), 2.25, 2.15, 1.15, 10, CROWN_LIGHT, colour_alt=CROWN_MID, length=1.26, width=0.70, seed=30 + idx)
 
     # Upper crown dome + yellow flowering raceme accents at the sunlit apex
     m.chunk((0.1, -0.05, 8.6), 2.25, 2.15, 2.35, 6, CROWN_MID, chamfer=0.34, twist=0.5, colour_top=CROWN_LIGHT)
-    m.leaf_fringe((0.1, -0.05, 9.8), 2.45, 2.35, 1.25, 18, CROWN_LIGHT, colour_alt=BLOSSOM, length=1.20, width=0.66, z_min=-0.25, z_max=0.92, seed=77)
+    m.leaf_fringe((0.1, -0.05, 9.8), 2.45, 2.35, 1.25, 14, CROWN_LIGHT, colour_alt=BLOSSOM, length=1.24, width=0.68, z_min=-0.25, z_max=0.92, seed=77)
 
     return C.apply_v2_foliage(C.build_object(m, "pau-brasil"), mode="tree")
 

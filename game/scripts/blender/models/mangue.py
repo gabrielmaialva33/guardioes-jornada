@@ -31,24 +31,23 @@ CROWN_BRIGHT = C.ramp("leaf", 3)
 
 def build():
     m = C.Mesh("mangue-vermelho")
-    # 8 arched prop roots (rizóforos) radiating from z = 1.6..2.8 u on the trunk out to r = 1.7..2.3 u on the mud
-    for k in range(8):
-        a = (2 * math.pi * k / 8) + 0.18 * (k % 2)
+    # 7 arched prop roots (rizóforos) radiating from z = 1.6..2.6 u on the trunk out to r = 1.65..2.2 u on the mud
+    for k in range(7):
+        a = (2 * math.pi * k / 7) + 0.16 * (k % 2)
         d = Vector((math.cos(a), math.sin(a), 0))
         z_start = 2.45 if k % 2 == 0 else 1.75
-        r_end = 2.15 if k % 2 == 0 else 1.65
+        r_end = 2.15 if k % 2 == 0 else 1.68
         p0 = d * 0.18 + Vector((0, 0, z_start))
-        p1 = d * (r_end * 0.58) + Vector((0, 0, z_start * 0.86))
-        p2 = d * (r_end * 0.90) + Vector((0, 0, z_start * 0.42))
-        p3 = d * r_end + Vector((0, 0, 0.0))
+        p1 = d * (r_end * 0.62) + Vector((0, 0, z_start * 0.80))
+        p2 = d * r_end + Vector((0, 0, 0.0))
         m.tube(
-            [p0, p1, p2, p3],
-            [0.14, 0.12, 0.10, 0.09],
+            [p0, p1, p2],
+            [0.14, 0.11, 0.09],
             4,
             ROOT_REDDISH,
             cap_end=False,
             twist=a,
-            colours=[BARK, ROOT_REDDISH, ROOT_DARK, ROOT_DARK],
+            colours=[BARK, ROOT_REDDISH, ROOT_DARK],
         )
 
     # Central trunk rising from z = 1.2 u (elevated on the stilt roots!) to the fork at z = 4.6 u
@@ -66,15 +65,15 @@ def build():
 
     # Smooth volume-shaded canopy lobes + elliptical opaque leaf fringe
     m.chunk((0.0, 0.0, 5.15), 2.10, 2.00, 1.95, 6, CROWN_MID, chamfer=0.34, twist=0.2, colour_bottom=CROWN_DARK)
-    m.leaf_fringe((0.0, 0.0, 6.1), 2.35, 2.25, 1.05, 16, CROWN_LIGHT, colour_alt=CROWN_BRIGHT, length=1.12, width=0.64, seed=19)
+    m.leaf_fringe((0.0, 0.0, 6.1), 2.35, 2.25, 1.05, 10, CROWN_LIGHT, colour_alt=CROWN_BRIGHT, length=1.16, width=0.66, seed=19)
 
     for idx, (a, tip) in enumerate(tips):
         c_pos = tip + Vector((0, 0, -0.45))
         m.chunk(c_pos, 1.65, 1.55, 1.75, 6, CROWN_LIGHT, chamfer=0.34, twist=a, colour_bottom=CROWN_MID)
-        m.leaf_fringe(c_pos + Vector((0, 0, 0.88)), 1.80, 1.70, 0.92, 10, CROWN_BRIGHT, colour_alt=CROWN_LIGHT, length=1.05, width=0.60, seed=50 + idx)
+        m.leaf_fringe(c_pos + Vector((0, 0, 0.88)), 1.80, 1.70, 0.92, 7, CROWN_BRIGHT, colour_alt=CROWN_LIGHT, length=1.10, width=0.62, seed=50 + idx)
 
     m.chunk((0.05, -0.05, 6.65), 1.75, 1.68, 1.85, 6, CROWN_LIGHT, chamfer=0.34, twist=0.6, colour_top=CROWN_BRIGHT)
-    m.leaf_fringe((0.05, -0.05, 7.55), 1.90, 1.82, 0.95, 14, CROWN_BRIGHT, colour_alt=CROWN_LIGHT, length=1.08, width=0.62, z_min=-0.25, z_max=0.92, seed=88)
+    m.leaf_fringe((0.05, -0.05, 7.55), 1.90, 1.82, 0.95, 5, CROWN_BRIGHT, colour_alt=CROWN_LIGHT, length=1.16, width=0.66, z_min=-0.25, z_max=0.92, seed=88)
 
     return C.apply_v2_foliage(C.build_object(m, "mangue-vermelho"), mode="tree")
 
