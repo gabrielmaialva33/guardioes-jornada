@@ -12,16 +12,14 @@
  * target (macro.ts riverWaterTarget, under the ground around it) and each
  * upstream node's surface minus MIN_DROP, down to the sea.
  *
- * The Reserva and its stitch band are the lattice cells (0..2, 0..2). In the
- * default 'detour' mode they hold no node and rivers go around them. The
- * 'pinned' mode (F2, not used by generateChunk yet) turns two of those cells
- * into the Reserva river's ends: the waterfall at (132, 30), fed from the east
- * by cell (3, 0), and the mouth at (28, 160), draining south-west to the sea;
- * the link between them is the hand-made river and is never carved.
+ * The park (level/zones, PARK.md §2) and its stitch band hold no node:
+ * generated rivers detour round it. The park's own river (level/zones
+ * PARK_RIVER, the Reserva's continued through the Vale and the Manguezal) is
+ * the zones' to carve.
  */
 import { clamp, floor } from '../survival/noise.ts';
 import { WATER_LEVEL } from '../survival/types.ts';
-import type { LayerSeeds } from './constants.ts';
+import { type LayerSeeds, STITCH_BAND } from './constants.ts';
 import { cellHash, cellUnit } from './hash.ts';
 import {
 	CREST_S,
@@ -34,9 +32,10 @@ import {
 	serraFoot
 } from './macro.ts';
 import { smooth } from './math.ts';
+import { parkDistance } from './park.ts';
 
 export const RIVER_CELL = 80;
-/** Cell i spans [RIVER_ORIGIN + i·RIVER_CELL, + RIVER_CELL): cells 0..2 cover the Reserva plus its band, [−40, 200). */
+/** Cell i spans [RIVER_ORIGIN + i·RIVER_CELL, + RIVER_CELL). */
 export const RIVER_ORIGIN = -40;
 /** Nodes sit at least this far inside their cell, so a link always runs west. */
 const INSET = 16;
@@ -77,31 +76,17 @@ export const RIVER_FLAG = {
 export const RIVER_PIECES = 4;
 export const RIVER_PIECE_SHIFT = 2;
 
-export type ReserveRiverMode = 'detour' | 'pinned';
-
 export const NODE_KIND = {
-	/** No river: inside the Reserva's cells, or past the crest. */
+	/** No river: in or near the park, or past the crest. */
 	off: 0,
 	/** On land between the coast and the crest: drains west. */
 	flow: 1,
 	/** In the sea: where rivers end. */
-	sink: 2,
-	/** One of the Reserva river's pinned ends ('pinned' mode). */
-	pin: 3
+	sink: 2
 } as const;
 
-/**
- * The Reserva river's ends (layout.ts RIVER, WATERFALL, RIVER_SURFACE), in
- * lattice cells; world-gen.test.ts checks them against the level.
- */
-export const RESERVE_RIVER = {
-	waterfall: { i: 2, j: 0, x: 132, z: 30, water: 3 },
-	mouth: { i: 0, j: 2, x: 28, z: 160, water: WATER_LEVEL },
-	/** The east neighbour that feeds the waterfall. */
-	feeder: { i: 3, j: 0 },
-	/** Where the mouth drains: south-west, out to sea. */
-	sea: { i: -1, j: 3 }
-} as const;
+/** Rows a detour may run along a column to get round the park. */
+const MAX_DETOUR = 12;
 
 export interface RiverNode {
 	i: number;
@@ -109,14 +94,12 @@ export interface RiverNode {
 	x: number;
 	z: number;
 	kind: number;
-	/** Downstream cell (flow and pin nodes). */
+	/** Downstream cell (flow nodes). */
 	di: number;
 	dj: number;
-	/** The link downstream is the Reserva's hand-made river. */
-	internal: boolean;
-	/** riverWaterTarget at the node (or the pin's height). */
+	/** riverWaterTarget at the node. */
 	target: number;
-	/** Distance past the serra foot (0 for pins and sinks). */
+	/** Distance past the serra foot (0 for sinks). */
 	s: number;
 	/** Upstream nodes, itself included. */
 	acc: number;
@@ -153,20 +136,16 @@ export interface RiverSegment {
 export const riverColumn = (x: number) => floor((x - RIVER_ORIGIN) / RIVER_CELL);
 export const riverRow = (z: number) => floor((z - RIVER_ORIGIN) / RIVER_CELL);
 const cellKey = (i: number, j: number) => (i + 32768) * 65536 + (j + 32768);
-/** The Reserva and its band. */
-const reserveCell = (i: number, j: number) => i >= 0 && i <= 2 && j >= 0 && j <= 2;
 
 export class RiverLattice {
 	readonly seed: number;
-	readonly mode: ReserveRiverMode;
 	readonly #layers: LayerSeeds;
 	readonly #fields: MacroFields;
 	readonly #nodes = new Map<number, RiverNode>();
 	readonly #point = newMacroPoint();
 
-	constructor(seed: number, mode: ReserveRiverMode = 'detour') {
+	constructor(seed: number) {
 		this.seed = seed;
-		this.mode = mode;
 		this.#fields = macroFields(seed);
 		this.#layers = this.#fields.layers;
 	}
@@ -180,24 +159,22 @@ export class RiverLattice {
 		this.#nodes.clear();
 	}
 
-	#pin(i: number, j: number) {
-		if (this.mode !== 'pinned') return null;
-		const { waterfall, mouth } = RESERVE_RIVER;
-		if (i === waterfall.i && j === waterfall.j) return waterfall;
-		if (i === mouth.i && j === mouth.j) return mouth;
-		return null;
+	#x(i: number, j: number) {
+		return RIVER_ORIGIN + i * RIVER_CELL + INSET + SPAN * cellUnit(i, j, this.#layers.river);
 	}
 
-	/**
-	 * Can a node in column `fromI` drain into cell (i, j)? Into a flow node or
-	 * the sea, never into the Reserva (but its waterfall pin, from the east, in
-	 * 'pinned' mode) nor into a node past the crest.
-	 */
-	#accepts(i: number, j: number, fromI: number): boolean {
-		if (reserveCell(i, j)) {
-			const { waterfall } = RESERVE_RIVER;
-			return this.mode === 'pinned' && i === waterfall.i && j === waterfall.j && fromI === waterfall.i + 1;
-		}
+	#z(i: number, j: number) {
+		return RIVER_ORIGIN + j * RIVER_CELL + INSET + SPAN * cellUnit(j, i, this.#layers.river ^ 0x5bd1e995);
+	}
+
+	/** Cell (i, j)'s node lies in the park or its stitch band: no generated river there (PARK.md §2). */
+	excluded(i: number, j: number): boolean {
+		return parkDistance(this.#x(i, j), this.#z(i, j)) < STITCH_BAND;
+	}
+
+	/** Can a node drain into cell (i, j)? Into a flow node or the sea, never into the park or past the crest. */
+	#accepts(i: number, j: number): boolean {
+		if (this.excluded(i, j)) return false;
 		const kind = this.#base(i, j).kind;
 		return kind === NODE_KIND.flow || kind === NODE_KIND.sink;
 	}
@@ -207,10 +184,8 @@ export class RiverLattice {
 		const key = cellKey(i, j);
 		const known = this.#nodes.get(key);
 		if (known) return known;
-		const seed = this.#layers.river;
-		const pin = this.#pin(i, j);
-		const x = pin ? pin.x : RIVER_ORIGIN + i * RIVER_CELL + INSET + SPAN * cellUnit(i, j, seed);
-		const z = pin ? pin.z : RIVER_ORIGIN + j * RIVER_CELL + INSET + SPAN * cellUnit(j, i, seed ^ 0x5bd1e995);
+		const x = this.#x(i, j);
+		const z = this.#z(i, j);
 		const node: RiverNode = {
 			i,
 			j,
@@ -219,22 +194,13 @@ export class RiverLattice {
 			kind: NODE_KIND.off,
 			di: i,
 			dj: j,
-			internal: false,
 			target: 0,
 			s: 0,
 			acc: 0,
 			water: SINK_WATER,
 			flowDone: false
 		};
-		if (pin) {
-			node.kind = NODE_KIND.pin;
-			node.target = pin.water;
-			const { mouth, sea } = RESERVE_RIVER;
-			const isMouth = pin === mouth;
-			node.di = isMouth ? sea.i : mouth.i;
-			node.dj = isMouth ? sea.j : mouth.j;
-			node.internal = !isMouth;
-		} else if (!reserveCell(i, j)) {
+		if (!this.excluded(i, j)) {
 			const p = samplePoint(
 				x,
 				z,
@@ -258,36 +224,53 @@ export class RiverLattice {
 	}
 
 	/**
-	 * One of the three west neighbours by hash that accepts the water; straight
-	 * along the column when all three are the Reserva's (the detour around it).
-	 * False when none accepts: a node just under the crest whose west
-	 * neighbours lie past it (the serra foot moves along z), which then holds
-	 * no river, so every flow node's water reaches the sea.
+	 * One of the three west neighbours by hash that accepts the water. When the
+	 * park blocks all three, the river runs along its column towards the nearer
+	 * row with a way west (north on a tie), round the park; the turn point is a
+	 * pure function of the park's shape, so a column's detours never meet head
+	 * on. False when nothing accepts: a node just under the crest whose west
+	 * neighbours lie past it (the serra foot moves along z), or one boxed in by
+	 * the park; it then holds no river, so every flow node's water reaches the sea.
 	 */
 	#downstream(node: RiverNode): boolean {
 		const { i, j } = node;
-		const { feeder, waterfall } = RESERVE_RIVER;
-		if (this.mode === 'pinned' && i === feeder.i && j === feeder.j) {
-			node.di = waterfall.i;
-			node.dj = waterfall.j;
-			return true;
-		}
 		const h = cellHash(i, j, this.#layers.river ^ 0x68e31da4);
 		const first = (h % 3) - 1;
 		const turn = (h >>> 8) & 1 ? 1 : -1;
 		let blocked = 0;
 		for (const delta of [first, first === 0 ? turn : 0, first === 0 ? -turn : -first]) {
-			if (this.#accepts(i - 1, j + delta, i)) {
+			if (this.#accepts(i - 1, j + delta)) {
 				node.di = i - 1;
 				node.dj = j + delta;
 				return true;
 			}
-			if (reserveCell(i - 1, j + delta)) blocked++;
+			if (this.excluded(i - 1, j + delta)) blocked++;
 		}
 		if (blocked < 3) return false;
+		const dir = this.#exit(i, j);
+		if (dir === 0 || !this.#accepts(i, j + dir)) return false;
 		node.di = i;
-		node.dj = j + (j < 1 ? -1 : j > 1 ? 1 : turn);
+		node.dj = j + dir;
 		return true;
+	}
+
+	/** −1 or +1 towards the nearer row of column i with an open west neighbour, 0 when none is near. */
+	#exit(i: number, j: number): number {
+		let north = true;
+		let south = true;
+		for (let k = 1; k <= MAX_DETOUR && (north || south); k++) {
+			for (const dir of [-1, 1]) {
+				if (dir < 0 ? !north : !south) continue;
+				const r = j + dir * k;
+				if (this.excluded(i, r)) {
+					if (dir < 0) north = false;
+					else south = false;
+					continue;
+				}
+				for (let delta = -1; delta <= 1; delta++) if (!this.excluded(i - 1, r + delta)) return dir;
+			}
+		}
+		return 0;
 	}
 
 	/** The node with its flow accumulation and water surface. */
@@ -298,7 +281,7 @@ export class RiverLattice {
 		let water = node.kind === NODE_KIND.sink ? SINK_WATER : node.target;
 		const visit = (ui: number, uj: number) => {
 			const up = this.#base(ui, uj);
-			if (up.kind !== NODE_KIND.flow && up.kind !== NODE_KIND.pin) return;
+			if (up.kind !== NODE_KIND.flow) return;
 			if (up.di !== i || up.dj !== j) return;
 			this.node(ui, uj);
 			acc += up.acc;
@@ -308,8 +291,6 @@ export class RiverLattice {
 			for (let dj = -1; dj <= 1; dj++) visit(i + 1, j + dj);
 			visit(i, j - 1);
 			visit(i, j + 1);
-			const { waterfall, mouth } = RESERVE_RIVER;
-			if (node.kind === NODE_KIND.pin && i === mouth.i && j === mouth.j) visit(waterfall.i, waterfall.j);
 		}
 		node.acc = acc;
 		node.water = water;
@@ -332,7 +313,7 @@ export class RiverLattice {
 		for (let i = i0; i <= i1; i++)
 			for (let j = j0; j <= j1; j++) {
 				const a = this.node(i, j);
-				if ((a.kind !== NODE_KIND.flow && a.kind !== NODE_KIND.pin) || a.internal) continue;
+				if (a.kind !== NODE_KIND.flow) continue;
 				if (a.acc < (a.s > SPRING_S ? 1 : STREAM_ACC)) continue;
 				const b = this.node(a.di, a.dj);
 				const deep = a.acc >= RIVER_ACC;
@@ -493,16 +474,15 @@ export function carve(
 	return out;
 }
 
-const lattices = new Map<string, RiverLattice>();
+const lattices = new Map<number, RiverLattice>();
 
-/** The shared lattice of a seed and mode (one per Worker). */
-export function riverLattice(seed: number, mode: ReserveRiverMode = 'detour'): RiverLattice {
-	const key = `${seed}:${mode}`;
-	let lattice = lattices.get(key);
+/** The shared lattice of a seed (one per Worker). */
+export function riverLattice(seed: number): RiverLattice {
+	let lattice = lattices.get(seed);
 	if (!lattice) {
 		if (lattices.size > 8) lattices.clear();
-		lattice = new RiverLattice(seed, mode);
-		lattices.set(key, lattice);
+		lattice = new RiverLattice(seed);
+		lattices.set(seed, lattice);
 	}
 	return lattice;
 }

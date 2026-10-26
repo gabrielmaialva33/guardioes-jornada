@@ -46,12 +46,12 @@ export {
 	PLANALTO_S,
 	serraFoot
 } from './macro.ts';
+export { nearPark, PARK_BOUNDARY, type ParkEdge, parkDistance, zoneOfChunk } from './park.ts';
+export { parkStitch, touchesParkBand } from './park-stitch.ts';
 export {
-	RESERVE_RIVER,
 	RIVER_ACC,
 	RIVER_FLAG,
 	type RiverLattice,
 	riverLattice,
 	STREAM_ACC
 } from './rivers.ts';
-export { BAND_SLOPE, eastWeight } from './stitch.ts';

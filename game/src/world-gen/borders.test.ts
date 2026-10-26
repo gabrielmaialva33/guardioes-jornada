@@ -123,12 +123,13 @@ describe('chunk borders', () => {
 	});
 
 	it('give every chunk an apron equal to the ring of a bigger area, corners included', () => {
+		// Generated chunks on the park's edge (the notch west of the Reserva, east of the Vale, south of
+		// the Vale, north of the Copa) and far away.
 		for (const [cx, cz] of [
-			[4, 1],
-			[4, -1],
-			[3, 4],
-			[5, 2],
-			[-1, 0],
+			[-1, 1],
+			[8, 1],
+			[4, 4],
+			[6, -5],
 			[9, -6],
 			[-700, 1500]
 		]) {
@@ -143,17 +144,25 @@ describe('chunk borders', () => {
 		}
 	});
 
-	it('stay bit-identical through the east stitch band', () => {
+	it('stay bit-identical through the park stitch band', () => {
+		// Pairs of generated chunks along the park's outer edges, both sides of every corner.
 		const band: [number, number, 'east' | 'south'][] = [
-			[3, -1, 'east'],
-			[3, 4, 'east'],
-			[4, -2, 'south'],
-			[4, 4, 'south']
+			[-2, 1, 'east'],
+			[-1, 0, 'south'],
+			[-1, 2, 'south'],
+			[8, -5, 'south'],
+			[8, 3, 'south'],
+			[4, 4, 'east'],
+			[4, 4, 'south'],
+			[3, 8, 'east'],
+			[-2, 6, 'south'],
+			[-1, -5, 'east'],
+			[-3, -2, 'east']
 		];
-		for (let cz = -1; cz <= 3; cz++) band.push([4, cz, 'east'], [4, cz, 'south']);
 		for (const [cx, cz, dir] of band) {
 			const a = generateChunk(cx, cz, WORLD_SEED);
 			const b = generateChunk(dir === 'east' ? cx + 1 : cx, dir === 'south' ? cz + 1 : cz, WORLD_SEED);
+			expect(a.handMade || b.handMade, `${cx},${cz} ${dir}`).toBe(false);
 			for (let k = 0; k < S; k++) {
 				const [qa, qb] = edge(dir, k);
 				expect(bits(a.heights[qa]), `${cx},${cz} ${dir}`).toBe(bits(b.heights[qb]));

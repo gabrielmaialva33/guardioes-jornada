@@ -62,8 +62,8 @@ describe('seamless scattering', () => {
 	});
 
 	it.each([
-		[5, -3],
-		[-1, 7],
+		[9, -3],
+		[-1, 9],
 		[12, 25],
 		[700, -300]
 	])(
@@ -96,7 +96,7 @@ describe('seamless scattering', () => {
 	);
 
 	it('sorts each chunk family by kind', () => {
-		const c = generateChunk(6, -2, WORLD_SEED);
+		const c = generateChunk(9, -2, WORLD_SEED);
 		for (const p of [c.trees, c.rocks, c.decorations])
 			for (let k = 1; k < p.count; k++) expect(p.kind[k]).toBeGreaterThanOrEqual(p.kind[k - 1]);
 		expect(c.trees.count + c.decorations.count).toBeGreaterThan(0);

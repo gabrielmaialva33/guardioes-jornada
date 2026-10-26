@@ -42,10 +42,11 @@ describe('generation order', () => {
 	});
 
 	it('gives each chunk the bits of any bigger area around it', () => {
-		const area = generateArea(-2 * CHUNK_SIZE, 4 * CHUNK_SIZE, 3 * CHUNK_SIZE, 2 * CHUNK_SIZE, WORLD_SEED);
+		// Generated chunks only: south of the Vale, by the park's edge.
+		const area = generateArea(5 * CHUNK_SIZE, 4 * CHUNK_SIZE, 3 * CHUNK_SIZE, 2 * CHUNK_SIZE, WORLD_SEED);
 		for (let b = 0; b < 2; b++)
 			for (let a = 0; a < 3; a++) {
-				const c = generateChunk(a - 2, b + 4, WORLD_SEED);
+				const c = generateChunk(a + 5, b + 4, WORLD_SEED);
 				for (let j = 0; j <= CHUNK_SIZE; j++)
 					for (let i = 0; i <= CHUNK_SIZE; i++) {
 						const q = j * c.grid + i;

@@ -45,11 +45,12 @@ describe('world-gen determinism', () => {
 				'host.ts',
 				'macro.ts',
 				'math.ts',
+				'park.ts',
+				'park-edges.ts',
+				'park-stitch.ts',
 				'protocol.ts',
-				'reserva-edge.ts',
 				'rivers.ts',
 				'scatter.ts',
-				'stitch.ts',
 				'worker.ts'
 			])
 		);
@@ -67,7 +68,9 @@ describe('world-gen determinism', () => {
 		for (const name of sources.filter((n) => n !== 'client.ts' && n !== 'worker.ts')) {
 			const code = readFileSync(`${dir}/${name}`, 'utf8');
 			expect(code, name).not.toMatch(/from '(three|svelte)/);
-			expect(code, name).not.toMatch(/from '\.\.\/(level|render|scene|engine|world-runtime)\//);
+			// From the level, only the park's pure data (level/zones/spec.ts, Worker-safe by its own test).
+			for (const [, path] of code.matchAll(/from '(\.\.\/[^']+)'/g))
+				if (!path.startsWith('../survival/')) expect(path, name).toBe('../level/zones/spec.ts');
 			expect(code, name).not.toMatch(/\b(document|window|localStorage)\b/);
 		}
 	});

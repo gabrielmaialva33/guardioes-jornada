@@ -44,15 +44,9 @@ function transect(z: number): Sample[] {
 	return out;
 }
 
-const rankWeight = (w: Uint8Array, rank: number) => {
-	let sum = 0;
-	for (let b = 0; b < BIOME_COUNT; b++) if (BIOME_RANK[b] === rank) sum += w[b];
-	return sum;
-};
-
 describe('biomes', () => {
 	it.each([
-		['next to the Reserva', -60],
+		['north of the park', -220],
 		['at a costão', COSTAO_Z],
 		['in a wide baixada', BAIXADA_Z]
 	])(
@@ -71,15 +65,24 @@ describe('biomes', () => {
 		}
 	);
 
-	it('blend over 20–40 u where the macro is calibrated (no hard borders)', () => {
-		const row = transect(-60);
+	it('blend over 20–40 u of the ladder, never hard borders', () => {
+		// In the macro's own coordinates (the warp only bends them in space): e along a calibrated
+		// costão profile, s = e − 132. Every generated vertex near the Reserva is the park's now.
+		const w = new Float64Array(BIOME_COUNT);
+		const ranks: number[][] = [];
+		for (let e = -80; e <= 600; e++) {
+			biomeWeights(e, e - COSTAO_FOOT, Number.POSITIVE_INFINITY, 0.5, w);
+			const row = new Array(RANK_COUNT).fill(0);
+			for (let b = 0; b < BIOME_COUNT; b++) row[BIOME_RANK[b]] += w[b];
+			ranks.push(row);
+		}
 		for (let r = 0; r + 1 < RANK_COUNT; r++) {
-			const first = row.findIndex((s) => rankWeight(s.weights, r + 1) > 0);
+			const first = ranks.findIndex((row) => row[r + 1] > 0);
 			let last = -1;
-			row.forEach((s, k) => {
-				if (rankWeight(s.weights, r) > 0) last = k;
+			ranks.forEach((row, k) => {
+				if (row[r] > 0) last = k;
 			});
-			const width = row[last].x - row[first].x;
+			const width = last - first;
 			expect(width, `rank ${r} → ${r + 1}`).toBeGreaterThanOrEqual(18);
 			expect(width, `rank ${r} → ${r + 1}`).toBeLessThanOrEqual(40);
 		}
@@ -87,7 +90,7 @@ describe('biomes', () => {
 
 	it('weigh every vertex to exactly 255, the dominant biome among the weighted ones', () => {
 		for (const [cx, cz] of [
-			[-1, -2],
+			[-3, -2],
 			[6, 9],
 			[20, 30],
 			[-500, 77]

@@ -1,19 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { RIVER, RIVER_SURFACE, WATERFALL } from '../level/layout.ts';
 import { FLAG, WATER_LEVEL, ZONE } from '../survival/types.ts';
 import { generateChunk } from './chunk.ts';
-import { reserveDistance, WORLD_SEED } from './constants.ts';
+import { WORLD_SEED } from './constants.ts';
+import { parkDistance } from './park.ts';
 import {
 	NODE_KIND,
-	RESERVE_RIVER,
 	RIVER_ACC,
 	RIVER_FLAG,
 	RIVER_PIECE_SHIFT,
 	RIVER_PIECES,
 	RiverLattice,
-	type RiverSegment,
-	riverColumn,
-	riverRow
+	type RiverSegment
 } from './rivers.ts';
 
 /** A big area west of the crest, around the Reserva and into a wide baixada. */
@@ -97,15 +94,18 @@ describe('lattice rivers', () => {
 		expect(toSea + out).toBe(links.size);
 	});
 
-	it('keeps clear of the Reserva and its pinned cells (detour mode)', () => {
+	it('keeps clear of the park, whose river is the zones’ own', () => {
 		for (const g of segments)
 			for (let t = 0; t <= 1; t += 1 / 64) {
 				const x = g.ax + (g.bx - g.ax) * t;
 				const z = g.az + (g.bz - g.az) * t;
-				expect(reserveDistance(x, z)).toBeGreaterThan(g.half + 4);
+				expect(parkDistance(x, z), `${x},${z}`).toBeGreaterThan(g.half);
 			}
-		for (let i = 0; i <= 2; i++)
-			for (let j = 0; j <= 2; j++) expect(lattice.node(i, j).kind).toBe(NODE_KIND.off);
+		// No node in the park or its band; the Reserva's cells among them.
+		for (let i = -1; i <= 4; i++)
+			for (let j = -2; j <= 4; j++)
+				if (lattice.excluded(i, j)) expect(lattice.node(i, j).kind).toBe(NODE_KIND.off);
+		for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) expect(lattice.excluded(i, j)).toBe(true);
 	});
 
 	it('counts accumulation from the crest down and widens with it', () => {
@@ -130,48 +130,5 @@ describe('lattice rivers', () => {
 					}
 			}
 		expect(wet).toBeGreaterThan(500);
-	});
-});
-
-describe('the Reserva river pins (F2, not active yet)', () => {
-	it('match the level', () => {
-		expect([RESERVE_RIVER.waterfall.x, RESERVE_RIVER.waterfall.z]).toEqual([...WATERFALL]);
-		expect([RESERVE_RIVER.waterfall.x, RESERVE_RIVER.waterfall.z]).toEqual([...RIVER[0]]);
-		expect([RESERVE_RIVER.mouth.x, RESERVE_RIVER.mouth.z]).toEqual([...RIVER[RIVER.length - 1]]);
-		expect(RESERVE_RIVER.waterfall.water).toBe(RIVER_SURFACE.topY);
-		expect(RESERVE_RIVER.mouth.water).toBe(RIVER_SURFACE.seaY);
-		for (const pin of [RESERVE_RIVER.waterfall, RESERVE_RIVER.mouth]) {
-			expect(riverColumn(pin.x)).toBe(pin.i);
-			expect(riverRow(pin.z)).toBe(pin.j);
-		}
-	});
-
-	it('chain the east feeder through the waterfall and the mouth to the sea, downhill', () => {
-		const pinned = new RiverLattice(WORLD_SEED, 'pinned');
-		const { feeder, waterfall, mouth } = RESERVE_RIVER;
-		const head = pinned.node(feeder.i, feeder.j);
-		expect([head.di, head.dj]).toEqual([waterfall.i, waterfall.j]);
-		const fall = pinned.node(waterfall.i, waterfall.j);
-		expect(fall.kind).toBe(NODE_KIND.pin);
-		expect(fall.internal).toBe(true);
-		expect(fall.water).toBeLessThan(head.water);
-		expect(fall.acc).toBeGreaterThan(head.acc);
-		const end = pinned.node(mouth.i, mouth.j);
-		expect([fall.di, fall.dj]).toEqual([mouth.i, mouth.j]);
-		expect(end.water).toBeLessThan(fall.water);
-		expect(end.acc).toBeGreaterThan(fall.acc);
-		const sea = pinned.node(end.di, end.dj);
-		expect(sea.kind).toBe(NODE_KIND.sink);
-		expect(sea.water).toBeLessThan(end.water);
-		// The hand-made river between the pins is never carved; the feeder and the mouth's run to the sea are.
-		const near = pinned.segmentsNear(0, 0, 160, 160, 60);
-		const ids = new Set(near.map((g) => g.id));
-		expect(ids.has((waterfall.i << 16) | waterfall.j)).toBe(false);
-		expect(ids.has((feeder.i << 16) | feeder.j)).toBe(true);
-		expect(ids.has((mouth.i << 16) | mouth.j)).toBe(true);
-		const feed = near.filter((g) => g.id === ((feeder.i << 16) | feeder.j));
-		expect(feed.some((g) => g.bx === waterfall.x && g.bz === waterfall.z)).toBe(true);
-		// The default lattice is untouched: generateChunk does not stitch yet.
-		expect(new RiverLattice(WORLD_SEED).node(waterfall.i, waterfall.j).kind).toBe(NODE_KIND.off);
 	});
 });

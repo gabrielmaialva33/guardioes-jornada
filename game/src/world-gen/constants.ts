@@ -8,6 +8,7 @@
  * hashes only, so any chunk can be built alone, in any order, in any Worker,
  * and two neighbours agree bit for bit on their shared edge.
  */
+import { zoneOfChunk } from '../level/zones/spec.ts';
 import { subSeed } from '../survival/random.ts';
 import { BLOCK_SIZE, COLLISION_STEP, WORLD_SIZE } from '../survival/types.ts';
 
@@ -41,12 +42,15 @@ export const RESERVE = {
 	minChunk: 0,
 	maxChunk: WORLD_SIZE / CHUNK_SIZE - 1
 } as const;
-/** Width of the band around the Reserva that F2 blends into it (WORLD.md §3). */
+/** Width of the band where the generated world blends into the park (WORLD.md §3, PARK.md §2). */
 export const STITCH_BAND = 40;
 
-/** True for the Reserva's chunks, which come from level/build.ts and are never generated. */
+/**
+ * True for the park's chunks (the Reserva and the four zones of PARK.md §2,
+ * level/zones/spec.ts), which come from the level and are never generated.
+ */
 export function isHandMade(cx: number, cz: number): boolean {
-	return cx >= RESERVE.minChunk && cx <= RESERVE.maxChunk && cz >= RESERVE.minChunk && cz <= RESERVE.maxChunk;
+	return zoneOfChunk(cx, cz) !== null;
 }
 
 /** Distance from (x, z) to the Reserva's square, 0 inside. */

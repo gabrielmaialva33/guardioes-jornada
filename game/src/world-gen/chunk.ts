@@ -59,6 +59,7 @@ import {
 	WORLD_SEED
 } from './constants.ts';
 import { clearMacroCaches, coastX, macroFields, newMacroPoint, samplePoint, serraFoot } from './macro.ts';
+import { parkStitch, touchesParkBand } from './park-stitch.ts';
 import {
 	CARVE_FAR,
 	carve,
@@ -68,7 +69,6 @@ import {
 	riverLattice
 } from './rivers.ts';
 import { blueNoise } from './scatter.ts';
-import { clearStitchCaches, type EastStitch, eastStitch, touchesEastBand } from './stitch.ts';
 
 /** Floats per river segment in WorldChunk.rivers: ax, az, aWater, bx, bz, bWater, halfWidth, depth. */
 export const RIVER_STRIDE = 8;
@@ -116,8 +116,9 @@ export interface WorldChunk {
 	/** Samples per side (41), 0 for a hand-made chunk. */
 	grid: number;
 	/**
-	 * A Reserva chunk: its data is level/build.ts's, never generated, and every
-	 * array here is empty. F2 blends the band around it.
+	 * A park chunk (the Reserva or a PARK.md zone): its data is the level's
+	 * (level/zones buildZone), never generated, and every array here is empty.
+	 * The generated chunks around the park blend into it (park-stitch.ts).
 	 */
 	handMade: boolean;
 	waterLevel: number;
@@ -125,10 +126,11 @@ export interface WorldChunk {
 	heights: Float32Array;
 	/**
 	 * APRON_LENGTH heights around the grid (layout at APRON_LENGTH; read it with
-	 * heightWithApron), equal to the neighbour chunks' bit for bit. Next to the
-	 * Reserva: its own heights on the stitched east side (x = 159), the
-	 * procedural ground on the sides still closed. Not in the checksum: it only
-	 * repeats the neighbours' heights, which borders.test.ts checks.
+	 * heightWithApron), equal to the neighbour chunks' bit for bit. Where the
+	 * ring falls inside a park zone it holds the stitched generated ground, not
+	 * the zone's: use the zone's own data for normals across the park's edge.
+	 * Not in the checksum: it only repeats the neighbours' heights, which
+	 * borders.test.ts checks.
 	 */
 	apron: Float32Array;
 	/** grid² survival ZONE values (biomes.ts BIOME_ZONE, or river). */
@@ -281,7 +283,7 @@ function handMadeChunk(cx: number, cz: number, seed: number): WorldChunk {
 }
 
 export interface AreaOptions {
-	/** Apply the east stitch band (default true); false gives the bare procedural ground, for tests. */
+	/** Blend into the park near it (default true); false gives the bare procedural ground, for tests. */
 	stitch?: boolean;
 }
 
@@ -298,7 +300,7 @@ export function generateArea(
 	seed: number,
 	options: AreaOptions = {}
 ): Area {
-	const stitch = bandFor(x0, z0, x0 + width, z0 + depth, seed, options.stitch !== false);
+	const stitch = bandFor(x0, z0, x0 + width, z0 + depth, options.stitch !== false);
 	const fields = macroFields(seed);
 	const layers = fields.layers;
 	const sideX = width + 1;
@@ -431,29 +433,18 @@ export function generateArea(
 	};
 }
 
-/** The east band if the rectangle (grown by the apron) can touch it. */
-function bandFor(
-	x0: number,
-	z0: number,
-	x1: number,
-	z1: number,
-	seed: number,
-	on: boolean
-): EastStitch | null {
-	return on && touchesEastBand(x0 - 1, z0 - 1, x1 + 1, z1 + 1) ? eastStitch(seed) : null;
-}
+/** Whether the rectangle (grown by the apron) meets the park's stitch band. */
+const bandFor = (x0: number, z0: number, x1: number, z1: number, on: boolean) =>
+	on && touchesParkBand(x0 - 1, z0 - 1, x1 + 1, z1 + 1);
 
-/** The band's height where it decides the vertex, the procedural ground elsewhere. */
-function stitched(stitch: EastStitch | null, x: number, z: number, ground: number): number {
-	if (!stitch) return ground;
-	const h = stitch.height(x, z);
-	return Number.isNaN(h) ? ground : h;
-}
+/** The ground blended into the park where the band reaches, the procedural ground elsewhere. */
+const stitched = (band: boolean, x: number, z: number, ground: number) =>
+	band ? parkStitch(x, z, ground) : ground;
 
 /** The apron ring of chunk (x0, z0): the same per-vertex pipeline as the grid. */
 function apronOf(x0: number, z0: number, seed: number, segments: readonly RiverSegment[]): Float32Array {
 	const fields = macroFields(seed);
-	const stitch = bandFor(x0, z0, x0 + CHUNK_SIZE, z0 + CHUNK_SIZE, seed, true);
+	const stitch = bandFor(x0, z0, x0 + CHUNK_SIZE, z0 + CHUNK_SIZE, true);
 	const p = newMacroPoint();
 	const r = newRiverSample();
 	const out = new Float32Array(APRON_LENGTH);
@@ -486,11 +477,10 @@ export function heightWithApron(chunk: WorldChunk, i: number, j: number): number
 	return chunk.apron[2 * (side + 2) + side + j];
 }
 
-/** Forgets every memo (river nodes, macro fields, the stitch band): results never depend on them. */
+/** Forgets every memo (river nodes, macro fields): results never depend on them. */
 export function clearWorldGenCaches() {
 	clearRiverCaches();
 	clearMacroCaches();
-	clearStitchCaches();
 }
 
 /**
