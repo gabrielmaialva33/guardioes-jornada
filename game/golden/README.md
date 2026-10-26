@@ -131,3 +131,25 @@ alongside the existing `debug` and `pose`:
 
 Example once it exists:
 `http://localhost:5196/?debug&golden=1&tier=high&t=10&cam=100,7.5,108,112,3.3,118,70&avatar=104,111,0.876`.
+
+## Runtime hook (wave 1)
+
+The hook above is now implemented in dev and acceptance builds. Public production builds ignore `golden`.
+`capture.ts` defaults to `--clock runtime`: all eleven poses (including the extra mirante) use free camera,
+night and lineup, wait for `goldenReady`, and capture frozen visual time with real rAF measurements. It passes
+`tier`, `seed`, `t`, `cam`, `avatar`, `time` and `scene` to the runtime. `--clock fake|real` keeps the original
+five-pose path for historical comparisons. Never compare a free-camera river frame to its old chase-camera
+approximation as a visual regression.
+
+For technique comparisons on identical assets, dev golden URLs also accept `look=0|1|2|3|4`: original Lambert,
+stylized light/normals, continuous terrain/shore, canopy shade/sun spots, then sky/height fog/horizon. Public packs
+always enable the full look. For example:
+
+```sh
+node game/golden/capture.ts --set wave1-light --url 'http://localhost:5196/?look=1'
+node game/golden/sheet.ts --before wave1-before --after wave1-light
+```
+
+The mask hook hides only the rendered sky/serra/sea, preserving opaque world geometry. A sky-heavy upward pose
+naturally has a high `Void↓ %`; P4 is the meaningful world-edge gate. Baselines need owner review; do not run
+`--approve` automatically after a deliberate art change.
