@@ -1,4 +1,4 @@
-import { Mesh, PerspectiveCamera } from 'three';
+import { InstancedMesh, Mesh, PerspectiveCamera } from 'three';
 import { expect, it, vi } from 'vitest';
 import { createAtmosphere } from './atmosphere.ts';
 
@@ -19,8 +19,12 @@ it('keeps its fog-free horizon inside each tier far plane without changing gamep
 	expect(draws).toBeLessThanOrEqual(8);
 	expect(tri).toBeLessThan(5000);
 	expect(camera.position.toArray()).toEqual([80, 5, 80]);
+	const cloud = a.sky.children.find((n) => n instanceof InstancedMesh);
+	if (!cloud) throw new Error('cloud fixture');
+	const cloudDispose = vi.spyOn(cloud, 'dispose');
 	const dispose = vi.spyOn(a.cloudTexture, 'dispose');
 	a.dispose();
 	a.dispose();
 	expect(dispose).toHaveBeenCalledOnce();
+	expect(cloudDispose).toHaveBeenCalledOnce();
 });

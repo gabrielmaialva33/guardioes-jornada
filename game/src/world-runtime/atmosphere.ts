@@ -285,6 +285,7 @@ export function createAtmosphere(size: number) {
 		dispose() {
 			if (disposed) return;
 			disposed = true;
+			clouds.dispose();
 			for (const g of new Set(geometries)) g.dispose();
 			for (const m of new Set(materials)) m.dispose();
 			cloudTexture.dispose();
