@@ -2,6 +2,7 @@ import type { PerspectiveCamera } from 'three';
 import {
 	BoxGeometry,
 	BufferGeometry,
+	Color,
 	CylinderGeometry,
 	Float32BufferAttribute,
 	Group,
@@ -18,6 +19,7 @@ import type { Quality } from '../render/index.ts';
 import { mergePieces } from '../render/index.ts';
 import { lighting, visualStep } from '../render/stylized.ts';
 import { ensureVertexColors } from '../scene/materials.ts';
+import { testing } from '../scene/testing.ts';
 import { BLOCK_SIZE, type SurvivalWorld } from '../survival/types.ts';
 import { createAtmosphere } from './atmosphere.ts';
 import { boundaryTerrain } from './boundary.ts';
@@ -25,6 +27,7 @@ import { bakeCanopy } from './canopy.ts';
 import { deckGeometry, prefabProxies, propGeometry } from './collision.ts';
 import { createFarTerrain, detailDistances } from './far-field.ts';
 import { createMapMaterials } from './materials.ts';
+import { pathRibbon, poolShoreScale } from './paths.ts';
 import { terrainChunk } from './terrain.ts';
 
 export function createMapVisual(
@@ -34,8 +37,8 @@ export function createMapVisual(
 	storyProps = false
 ) {
 	const object = new Group();
-	const farTerrain = createFarTerrain(world, level?.trails);
-	object.add(farTerrain.object);
+	const farTerrain = testing ? undefined : createFarTerrain(world, level?.trails);
+	if (farTerrain) object.add(farTerrain.object);
 	const detailed: Mesh[] = [];
 	const ownedGeometries: BufferGeometry[] = [];
 	const materials = createMapMaterials();
@@ -74,6 +77,10 @@ export function createMapVisual(
 		mesh.geometry.computeBoundingBox();
 		detailed.push(mesh);
 	}
+	if (level && visualStep() >= 2) {
+		const paths = add(pathRibbon(world, level.trails), materials.path);
+		paths.name = 'trail-ribbons';
+	}
 	// Join the ribbon at shared control-point cross sections, with no independently overlapping segments.
 	const p: number[] = [],
 		indices: number[] = [];
@@ -98,23 +105,38 @@ export function createMapVisual(
 	if (level?.pool) {
 		const pool = level.pool;
 		const points: number[] = [pool.x, pool.water + 0.005, pool.z],
-			faces: number[] = [];
-		for (let i = 0; i <= 48; i++) {
-			const t = (i / 48) * Math.PI * 2,
-				along = Math.cos(t) * pool.halfLength,
-				across = Math.sin(t) * pool.halfWidth;
-			points.push(
-				pool.x + along * pool.axisX - across * pool.axisZ,
-				pool.water + 0.005,
-				pool.z + along * pool.axisZ + across * pool.axisX
-			);
-			if (i) faces.push(0, i, i + 1);
+			faces: number[] = [],
+			colors: number[] = [];
+		const blue = new Color('#3e9ccf'),
+			foam = new Color('#b6e6f7');
+		colors.push(blue.r, blue.g, blue.b);
+		for (let i = 0; i <= 96; i++) {
+			const t = (i / 96) * Math.PI * 2,
+				r = poolShoreScale(t);
+			for (const edge of [false, true]) {
+				const k = r - (edge ? 0 : 0.008),
+					along = Math.cos(t) * pool.halfLength * k,
+					across = Math.sin(t) * pool.halfWidth * k;
+				points.push(
+					pool.x + along * pool.axisX - across * pool.axisZ,
+					pool.water + 0.005,
+					pool.z + along * pool.axisZ + across * pool.axisX
+				);
+				const c = edge ? foam : blue;
+				colors.push(c.r, c.g, c.b);
+			}
+			if (i) {
+				const inner = 1 + i * 2,
+					previous = inner - 2;
+				faces.push(0, inner, previous, previous, inner, previous + 1, previous + 1, inner, inner + 1);
+			}
 		}
 		const g = new BufferGeometry();
 		g.setAttribute('position', new Float32BufferAttribute(points, 3));
+		g.setAttribute('color', new Float32BufferAttribute(colors, 3));
 		g.setIndex(faces);
 		g.computeVertexNormals();
-		add(g, waterMaterial);
+		add(g, materials.poolWater);
 	}
 	// Every bridge/stone is drawn at the same authored top as its collider.
 	for (const c of world.crossings) {
@@ -195,7 +217,7 @@ export function createMapVisual(
 		prepareFrame(camera: PerspectiveCamera, time: number, quality: Quality, night: boolean) {
 			lighting.uVisualTime.value = time;
 			lighting.uTreeRange.value = detailDistances(quality).trees;
-			farTerrain.update(camera, quality, night);
+			farTerrain?.update(camera, quality, night);
 			for (const mesh of detailed) {
 				const b = mesh.geometry.boundingBox;
 				if (!b) continue;
@@ -211,7 +233,7 @@ export function createMapVisual(
 				lighting.uShadeMap.value = null;
 			}
 			canopy.dispose();
-			farTerrain.dispose();
+			farTerrain?.dispose();
 			atmosphere?.dispose();
 			for (const g of ownedGeometries) g.dispose();
 			materials.dispose();

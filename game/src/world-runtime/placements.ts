@@ -13,6 +13,7 @@ import pauBrasil from '../assets/models/custom-pau-brasil.glb?url';
 import xaxim from '../assets/models/custom-xaxim.glb?url';
 import flora from '../assets/models/kit-flora.glb?url';
 import type { Trail } from '../level/types.ts';
+import { applyWind, CROWNS, WIND } from '../life/index.ts';
 import { CanopyVisibility, type CanopyVolume } from '../render/canopy-visibility.ts';
 import {
 	addPlacements,
@@ -24,6 +25,7 @@ import {
 } from '../render/index.ts';
 import { visualStep } from '../render/stylized.ts';
 import { disposeModel, loadModel } from '../scene/avatar.ts';
+import { SharedModelTextures } from '../scene/shared-textures.ts';
 import { RAMPS } from '../style/palette.ts';
 import type { Placements, SurvivalWorld } from '../survival/types.ts';
 import { detailDistances } from './far-field.ts';
@@ -70,6 +72,7 @@ export async function loadWorldPlacements(
 		if (decorations.kinds[decorations.kind[i]] === 'bromelia' && i % 3 === 0)
 			decorations.kind[i] = decorations.kinds.length - 1;
 	const grassy = (kind: string) => ['grass', 'fern', 'beach-grass'].includes(kind);
+	const textures = new SharedModelTextures();
 	const prototypes: TreePrototype[] = [];
 	const canopyBounds: Record<string, Box3> = {};
 	const source = new Group(),
@@ -111,6 +114,13 @@ export async function loadWorldPlacements(
 								: new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 						model = new Mesh(geometry, new MeshLambertMaterial({ color: RAMPS.rock[2] }));
 					}
+					// The old ipê export includes one flat fallen-flower polygon; it reads as a broken mesh.
+					const petals = model.getObjectByName('flores-caidas');
+					if (petals instanceof Mesh) {
+						petals.removeFromParent();
+						petals.geometry.dispose();
+					}
+					if (model instanceof Group) textures.adopt(model);
 					const modelBounds = new Box3().setFromObject(model);
 					if (family === 'tree') {
 						canopyBounds[name] = modelBounds;
@@ -187,6 +197,29 @@ export async function loadWorldPlacements(
 			fades: true,
 			material: 'house'
 		});
+		for (const [name, pool] of pools.pools) {
+			const kind = name.slice(name.indexOf(':') + 1),
+				bounds = canopyBounds[name];
+			const crown = Object.entries(CROWNS).find(([key]) => key === kind)?.[1];
+			const tree = name.startsWith('tree:') && bounds,
+				grass = name.startsWith('cover:') && grassy(kind);
+			if (!tree && !grass) continue;
+			for (const mesh of pool.meshes)
+				for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+					if (material.userData.lifeWind) continue;
+					applyWind(
+						material,
+						tree
+							? {
+									amplitude: WIND.canopySway,
+									from: crown?.model ? crown.base : bounds.min.y + (bounds.max.y - bounds.min.y) * 0.45,
+									to: crown?.model ? crown.top : bounds.max.y,
+									sample: 'origin'
+								}
+							: { amplitude: WIND.grassSway, from: 0, to: 0.7 / (scales[name] || 1), sample: 'vertex' }
+					);
+				}
+		}
 		const crowns: CanopyVolume[] = [];
 		try {
 			for (const [family, placements] of [
@@ -227,7 +260,13 @@ export async function loadWorldPlacements(
 			pools.dispose();
 			throw error;
 		}
-		const impostors = createTreeImpostors(prototypes, world.trees, quality);
+		let impostors: ReturnType<typeof createTreeImpostors>;
+		try {
+			impostors = createTreeImpostors(prototypes, world.trees, quality);
+		} catch (error) {
+			pools.dispose();
+			throw error;
+		}
 		pools.object.add(impostors.object);
 		return {
 			pools,

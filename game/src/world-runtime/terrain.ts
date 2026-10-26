@@ -96,7 +96,7 @@ export function terrainTint(
 	const h = (xx: number, zz: number) => bilinear(world, xx, zz, (i) => world.heights[i]);
 	const y = h(x, z),
 		slope = Math.hypot((h(x + 1, z) - h(x - 1, z)) * 0.5, (h(x, z + 1) - h(x, z - 1)) * 0.5);
-	out.lerp(colors.rock[1], smooth(0.65, 2.0, slope) * 0.7).lerp(colors.grass[3], smooth(10, 20, y) * 0.15);
+	out.lerp(colors.grass[3], smooth(10, 20, y) * 0.15);
 	out.lerp(colors.soil[1], (wet / weight) * 0.8);
 	const beach = bilinear(world, x, z, (i) => +(world.zones[i] === ZONE.beach || world.zones[i] === ZONE.sea));
 	out.lerp(colors.soil[3], beach * 0.85);
@@ -116,6 +116,7 @@ export function terrainTint(
 		bilinear(world, x, z, (i) => +!!(world.flags[i] & FLAG.base))
 	);
 	out.lerp(colors.soil[2], path);
+	out.lerp(colors.rock[2], smooth(0.4, 1.05, slope));
 	return out.multiplyScalar(0.95 + 0.07 * noise(x * 0.13, z * 0.13) + 0.03 * noise(x * 0.37, z * 0.37));
 }
 /** Shore distance is measured to the ribbon edge, with a per-vertex water height for sloping rivers. */
@@ -159,7 +160,8 @@ export function shoreAt(
 		);
 		if (d < distance) {
 			distance = d;
-			water = pool.water;
+			// The pool has its own irregular foam rim; the terrain must not draw the old ellipse.
+			water = -10000;
 		}
 	}
 	return [water, distance];
@@ -184,7 +186,7 @@ export function terrainChunk(
 				pz = block.z0 + z,
 				i = pz * world.grid + px;
 			positions.push(px, world.heights[i], pz);
-			if (continuous) terrainTint(world, px, pz, trails, c);
+			if (continuous) terrainTint(world, px, pz, [], c);
 			else c.set(terrainColor(world, px, pz, trails));
 			colorsOut.push(c.r, c.g, c.b);
 			const dx =
