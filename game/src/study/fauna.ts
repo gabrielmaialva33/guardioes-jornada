@@ -151,17 +151,7 @@ const TUNING: Record<string, Tuning> = {
 	Tapir: { walk: 1.2, run: 3.4, turn: 1.6, alert: 13, flee: 7.5, far: 140, idle: [3, 6], graze: [5, 10] },
 	Tapir_baby: { walk: 1.2, run: 3.4, turn: 2.6, alert: 13, flee: 7.5, far: 120, idle: [2, 4], graze: [3, 6] },
 	Peccary: { walk: 1.1, run: 3.8, turn: 2.8, alert: 12, flee: 7, far: 120, idle: [2, 5], graze: [3, 7] },
-	ArmadilloThreeBanded: {
-		walk: 0.7,
-		run: 1.6,
-		turn: 3.0,
-		alert: 7,
-		flee: 4,
-		far: 70,
-		idle: [2, 4],
-		graze: [3, 6],
-		hides: true
-	},
+	Armadillo: { walk: 0.8, run: 3.0, turn: 3.0, alert: 8, flee: 5, far: 70, idle: [2, 4], graze: [3, 6] },
 	CaneToad: { walk: 0.6, run: 1.2, turn: 3.0, alert: 5, flee: 3, far: 55, idle: [4, 9], graze: [3, 6] },
 	Crab: {
 		walk: 0.9,
@@ -338,8 +328,9 @@ export function makeInPlace(clip: AnimationClip) {
 }
 
 /**
- * Some conversions (the cururu, the crab, the tatu-galinha) bake the armature
- * root's offset into the inverse bind matrices once more, so at the rest pose
+ * Some conversions (the cururu, the crab and the tatu-galinha before the
+ * owner's 01:48 re-export) baked the armature root's offset into the inverse
+ * bind matrices once more, so at the rest pose
  * the skin sits a root offset away from its bones. Measured at the rest pose
  * (as loaded, before any clip): shift every inverse bind matrix so the skin's
  * centre lands on the skeleton's. Returns whether it had to.

@@ -322,8 +322,7 @@ export const STUDY_WISHES: readonly Wish[] = [
 	},
 	{
 		key: 'tatu',
-		// The tatu-galinha's clips are broken in the conversion (report); the tatu-bola stands in.
-		species: 'ArmadilloThreeBanded',
+		species: 'Armadillo',
 		group: 'tatu',
 		behaviour: 'cross',
 		habitat: 'any',
