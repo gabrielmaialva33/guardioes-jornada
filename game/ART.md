@@ -35,7 +35,12 @@ The research behind it is in `~/.cache/agents/2026-10-25-trilha-secreta/pesquisa
 - **Characters:** a dark-palette outline (never black), a rim light and a crisp blob shadow. They read at 20 m.
 - **Life:** falling leaves, pollen in the clearings, butterflies; fireflies at night.
 - **Truthful biology:** readability over realism, but never false biology. The right colours, proportions and behaviour of each species, simplified.
-- **Day and night:** daylight by default. Night (survival mode) is a lighting, fog and sky change, never new materials.
+- **Day and night:** a slow cycle of about 24 minutes (16 day, 2 dusk, 6 night), approved by the coordinator for the living world and the time-of-day species in the Guia da Mata.
+  - Every session starts in daylight, and dusk is short.
+  - Night is moonlit blue, never near-black: paths, interactables and the avatar stay legible on the low tier.
+  - Night is a change of lighting, fog and sky only, never new materials.
+  - Reduced motion keeps the cycle but never flickers.
+  - Debug override: `?time=day|dusk|night`.
 
 ### Avatar
 

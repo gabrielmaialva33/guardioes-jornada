@@ -6,6 +6,21 @@ The hand-made park is the Reserva da Iara (`LEVEL.md`, Act 1) plus four hand-mad
 - **Approval:** the owner approved the plan on 26/10/2026.
 - **Units:** game units. The avatar is 3 u tall, 1 u ≈ 0.47 m, walking is 9.6 u/s, and a full jump is 5.2 u on the flat (`jumpReach`). x grows east (the serra), z grows south.
 
+## 0. Where the park is
+
+The Parque da Iara is fictional. It sits in the centre-north of Rio de Janeiro state, between the Serra dos Órgãos and the coast around Macaé. It is inspired by the mico-leão lowlands of Silva Jardim and the São João basin, and by the restinga of Jurubatiba.
+
+That choice keeps the fauna coherent with the verified facts (`~/.cache/agents/2026-10-25-trilha-secreta/p27-fatos-guia.md`, §10–§11):
+- the mico-leão-dourado lives in the São João basin;
+- the preguiça-de-coleira reaches Macaé, Silva Jardim and Teresópolis;
+- the tapiti (_Sylvilagus tapetillus_) is endemic to RJ, with records in the Serra dos Órgãos;
+- the muriqui-do-sul and the jabuti-tinga are within range;
+- the jacutinga has been reintroduced in RJ.
+
+Since the guará's current range is São Paulo to Santa Catarina, with Rio de Janeiro only historical, the Manguezal's pink-bird finale uses the **colhereiro** (_Platalea ajaja_), which lives in RJ mangroves.
+
+Texts that name a real place, such as Iguaçu, Tijuca, Cubatão or Ilha Grande, describe where an idea or example comes from, never where the park is.
+
 ## 1. Why
 
 - **Size:** today the Reserva is 160 × 160 u (about 75 m across). The main loop is 40 s of walking and the whole story takes about 10 minutes.
@@ -106,13 +121,13 @@ Animals: the muriqui group moves here from the Reserva's row; bugios; a jacuting
 - **Boardwalk:** a loop centred at (18, 246) with radius 26, raised 1.5 u.
 - **Trail:** south portal (40, 160) → (34, 186) → (24, 206) → canoe landing (2, 222).
 
-| #   | Mission                      | Done when                                                                                                               | Teaches                                              | Real basis                                       |
-| --- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
-| M1  | Travessia de canoa (arrival) | Ride the canoe across the river mouth from (2, 222) to the boardwalk side (10, 255). You row; the current pushes gently | The mangrove is a nursery between river and sea      | Rowboat crossings on coastal trails (Picinguaba) |
-| M2  | Caranguejo-uçá               | Observe 5 crabs on the mud from the boardwalk. During the "andada" a sign explains why nobody catches them              | Defeso: catching is forbidden in the breeding season | Federal defeso of the caranguejo-uçá             |
-| M3  | Propágulos                   | Plant 6 red-mangrove propagules in a cleared mud patch (−14, 280)                                                       | Mangroves are restored with propagules               | Mangrove restoration practice                    |
-| M4  | Lixo nas raízes              | Free 5 trash items caught in the roots along the boardwalk                                                              | Trash travels down rivers to the sea                 | Mangrove clean-ups                               |
-| M5  | Os guarás                    | From the hide (52, 282) at the end of the day, watch the scarlet ibis flock arrive                                      | Species can come back when habitats recover          | Guarás returned to the Cubatão mangroves         |
+| #   | Mission                      | Done when                                                                                                               | Teaches                                              | Real basis                                                                 |
+| --- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
+| M1  | Travessia de canoa (arrival) | Ride the canoe across the river mouth from (2, 222) to the boardwalk side (10, 255). You row; the current pushes gently | The mangrove is a nursery between river and sea      | Rowboat crossings on coastal trails (Picinguaba)                           |
+| M2  | Caranguejo-uçá               | Observe 5 crabs on the mud from the boardwalk. During the "andada" a sign explains why nobody catches them              | Defeso: catching is forbidden in the breeding season | Federal defeso of the caranguejo-uçá                                       |
+| M3  | Propágulos                   | Plant 6 red-mangrove propagules in a cleared mud patch (−14, 280)                                                       | Mangroves are restored with propagules               | Mangrove restoration practice                                              |
+| M4  | Lixo nas raízes              | Free 5 trash items caught in the roots along the boardwalk                                                              | Trash travels down rivers to the sea                 | Mangrove clean-ups                                                         |
+| M5  | Os colhereiros               | From the hide (52, 282) at the end of the day, watch a flock of roseate spoonbills arrive to feed in the mud            | Species come back when mangroves recover             | The colhereiro (Platalea ajaja) lives in RJ mangroves (sources in p27 §11) |
 
 The animal facts used in the UI need a source each, as the loading screen's facts do (`p11-loading.md`). The coordinator verifies them before they ship.
 

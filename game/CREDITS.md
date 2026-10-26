@@ -14,14 +14,14 @@ The 3D models, character skins, and color palettes in `src/assets/` come from th
 
 ## Source Packs (Verified from Official `kenney.nl` Archives & `License.txt`)
 
-| Pack Name             | Version | Creation Date (`License.txt`) | License | Official Page URL                          | Used For                                                                                                                                 |
-| --------------------- | ------- | ----------------------------- | ------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Blocky Characters** | `2.0`   | `10-06-2025 11:19`            | CC0 1.0 | https://kenney.nl/assets/blocky-characters | `models/avatar.glb` (`character-a` rig, 6 rigid nodes) and `skins/skin-{a..r}.webp` (18 skins)                                           |
-| **Cube Pets**         | `2.0`   | `26-03-2026 11:16`            | CC0 1.0 | https://kenney.nl/assets/cube-pets         | `models/{monkey,tiger,parrot,koala}.glb`, `skins/palette-pets.png`, and 7 Atlantic Forest species palettes (`skins/palette-*.png`)       |
-| **Nature Kit**        | `2.1`   | `29-04-2020 01:02`            | CC0 1.0 | https://kenney.nl/assets/nature-kit        | `models/kit-flora.glb` (18 merged flora/terrain props: trees, palms, bushes, rocks, logs, grass, seedlings, sign)                        |
-| **Platformer Kit**    | `4.1`   | `02-04-2026 11:29`            | CC0 1.0 | https://kenney.nl/assets/platformer-kit    | `models/kit-props.glb` (`platform`, `platform-ramp`, `platform-fortified`, `block-grass`, `block-grass-large`, `flag`, `coin-gold`)      |
-| **Food Kit**          | `2.0`   | `26-06-2024 01:23`            | CC0 1.0 | https://kenney.nl/assets/food-kit          | `models/kit-props.glb` (`soda-bottle`, `soda-can`, `soda-can-crushed`, `bag`)                                                            |
-| **Holiday Kit**       | `2.0`   | `11-12-2024 14:31`            | CC0 1.0 | https://kenney.nl/assets/holiday-kit       | `models/kit-props.glb` (`cabin-wall`, `cabin-doorway`, `cabin-window-a`, `cabin-corner`, `cabin-roof`, `cabin-roof-point`, `floor-wood`) |
+| Pack Name             | Version | Creation Date (`License.txt`) | License | Official Page URL                          | Used For                                                                                                                                                                                                                |
+| --------------------- | ------- | ----------------------------- | ------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Blocky Characters** | `2.0`   | `10-06-2025 11:19`            | CC0 1.0 | https://kenney.nl/assets/blocky-characters | `models/avatar.glb` (`character-a` rig, 6 rigid nodes) and `skins/skin-{a..r}.webp` (18 skins)                                                                                                                          |
+| **Cube Pets**         | `2.0`   | `26-03-2026 11:16`            | CC0 1.0 | https://kenney.nl/assets/cube-pets         | `models/{monkey,tiger,parrot,koala}.glb`, `skins/palette-pets.png`, 7 Atlantic Forest species palettes (`skins/palette-*.png`), and the P23 species models and palettes ([Bichos da Mata](#bichos-da-mata-p23-species)) |
+| **Nature Kit**        | `2.1`   | `29-04-2020 01:02`            | CC0 1.0 | https://kenney.nl/assets/nature-kit        | `models/kit-flora.glb` (18 merged flora/terrain props: trees, palms, bushes, rocks, logs, grass, seedlings, sign)                                                                                                       |
+| **Platformer Kit**    | `4.1`   | `02-04-2026 11:29`            | CC0 1.0 | https://kenney.nl/assets/platformer-kit    | `models/kit-props.glb` (`platform`, `platform-ramp`, `platform-fortified`, `block-grass`, `block-grass-large`, `flag`, `coin-gold`)                                                                                     |
+| **Food Kit**          | `2.0`   | `26-06-2024 01:23`            | CC0 1.0 | https://kenney.nl/assets/food-kit          | `models/kit-props.glb` (`soda-bottle`, `soda-can`, `soda-can-crushed`, `bag`)                                                                                                                                           |
+| **Holiday Kit**       | `2.0`   | `11-12-2024 14:31`            | CC0 1.0 | https://kenney.nl/assets/holiday-kit       | `models/kit-props.glb` (`cabin-wall`, `cabin-doorway`, `cabin-window-a`, `cabin-corner`, `cabin-roof`, `cabin-roof-point`, `floor-wood`)                                                                                |
 
 ---
 
@@ -70,11 +70,13 @@ The 3D models, character skins, and color palettes in `src/assets/` come from th
 ## Decor and trees (staging v2)
 
 These files were edited in Blender in October 2026 from the downloads below:
+
 - `src/assets/models/decor/*.glb`: understorey, rocks, shore and waterfall;
 - `src/assets/models/trees/tree-*.glb`: the seven Atlantic Forest tree species;
 - the atlases `src/assets/skins/decor-atlas.png`, `trees-atlas.png` and `ground-atlas.png`.
 
 Licences were checked on 2026-10-25:
+
 - **Sketchfab:** each download's embedded `asset.extras` (title, author, `CC-BY-4.0`) and its model page;
 - **OpenGameArt:** the licence field on the page;
 - **Kenney:** the pack's `License.txt`.
@@ -82,11 +84,13 @@ Licences were checked on 2026-10-25:
 The original downloads and the build scripts are kept outside the repository; `scripts/assets.mjs --only=staging` packs them (gltfpack meshopt, atlases quantized to 256 colours).
 
 **Modifications (all models):**
+
 - re-meshed to the game's budgets (decimated, leaf cards resampled or flattened) with near and far LODs, and scaled to ART.md §3;
 - UVs moved into a shared atlas, normals rebuilt, and a vertex-colour gradient added;
 - textures downsampled, recoloured to the palette ramps of `src/style/palette.ts` and packed into the atlases.
 
 The trees are also reshaped into their species:
+
 - **ipê-amarelo and pau-brasil:** from the Ginkgo trees; the ipê's crown is widened and recoloured yellow, and the pau-brasil is mirrored with a red-brown bark;
 - **jequitibá-rosa:** stretched into an emergent tree with an umbrella crown;
 - **juçara:** slimmed, with purple fruit bunches added;
@@ -124,19 +128,62 @@ All under **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/), modified
 | `skins/decor-atlas.png` (moss, grass), `skins/ground-atlas.png`, moss on the rocks        | "Ancient civ in the jungle (200 seamless textures)", https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures | DevEarley   | CC0 1.0 |
 | `skins/decor-atlas.png` (sand), `skins/ground-atlas.png` (rock), sand on the shore pieces | "Big pack of hand-painted tiling textures", https://opengameart.org/content/big-pack-of-hand-painted-tiling-textures                 | Drummyfish  | CC0 1.0 |
 
+### Park props built from downloaded pieces
+
+Every other park prop (`custom-passarela-*`, `custom-marco-trilha*`, `custom-casa-iara`, the seeds and propagules, the field gear, the coast animals, `custom-torre-observacao`, `custom-observatorio-aves`) is modelled from primitives by the repository's scripts. One prop reuses a CC BY download, under **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/):
+
+| Files                                        | Attribution                                                                                                                    | Modifications                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `models/custom-cachoeira-grande-paredao.glb` | "Stylized Rocks Formation Asset Pack" by **Gebus** (deadzik), https://sketchfab.com/3d-models/726e8563eb634c529410f4e00857bbb3 | The five formations welded, decimated and scaled uniformly, nine copies assembled into the waterfall wall, textures dropped and faces recoloured to the rock ramp with moss tops in vertex colours (`scripts/blender/models/marcos_paisagem.py`, October 2026). Licence checked on 2026-10-25 (see above). |
+
+### Bichos da Mata (P23 species)
+
+Built by `scripts/blender/models/bichos_mata.py` (with `_pets_kit.py`) from the raw **Kenney Cube Pets 2.0** GLBs (CC0 1.0, https://kenney.nl/assets/cube-pets, `License.txt` checked), reshaped and re-coloured: each face samples one cell of its species' own 64×64 palette, generated by the same script from the species' real colours (sources in the script). The three custom models are modelled from bevelled blocks in the Cube Pets style and reuse the Cube Pets eye pieces (CC0). Packed with gltfpack 1.3.0 (`-cc -kn -vtf -vpf`). No other source; nothing from any game.
+
+| Files (`models/`, `skins/`)                                                   | Base (Kenney Cube Pets, CC0)          | Changes                                                                                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `capivara.glb`, `palette-capivara.png`                                        | `animal-beaver.glb`                   | Tail, buck teeth, nose and ears removed; deep blunt square muzzle, tiny ears, longer body                                         |
+| `anta.glb`, `palette-anta.png`, `palette-anta-filhote.png`                    | `animal-pig.glb`                      | Pig snout and ears removed; forward trunk, small white-rimmed ears, nape crest, tail stub, body 1.5× longer; striped calf palette |
+| `cateto.glb`, `palette-cateto.png`                                            | `animal-hog.glb`                      | Tusks and back ridges removed; dorsal crest; the pale collar as its own region                                                    |
+| `veado.glb`, `palette-veado-mateiro.png`                                      | `animal-deer.glb`                     | Branched antlers replaced by two spikes; short tail                                                                               |
+| `cachorro-do-mato.glb`, `palette-cachorro-do-mato.png`                        | `animal-fox.glb`                      | Black dorsal stripe; re-coloured                                                                                                  |
+| `onca-parda.glb`, `palette-onca-parda.png`                                    | `animal-lion.glb`                     | Mane removed, body 1.2× longer; re-coloured tawny with a dark tail tip                                                            |
+| `tapiti.glb`, `palette-tapiti.png`                                            | `animal-bunny.glb`                    | Ears shortened to 62%, head tufts removed, a small tail                                                                           |
+| `jaguatirica.glb`, `palette-jaguatirica.png`                                  | `animal-cat.glb`                      | Flat rosette, stripe and spot patches; banded tail palette                                                                        |
+| `caranguejo.glb`, `palette-caranguejo-uca.png`                                | `animal-crab.glb`                     | Four extra walking legs; re-coloured blue-grey and orange                                                                         |
+| `passaro.glb`, `palette-saira-sete-cores.png`, `palette-sabia-laranjeira.png` | `animal-chick.glb`                    | Head tufts removed, a tail added, plumage regions                                                                                 |
+| `jacutinga.glb`, `palette-jacutinga.png`                                      | `animal-parrot.glb`                   | Hooked bill replaced by a cracid bill, dewlap added, white wing patch                                                             |
+| `colhereiro.glb`, `palette-colhereiro.png`                                    | `animal-parrot.glb`                   | Colhereiro: crest removed, legs 3× longer and thinner, flat spoon-shaped bill, bare greenish-grey face, carmine shoulders         |
+| `tatu.glb`, `palette-tatu-galinha.png`                                        | custom (eyes from `animal-chick.glb`) | Banded shell, long snout, ringed tail                                                                                             |
+| `jabuti.glb`, `palette-jabuti-tinga.png`                                      | custom (eyes from `animal-chick.glb`) | Jabuti-tinga: stepped dome with scute centres, scaled head and legs                                                               |
+| `sapo.glb`, `palette-sapo-cururu.png`                                         | custom (eyes from `animal-chick.glb`) | Squat warty body, parotoid glands, folded hind legs                                                                               |
+
+### Costa (P35 species and restinga plants)
+
+The coast species are built by `scripts/blender/models/bichos_costa.py` the same way as the custom P23 models: bevelled blocks in the Cube Pets style, the Cube Pets eye pieces (Kenney **Cube Pets 2.0**, `animal-chick.glb`, CC0 1.0), one 64×64 palette per species from its real colours (sources in the script), gltfpack 1.3.0 (`-cc -kn -vtf -vpf`). Their clips (`perch`, `glide`, `swim`) and the turtles' `swim` clip are node rotations written by `_clips.py`. The restinga plants are modelled from primitives by `restinga.py` and packed like every `custom-*` prop. No download; nothing from any game.
+
+| Files (`models/`, `skins/`)                                  | Base                                  | Notes                                                                       |
+| ------------------------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------- |
+| `caranguejo-de-pedra.glb`, `palette-caranguejo-de-pedra.png` | custom (eyes from `animal-chick.glb`) | Flat carapace with ridges, eye stalks, two claws, four splayed legs a side  |
+| `sargentinho.glb`, `palette-sargentinho.png`                 | custom (eyes from `animal-chick.glb`) | Tide-pool fish with five dark bars, forked tail; `swim` clip                |
+| `atoba.glb`, `palette-atoba-pardo.png`                       | custom (eyes from `animal-chick.glb`) | Atobá-pardo: brown back, white belly and underwing; `perch` and `glide`     |
+| `gaivotao.glb`, `palette-gaivotao.png`                       | custom (eyes from `animal-chick.glb`) | Gaivotão: white body, black back and wings, red bill spot; `perch`, `glide` |
+| `custom-cacto-da-restinga.glb`, `custom-pitangueira.glb`     | primitives (`restinga.py`)            | Creeping cactus clump with crimson fruit; pitanga shrub with red fruit      |
+
 ---
 
 ## Áudio
 
-Sound files in `src/assets/audio/` (wave 1, October 2026; the dirt steps `step-soil` added in wave 1.1). Every file is a T1 source: **CC0** or **CC BY**, with no share-alike, no non-commercial and no music. Each sound is shipped as `<id>-<n>.webm` (Opus) plus `<id>-<n>.m4a` (AAC fallback); both files of a variant come from the same cut. Licences were checked on each source page on 2026-10-25 (and again on the same day for Freesound 813621): Kenney `License.txt`, the Freesound "license text" link, the OpenGameArt licence field and the `license.txt` files inside that pack, and for iNaturalist the API `license_code` (`cc-by`) cross-checked with the GBIF mirror (`creativecommons.org/licenses/by/4.0/`). Original downloads are kept outside the repository.
+Sound files in `src/assets/audio/` (wave 1, October 2026; the dirt steps `step-soil` added in wave 1.1; the park zones' beds `waterfall-far`, `canopy-birds`, `surf-*` and `mangrove-*` added in wave 2, P35). Every file is a T1 source: **CC0** or **CC BY**, with no share-alike, no non-commercial and no music. Each sound is shipped as `<id>-<n>.webm` (Opus) plus `<id>-<n>.m4a` (AAC fallback); both files of a variant come from the same cut. Licences were checked on each source page on 2026-10-25 (and again on the same day for Freesound 813621; on 2026-10-26 for the wave 2 sources): Kenney `License.txt`, the Freesound "license text" link, the OpenGameArt licence field and the `license.txt` files inside that pack, and for iNaturalist the API `license_code` (`cc-by`) cross-checked with the GBIF mirror (`creativecommons.org/licenses/by/4.0/`). Original downloads are kept outside the repository.
 
-**Modifications (all files):** cut to the listed span, mixed to mono, high-passed where noted, faded in and out, loudness-normalised, and encoded to Opus (WebM) and AAC (M4A) at 48 kHz. The targets were about −16 LUFS short-term for effects, −20 for UI and animals and −24 integrated for beds, with peaks under −1 dBTP and light peak limiting on some transients. Loops are folded onto themselves with an equal-power crossfade so they repeat without a seam, and each loop file carries 50 ms of its own start after the end so a decoder that trims a few samples still wraps cleanly. Freesound sources are the site's HQ Ogg previews of each sound.
+**Modifications (all files):** cut to the listed span, mixed to mono, high-passed where noted, faded in and out, loudness-normalised, and encoded to Opus (WebM) and AAC (M4A) at 48 kHz. The targets were about −16 LUFS short-term for effects, −20 for UI and animals and −24 integrated for beds, with peaks under −1 dBTP and light peak limiting on some transients. Loops are folded onto themselves with an equal-power crossfade so they repeat without a seam, and each loop file carries 50 ms of its own start after the end so a decoder that trims a few samples still wraps cleanly. Freesound sources are the site's HQ Ogg previews of each sound. The wave 2 beds are cut from long field recordings, low-passed where noted to sound distant, and the mangrove clicks get up to 6 dB of limiting so single snaps do not jump out of the bed.
 
 ### CC BY attributions (required)
 
 | Files                                | Attribution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `audio/waterfall-1.{webm,m4a}`       | "A small waterfall in the rainforest" by **ricardoemfield** (Rio Catarina, Itapoá, SC), https://freesound.org/people/ricardoemfield/sounds/795998/, licensed under **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/). Modified: cut 18.5–34.5 s, high-pass 40 Hz, looped with a 1 s crossfade, normalised, converted to Opus/AAC.                                                                                                                                                                                                                                                                       |
+| `audio/waterfall-far-1.{webm,m4a}`   | "A small waterfall in the rainforest" by **ricardoemfield** (Rio Catarina, Itapoá, SC), https://freesound.org/people/ricardoemfield/sounds/795998/, licensed under **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/). Modified: cut 40–53.5 s, high-pass 30 Hz and low-pass 500 Hz (the roar from across the valley), looped (12 s), normalised, converted to Opus/AAC.                                                                                                                                                                                                                                 |
 | `audio/step-rock-{1..4}.{webm,m4a}`  | "Footsteps on different surfaces" (folder `gravel`, files 0, 3, 6, 7) by **congusbongus**, https://opengameart.org/content/footsteps-on-different-surfaces, licensed under **CC BY 3.0** (https://creativecommons.org/licenses/by/3.0/). Derived by its author from "Gravel Footsteps" by **Ali_6868** (https://freesound.org/people/Ali_6868/packs/21608/, CC0). Modified: trimmed, mono, normalised with peak limiting, converted to Opus/AAC.                                                                                                                                                                   |
 | `audio/step-water-{1..4}.{webm,m4a}` | "Footsteps on different surfaces" (folder `water`, files 0, 1, 3, 4) by **congusbongus**, https://opengameart.org/content/footsteps-on-different-surfaces, licensed under **CC BY 3.0** (https://creativecommons.org/licenses/by/3.0/). Derived from "Water Footsteps" by **EminYILDIRIM** (https://freesound.org/people/EminYILDIRIM/sounds/608663/, **CC BY 4.0**) and "footstep-concrete.wav" by **swuing** (https://freesound.org/people/swuing/sounds/38873/, **CC BY 4.0** on its page; the pack notes list it as CC BY 3.0). Modified: trimmed, mono, normalised with peak limiting, converted to Opus/AAC. |
 | `audio/howler-{1,2}.{webm,m4a}`      | Southern brown howler monkey (_Alouatta guariba clamitans_), recording "(c) **Bruno Luka de Souza Bambirra Silveira**, some rights reserved (CC BY)", iNaturalist observation 268999935, sound 1364419 (São Francisco de Paula, RS), https://www.inaturalist.org/observations/268999935, licensed under **CC BY 4.0**. Modified: cuts 16–22 s and 5–11 s, high-pass 90 Hz, normalised, converted to Opus/AAC.                                                                                                                                                                                                      |
@@ -165,15 +212,20 @@ Sound files in `src/assets/audio/` (wave 1, October 2026; the dirt steps `step-s
 | `audio/forest-day-1`       | "ANMLBird_BR Serrinha do alambari calm atmosphere with turtledove and crickets" (Mata Atlântica, morning; 57.5–83 s, 24 s loop), https://freesound.org/people/MeliaRoger/sounds/586171/ | Melia Roger (MeliaRoger) | CC0 1.0 |
 | `audio/river-1`            | "babbling_brook_loop.wav" (re-looped at 4.85 s), https://freesound.org/people/minian89/sounds/222752/                                                                                   | minian89                 | CC0 1.0 |
 | `audio/chainsaw-1`         | "Distant Chainsaw 2" (0.5–10.5 s, 9 s loop), https://freesound.org/people/FunWithSound/sounds/390741/                                                                                   | FunWithSound             | CC0 1.0 |
+| `audio/canopy-birds-1`     | "rainforest mata atlantica.wav" (156–173.5 s, 16 s loop; high-pass 300 Hz, low-pass 7 kHz), https://freesound.org/people/Fenodyrie/sounds/673163/                                       | Fenodyrie                | CC0 1.0 |
+| `audio/surf-rocks-1`       | "waterfront rocky seashore waves close" (246–259.5 s, 12 s loop; high-pass 60 Hz), https://freesound.org/people/teatov/sounds/830368/                                                   | teatov                   | CC0 1.0 |
+| `audio/surf-beach-1`       | "Waves On The Beach (Sand Wash)" (Gylly Beach; 644–657.5 s, 12 s loop; high-pass 50 Hz), https://freesound.org/people/ralph.whitehead/sounds/470648/                                    | ralph.whitehead          | CC0 1.0 |
+| `audio/mangrove-water-1`   | "Gentle small waves lapping on shore" (82–95 s, 12 s loop; high-pass 80 Hz), https://freesound.org/people/Alex_hears_things/sounds/352356/                                              | Alex_hears_things        | CC0 1.0 |
+| `audio/mangrove-clicks-1`  | "Aquatic sound of the mangrove" (hydrophone, Sian Ka'an; 43–53.8 s, 10 s loop; high-pass 400 Hz, limited), https://freesound.org/people/felix.blume/sounds/328307/                      | felix.blume              | CC0 1.0 |
 
 Each file above is the pair `.webm` + `.m4a`.
 
 ### Audio bill of materials
 
-| Group (loading)                                                                                   | Variants |   Duration |                 Opus WebM |                   AAC M4A | Loaded                |
-| ------------------------------------------------------------------------------------------------- | -------: | ---------: | ------------------------: | ------------------------: | --------------------- |
-| Essential: steps, jump, land, splash, collect, checkpoint, mission complete, badge, UI tap, radio |       40 |     15.9 s |       89,578 B (87.5 KiB) |     172,314 B (168.3 KiB) | with the game         |
-| Nature: forest, river, waterfall, chainsaw, howler, muriqui, toucan, tamarin                      |       12 |     78.8 s |     387,956 B (378.9 KiB) |     528,332 B (515.9 KiB) | after the first frame |
-| **Total (104 files)**                                                                             |   **52** | **94.7 s** | **477,534 B (466.3 KiB)** | **700,646 B (684.2 KiB)** |                       |
+| Group (loading)                                                                                   | Variants |    Duration |                 Opus WebM |                     AAC M4A | Loaded                |
+| ------------------------------------------------------------------------------------------------- | -------: | ----------: | ------------------------: | --------------------------: | --------------------- |
+| Essential: steps, jump, land, splash, collect, checkpoint, mission complete, badge, UI tap, radio |       40 |      15.9 s |       89,578 B (87.5 KiB) |       172,314 B (168.3 KiB) | with the game         |
+| Nature: forest, river, waterfall, chainsaw, howler, muriqui, toucan, tamarin, the zone beds       |       18 |     152.8 s |     539,769 B (527.1 KiB) |       849,885 B (830.0 KiB) | after the first frame |
+| **Total (116 files)**                                                                             |   **58** | **168.7 s** | **629,347 B (614.6 KiB)** | **1,022,199 B (998.2 KiB)** |                       |
 
 A device downloads one codec only, into the offline game pack too: Opus everywhere it plays, AAC on old iPhones.
