@@ -4,7 +4,6 @@ import type { CollisionWorld } from '../engine/world.ts';
 import type { StoryLevel } from '../level/types.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { DownProbe } from './down-probe.ts';
-import { riverSurfaceAt } from './navigation.ts';
 
 interface Footing {
 	x: number;
@@ -94,8 +93,42 @@ export class AvatarGroundContext {
 		const sin = Math.sin(input.yaw),
 			cos = Math.cos(input.yaw);
 		input.slope = Math.atan2(-(n.x * sin + n.z * cos), n.y);
-		const water = riverSurfaceAt(this.world, p.x, p.z, this.level?.pool);
-		if (water !== null && water - p.y > 0.01 && water - p.y <= 0.65) input.surface = 'water';
+		// Squared distances avoid Math.hypot's variadic/boxed arguments on V8's hot path.
+		let water = -Infinity,
+			best = Infinity;
+		const pool = this.level?.pool;
+		if (pool) {
+			const dx = p.x - pool.x,
+				dz = p.z - pool.z,
+				a = (dx * pool.axisX + dz * pool.axisZ) / pool.halfLength,
+				b = (-dx * pool.axisZ + dz * pool.axisX) / pool.halfWidth;
+			if (a * a + b * b <= 1) water = pool.water;
+		}
+		if (water === -Infinity)
+			for (let i = 1; i < this.world.river.points.length; i++) {
+				const a = this.world.river.points[i - 1],
+					b = this.world.river.points[i],
+					dx = b.x - a.x,
+					dz = b.z - a.z;
+				const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / (dx * dx + dz * dz || 1))),
+					x = p.x - a.x - t * dx,
+					z = p.z - a.z - t * dz,
+					d = x * x + z * z;
+				if (d < best && d <= this.world.river.halfWidth * this.world.river.halfWidth) {
+					best = d;
+					water = a.water + (b.water - a.water) * t;
+				}
+			}
+		if (
+			water === -Infinity &&
+			p.x >= 0 &&
+			p.z >= 0 &&
+			p.x <= this.world.size &&
+			p.z <= this.world.size &&
+			this.world.zones[Math.round(p.z) * this.world.grid + Math.round(p.x)] === 0
+		)
+			water = this.world.waterLevel;
+		if (water - p.y > 0.01 && water - p.y <= 0.65) input.surface = 'water';
 		else
 			for (const f of this.#footings) {
 				const dx = p.x - f.x,
@@ -110,7 +143,7 @@ export class AvatarGroundContext {
 			}
 		let dx = p.x - character.previousPosition.x,
 			dz = p.z - character.previousPosition.z;
-		const length = Math.hypot(dx, dz);
+		const length = Math.sqrt(dx * dx + dz * dz);
 		if (length > 0.001 && input.speed > 0.05) {
 			dx /= length;
 			dz /= length;
