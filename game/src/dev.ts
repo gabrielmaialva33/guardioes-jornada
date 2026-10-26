@@ -1,5 +1,6 @@
 import { GAME_ABI } from '../abi.ts';
-import { mountGame } from './main.ts';
+// The pack's real entry: the loading screen first, then the game chunk.
+import { mountGame } from './ui/loading/entry.ts';
 
 const target = document.querySelector<HTMLElement>('#game');
 if (!target) throw new Error('game-root-missing');

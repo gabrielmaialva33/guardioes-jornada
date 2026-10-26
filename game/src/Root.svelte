@@ -33,11 +33,18 @@
 	import { createGameAudio } from './audio/engine.ts';
 	import { Soundscape } from './audio/soundscape.ts';
 	import SoundSettings from './audio/SoundSettings.svelte';
+	import type { LoadingProgress } from './ui/loading/loading.ts';
 
 	let {
 		bridge,
-		createRenderer
-	}: { bridge: GameBridge; createRenderer: (canvas: HTMLCanvasElement) => WebGLRenderer } = $props();
+		createRenderer,
+		loading
+	}: {
+		bridge: GameBridge;
+		createRenderer: (canvas: HTMLCanvasElement) => WebGLRenderer;
+		/** The loading screen's progress model, from ui/loading/entry.ts; absent in dev and tests. */
+		loading?: LoadingProgress;
+	} = $props();
 	let wrapper: HTMLDivElement | undefined = $state();
 	let touchControls: { draw(): void } | undefined = $state();
 	let safeArea: HTMLDivElement;
@@ -320,6 +327,7 @@
 					{input}
 					{environment}
 					{bridge}
+					{loading}
 					sound={soundscape}
 					onHud={(state) => (hud = state)}
 					onFrame={drawControls}

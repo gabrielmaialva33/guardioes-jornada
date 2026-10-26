@@ -43,6 +43,7 @@
 
 	import { horizontalFov, verticalFov } from './projection.ts';
 	import type { GameDebug, HudState } from './types.ts';
+	import type { LoadingProgress } from '../ui/loading/loading.ts';
 
 	let {
 		wrapper,
@@ -54,7 +55,8 @@
 		onHud,
 		onFrame,
 		paused,
-		sound
+		sound,
+		loading
 	}: {
 		wrapper: HTMLElement;
 		controller: PlayerController;
@@ -67,6 +69,8 @@
 		paused: boolean;
 		/** The game's sounds; owned (created and disposed) by Root. */
 		sound?: Soundscape;
+		/** Loading screen progress (ui/loading): every load below is tracked, then `ready()` once drawn. */
+		loading?: LoadingProgress;
 	} = $props();
 	const { renderer, scene, dpr, mainStage, renderStage, invalidate } = useThrelte();
 	const context = renderer.getContext();
@@ -304,7 +308,7 @@
 				proxies.setBackgroundVisible?.(!hide);
 				invalidate();
 			};
-		void Promise.all([
+		const loads = [
 			environment.loadStoryAssets?.(abort.signal).then((value) => {
 				if (abort.signal.aborted) {
 					value.dispose();
@@ -360,7 +364,18 @@
 				shadows.addCaster(value.pools.object, 'static');
 				shadows.addReceiver(value.pools.object);
 			})
-		])
+		];
+		// Loading screen stages, in the order of `loads`, with their share of the bar.
+		const stages = [
+			['story', 2],
+			['avatar', 1],
+			['sound', 1],
+			['life', 2],
+			['placements', 3]
+		] as const;
+		loading?.reserve('compile', 2);
+		for (const [index, [id, weight]] of stages.entries()) loading?.track(id, loads[index], weight);
+		void Promise.all(loads)
 			.then(async () => {
 				if (abort.signal.aborted) return;
 				if (golden.enabled) {
@@ -388,15 +403,19 @@
 						life?.update(lifeFrame);
 					}
 				}
-				await renderer.compileAsync(scene, camera);
+				const compiled = renderer.compileAsync(scene, camera);
+				loading?.track('compile', compiled, 2);
+				await compiled;
 				if (!abort.signal.aborted) {
 					ready = true;
+					loading?.ready();
 					invalidate();
 					void sound?.startNature(abort.signal);
 				}
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
 				if (!abort.signal.aborted) {
+					loading?.fail(error);
 					loadError = 'Não foi possível abrir a clareira. Saia e tente novamente.';
 					onHud({ notice: loadError, shiftLock: false, ready: false, debug: debug ? readDebug() : null });
 				}

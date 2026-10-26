@@ -4,15 +4,22 @@ import { GAME_ABI, type GameBridge, type GameDispose } from '../abi.ts';
 import Root from './Root.svelte';
 import { pickQuality, readCapabilities } from './render/index.ts';
 import { golden } from './scene/golden.ts';
+import type { LoadingProgress } from './ui/loading/loading.ts';
 
 declare const __PACK_SOFTWARE_TEST__: boolean;
 
 declare const __PACK_BUILD__: string;
 export const abi = GAME_ABI;
 export const buildTag = __PACK_BUILD__;
+/** Tells the loader (ui/loading/entry.ts) that the world reports its tasks and calls `ready()`. */
+export const reportsLoading = true;
 
 /** Each call owns its runtime root, renderer and listeners; disposal is awaitable and idempotent. */
-export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose {
+export function mountGame(
+	element: HTMLElement,
+	bridge: GameBridge,
+	options: { loading?: LoadingProgress } = {}
+): GameDispose {
 	if (bridge.abi !== GAME_ABI) throw new Error('game-abi-mismatch');
 	const target = document.createElement('div');
 	element.append(target);
@@ -70,7 +77,7 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 		return value;
 	};
 	try {
-		app = mount(Root, { target, props: { bridge, createRenderer } });
+		app = mount(Root, { target, props: { bridge, createRenderer, loading: options.loading } });
 		flushSync();
 	} catch (error) {
 		listeners.abort();
