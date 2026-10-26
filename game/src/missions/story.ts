@@ -33,6 +33,11 @@ const record = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === 'object' && !Array.isArray(v);
 export function decodeStorySave(level: StoryLevel, value: unknown): { data: StorySave; readOnly: boolean } {
 	const input = record(value) ? value : {};
+	// The first story pack used a planting-cell id for this reward.
+	const collected =
+		Array.isArray(input.collected) && level.collectibles.some((c) => c.id === 'folha-missao-1')
+			? input.collected.map((id) => (id === 'corredor-3' ? 'folha-missao-1' : id))
+			: input.collected;
 	const readOnly =
 		(typeof input.levelVersion === 'number' && input.levelVersion > level.version) ||
 		(input.version !== undefined && input.version !== 0 && input.version !== 1);
@@ -71,7 +76,7 @@ export function decodeStorySave(level: StoryLevel, value: unknown): { data: Stor
 					: [])
 			],
 			collected: validIds(
-				input.collected,
+				collected,
 				level.collectibles.filter((c) => c.kind !== 'jucara-fruit').map((c) => c.id)
 			),
 			marked,

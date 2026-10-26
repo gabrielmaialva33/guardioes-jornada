@@ -191,3 +191,7 @@ it('badge storage errors cannot crash a completed saved journey', () => {
 	expect(() => g.repairBadge()).not.toThrow();
 	expect(g.finished).toBe(true);
 });
+it('migrates the pre-fix corridor reward id without restoring an obsolete action namespace', () => {
+	const g = setup({ version: 1, started: true, collected: ['corredor-3'] }).game;
+	expect(g.data.collected).toEqual(['folha-missao-1']);
+});
