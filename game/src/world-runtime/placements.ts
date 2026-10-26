@@ -257,6 +257,8 @@ export async function loadWorldPlacements(
 					});
 				}
 		}
+		// A stable atlas layout avoids mip/filter differences caused by async decode completion order.
+		prototypes.sort((a, b) => a.kind.localeCompare(b.kind));
 		impostors = createTreeImpostors(prototypes, world.trees, quality);
 		pools.object.add(impostors.object);
 		const ownedImpostors = impostors;
