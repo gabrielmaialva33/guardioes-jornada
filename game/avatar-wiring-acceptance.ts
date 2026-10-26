@@ -53,6 +53,18 @@ try {
 	await page.screenshot({ path: join(output, 'mirante-binoculars.png') });
 	await open('spawn');
 	await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
+	const editorContent = page.locator('.editor .content');
+	assert.equal(
+		await editorContent.evaluate((e) =>
+			e.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }))
+		),
+		true
+	);
+	if (await editorContent.evaluate((e) => e.scrollHeight > e.clientHeight)) {
+		await editorContent.hover();
+		await page.mouse.wheel(0, 250);
+		await page.waitForFunction(() => (document.querySelector('.editor .content')?.scrollTop ?? 0) > 0);
+	}
 	await page.getByRole('tab', { name: 'Cabelo', exact: true }).click();
 	await page.getByRole('radio', { name: 'Cabelo rabo de cavalo', exact: true }).click();
 	await page.getByRole('button', { name: 'Usar este personagem', exact: true }).click();
@@ -75,23 +87,21 @@ try {
 			{ buildStoryWorld },
 			{ buildMapCollision, prefabProxies },
 			{ AvatarGroundContext },
-			{ createAvatarInput },
-			{ Vector3 }
+			{ createAvatarInput }
 		] = await Promise.all([
 			load('/src/level/index.ts'),
 			load('/src/world-runtime/collision.ts'),
 			load('/src/world-runtime/avatar-context.ts'),
-			load('/src/animation/avatar-animator.ts'),
-			load('/@id/three')
+			load('/src/animation/avatar-animator.ts')
 		]);
 		const { world, level } = buildStoryWorld(),
 			collision = buildMapCollision(world, prefabProxies(world, level)),
 			probe = new AvatarGroundContext(collision, world, level),
 			input = createAvatarInput();
 		const character = {
-			position: new Vector3(),
-			previousPosition: new Vector3(),
-			groundNormal: new Vector3(0, 1, 0),
+			position: { x: 0, y: 0, z: 0 },
+			previousPosition: { x: 0, y: 0, z: 0 },
+			groundNormal: { x: 0, y: 1, z: 0 },
 			grounded: true
 		};
 		const points = [
@@ -104,8 +114,12 @@ try {
 			const start = performance.now();
 			for (let i = 0; i < 500; i++) {
 				const p = points[i % points.length];
-				character.position.set(p.x, p.y, p.z);
-				character.previousPosition.copy(character.position);
+				character.position.x = p.x;
+				character.position.y = p.y;
+				character.position.z = p.z;
+				character.previousPosition.x = p.x;
+				character.previousPosition.y = p.y;
+				character.previousPosition.z = p.z;
 				probe.update(input, character);
 			}
 			if (run >= 20) batches.push((performance.now() - start) / 500);

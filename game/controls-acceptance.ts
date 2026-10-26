@@ -74,6 +74,18 @@ try {
 		assert.ok(top.every((r) => r.w >= 44 && r.h >= 44 && r.y < 60));
 		assert.ok(top.every((r) => r.x >= 0 && r.right <= viewport.width));
 		await page.getByRole('button', { name: 'Som e controles', exact: true }).click();
+		const panel = page.locator('.settings .panel');
+		assert.equal(
+			await panel.evaluate((e) =>
+				e.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }))
+			),
+			true
+		);
+		if (await panel.evaluate((e) => e.scrollHeight > e.clientHeight)) {
+			await panel.hover();
+			await page.mouse.wheel(0, 250);
+			await page.waitForFunction(() => (document.querySelector('.settings .panel')?.scrollTop ?? 0) > 0);
+		}
 		await page.getByRole('checkbox', { name: 'Modo canhoto' }).check();
 		await page.getByRole('checkbox', { name: 'Botões maiores' }).check();
 		await page.getByRole('button', { name: 'Fechar som e controles' }).click();
@@ -113,7 +125,10 @@ try {
 		.waitFor({ state: 'hidden' });
 	await page.waitForTimeout(400);
 	const canopy = await page.evaluate(() => globalThis.__gameDebug?.());
-	assert.ok(canopy && (canopy.canopiesFading ?? 0) > 0);
+	// F1 cleared the palms at this pose. An unobstructed view keeps full distance;
+	// if a canopy still pulls the camera in, its fade must be active as before.
+	assert.ok(canopy);
+	assert.ok((canopy.canopiesFading ?? 0) > 0 || (canopy.cameraDistance ?? 0) >= 7.49);
 	await page.screenshot({ path: join(output, '915-mirante-canopy.png') });
 	results.push({ canopy });
 	await context.close();

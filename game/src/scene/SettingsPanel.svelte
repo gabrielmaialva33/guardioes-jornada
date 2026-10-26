@@ -39,6 +39,7 @@
 	aria-modal="true"
 	aria-labelledby="settings-title"
 	onpointerdown={(event) => event.stopPropagation()}
+	onwheel={(event) => event.stopPropagation()}
 	onkeydown={keydown}
 	onkeyup={(event) => event.stopPropagation()}
 >

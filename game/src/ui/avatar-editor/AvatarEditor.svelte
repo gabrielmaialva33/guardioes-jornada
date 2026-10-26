@@ -402,6 +402,7 @@
 	aria-modal="true"
 	aria-labelledby="avatar-editor-title"
 	onpointerdown={(event) => event.stopPropagation()}
+	onwheel={(event) => event.stopPropagation()}
 	onkeydown={keydown}
 	onkeyup={(event) => event.stopPropagation()}
 >
