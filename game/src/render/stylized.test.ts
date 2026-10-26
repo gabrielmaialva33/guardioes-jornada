@@ -42,3 +42,19 @@ it('preserves a bromelia flower atlas while tinting only grass from the terrain'
 	grass.dispose();
 	texture.dispose();
 });
+it('receives canopy shade on terrain and ground cover but not on the tree canopy itself', () => {
+	const source = () => ({
+		vertexShader: ShaderLib.lambert.vertexShader,
+		fragmentShader: ShaderLib.lambert.fragmentShader,
+		uniforms: {} as Record<string, { value: unknown }>
+	});
+	const ground = source(),
+		tree = source(),
+		cover = source();
+	patchStylizedShader(ground, { vegetation: true, terrain: true });
+	patchStylizedShader(tree, { vegetation: true });
+	patchStylizedShader(cover, { vegetation: true, cover: true });
+	expect(ground.uniforms.uShadeReceiver.value).toBe(1);
+	expect(cover.uniforms.uShadeReceiver.value).toBe(1);
+	expect(tree.uniforms.uShadeReceiver.value).toBe(0);
+});

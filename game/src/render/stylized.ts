@@ -34,7 +34,7 @@ export function visualStep(): number {
 export function patchStylizedShader(shader: ShaderSource, options: StylizedOptions = {}) {
 	Object.assign(shader.uniforms, lighting, {
 		uRim: { value: options.rim ? 0.09 : 0 },
-		uShadeReceiver: { value: options.vegetation && !options.cover ? 0 : 1 }
+		uShadeReceiver: { value: options.vegetation && !options.cover && !options.terrain ? 0 : 1 }
 	});
 	const world = `
  vec4 stylizedWorld = vec4( transformed, 1.0 );
