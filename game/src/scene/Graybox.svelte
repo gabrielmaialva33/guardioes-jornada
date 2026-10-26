@@ -155,6 +155,11 @@
 		// The CSS sky is a gradient whose horizon matches the fog. Do not replace it with a flat clear colour.
 		scene.background = null;
 		shadows.setTier(next, scene);
+		if (golden.enabled && golden.lineup) {
+			scene.fog = null;
+			camera.far = 120;
+			camera.updateProjectionMatrix();
+		}
 		if (golden.enabled && golden.night) {
 			if (scene.fog) scene.fog.color.set(LIGHT.night.horizon);
 			lighting.uHemisphereSky.value.set(LIGHT.night.hemisphereSky);
@@ -295,6 +300,7 @@
 					animationInput.y = controller.character.position.y;
 					animationInput.z = controller.character.position.z;
 					animationInput.yaw = golden.avatar?.[2] ?? initialYaw();
+					animationInput.grounded = true;
 					for (let i = 0; i < Math.round(golden.time * 60); i++) {
 						if (rig) applyToRig(animator.update(1 / 60, animationInput), rig);
 						storyAssets?.update(1 / 60);
