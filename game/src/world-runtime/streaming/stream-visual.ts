@@ -8,16 +8,20 @@ import type { StoryLevel } from '../../level/types.ts';
 import type { ZoneId } from '../../level/zones/spec.ts';
 import type { Quality } from '../../render/index.ts';
 import { PoolSet } from '../../render/index.ts';
+import { lighting } from '../../render/stylized.ts';
 import type { SurvivalWorld } from '../../survival/types.ts';
 import { AvatarGroundContext } from '../avatar-context.ts';
 import { type PropProxy, prefabProxies } from '../collision.ts';
 import { loadWorldPlacements } from '../placements.ts';
 import { createMapVisual } from '../visual.ts';
+import { createHomeBeacon } from './beacon.ts';
 import { createParkBoundary } from './boundary.ts';
+import { GroundClipmap } from './ground-clipmap.ts';
 import { lightAt } from './navigation.ts';
 import { createStreamingRuntime, type StreamingRuntime } from './runtime.ts';
 import { ChunkPlacements, ToroidalBlockGrid } from './slots.ts';
 import type { StreamChunk } from './types.ts';
+import type { ZoneCut } from './zone-cut.ts';
 
 export interface StreamSceneOptions {
 	world: SurvivalWorld;
@@ -34,7 +38,14 @@ export function createStreamScene(options: StreamSceneOptions) {
 	const x0 = options.offsetX ?? 0,
 		z0 = options.offsetZ ?? 0;
 	const grid = new ToroidalBlockGrid(9);
+	const field = new GroundClipmap();
+	const fieldChunks = new Map<number, StreamChunk>();
+	const chunks: Iterable<StreamChunk> = { [Symbol.iterator]: () => fieldChunks.values() };
+	let fieldRevision = 1;
 	const baseVisual = createMapVisual(world, level, options.pads, true, { streaming: true });
+	const beacon = createHomeBeacon(world);
+	baseVisual.object.add(beacon.object);
+	baseVisual.textures.push(field.paths, field.shade);
 	baseVisual.object.position.set(x0, 0, z0);
 	const object = new Group();
 	object.add(baseVisual.object);
@@ -49,6 +60,14 @@ export function createStreamScene(options: StreamSceneOptions) {
 			baseVisual.update(x - x0, y, z - z0, localTarget);
 		},
 		dispose() {
+			if (lighting.uShadeMap.value === field.shade) {
+				lighting.uShadeMap.value = null;
+				lighting.uShadeEnabled.value = 0;
+				lighting.uShadeOrigin.value.set(0, 0);
+			}
+			field.dispose();
+			beacon.dispose();
+			fieldChunks.clear();
 			baseVisual.dispose();
 			object.removeFromParent();
 			object.clear();
@@ -65,6 +84,8 @@ export function createStreamScene(options: StreamSceneOptions) {
 		focusZ = world.base.spawn.z + z0;
 	let lastX = NaN,
 		lastZ = NaN;
+	let activeZone: ZoneId | null | undefined;
+	const audioOrigin = { x: 0, z: 0 };
 	const collision: CollisionQuery & { dispose(): void } = {
 		shapecast(bounds: Box3, visit: (t: ExtendedTriangle) => void) {
 			runtime?.collision.shapecast(bounds, visit);
@@ -118,6 +139,8 @@ export function createStreamScene(options: StreamSceneOptions) {
 		return result;
 	};
 	const stream = {
+		audioOrigin,
+		onZoneChanged: null as ((cut: Readonly<ZoneCut> | null) => void) | null,
 		get runtime() {
 			return runtime;
 		},
@@ -142,7 +165,26 @@ export function createStreamScene(options: StreamSceneOptions) {
 			if ((focusX - lastX) ** 2 + (focusZ - lastZ) ** 2 > 400) runtime?.relocate();
 			lastX = focusX;
 			lastZ = focusZ;
-			return runtime?.update(focusX, focusZ, Math.sin(yaw), Math.cos(yaw)) ?? false;
+			const ready = runtime?.update(focusX, focusZ, Math.sin(yaw), Math.cos(yaw)) ?? false;
+			field.request(focusX, focusZ, chunks, fieldRevision);
+			if (field.step()) {
+				visual.streamMaterials.setField(field.paths, field.origin, field.size);
+				lighting.uShadeMap.value = field.shade;
+				lighting.uShadeOrigin.value.copy(field.origin);
+				lighting.uShadeSize.value = field.size;
+				lighting.uShadeEnabled.value = 1;
+			}
+			const chunk = runtime?.ring.chunkAt(Math.floor(focusX / 40), Math.floor(focusZ / 40));
+			if (chunk && chunk.zone !== activeZone) {
+				const cut = chunk.zone ? runtime?.zones.cut(chunk.zone) : null;
+				if (cut || !chunk.zone) {
+					activeZone = chunk.zone;
+					audioOrigin.x = cut?.offsetX ?? 0;
+					audioOrigin.z = cut?.offsetZ ?? 0;
+					stream.onZoneChanged?.(cut ?? null);
+				}
+			}
+			return ready;
 		},
 		water(x: number, z: number) {
 			return runtime?.water(x, z) ?? null;
@@ -151,6 +193,8 @@ export function createStreamScene(options: StreamSceneOptions) {
 			return runtime
 				? {
 						...runtime.ring.stats,
+						activeZone,
+						surfaces: { ...runtime.surfaces },
 						ready: runtime.ready,
 						maxStepMs: Array.from(runtime.ring.stats.maxStepMs),
 						worker: { ...runtime.stream.stats },
@@ -192,10 +236,19 @@ export function createStreamScene(options: StreamSceneOptions) {
 			props
 		});
 		const ownedRuntime = runtime;
-		ownedRuntime.ring.onRender = (chunk) => bank?.mountScenery(chunk);
+		ownedRuntime.ring.onRender = (chunk) => {
+			bank?.mountScenery(chunk);
+			fieldChunks.set(chunk.key, chunk);
+			fieldRevision++;
+		};
+		ownedRuntime.ring.onUnrender = (chunk) => {
+			fieldChunks.delete(chunk.key);
+			fieldRevision++;
+		};
 		visual.object.add(ownedRuntime.ring.object);
 		try {
 			await new Promise<void>((resolve, reject) => {
+				const position = { x: focusX, z: focusZ };
 				let frame = 0;
 				const deadline = performance.now() + 30_000;
 				const cancel = () => {
@@ -208,7 +261,9 @@ export function createStreamScene(options: StreamSceneOptions) {
 						cancel();
 						return;
 					}
-					if (ownedRuntime.update(focusX, focusZ)) {
+					position.x = focusX;
+					position.z = focusZ;
+					if (stream.update(position, 0) && field.revision === fieldRevision) {
 						signal.removeEventListener('abort', cancel);
 						resolve();
 						return;
@@ -256,7 +311,8 @@ export function createStreamScene(options: StreamSceneOptions) {
 		localCamera.position.x -= x0;
 		localCamera.position.z -= z0;
 		prepare(localCamera, time, quality, night);
-		runtime?.ring.updateWaterfalls(camera);
+		beacon.update(localCamera);
+		runtime?.prepareFrame(camera);
 	};
 	return { grid, visual, stream, collision, loadPlacements, avatarGround };
 }

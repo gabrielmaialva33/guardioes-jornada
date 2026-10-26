@@ -1,5 +1,5 @@
 /** The page owns two Workers and one bounded ring; no scene/global state lives in either Worker. */
-import type { Material } from 'three';
+import type { Material, PerspectiveCamera } from 'three';
 import type { ZoneId } from '../../level/zones/spec.ts';
 import type { Quality } from '../../render/index.ts';
 import { createWorldGenWorker, type WorkerPort, WorldGenClient } from '../../world-gen/client.ts';
@@ -13,10 +13,9 @@ import type { StreamRequest, StreamResponse } from './protocol.ts';
 import { type RingOptions, StreamingRing } from './ring.ts';
 import { ParkSource, ZoneSource } from './sources.ts';
 import { createWaterfallSpray } from './spray.ts';
+import { BatchedRibbonPool, BatchedWaterPool } from './surface-batch.ts';
 import { TerrainMeshPool } from './terrain-mesh.ts';
-import { RibbonMeshPool } from './trails.ts';
 import { chunkOf } from './types.ts';
-import { WaterMeshPool } from './water.ts';
 
 function adaptWorker<Input, Output>(worker: Worker) {
 	const port = {
@@ -102,8 +101,8 @@ export function createStreamingRuntime(options: StreamingOptions) {
 	const zones = new ZoneSource(stream, { only: options.zone ?? undefined, keepBytes: 2 * 1024 * 1024 });
 	const source = generator ? new ParkSource(zones, new GeneratedSource(generator)) : zones;
 	const terrain = options.ground ? new TerrainMeshPool(options.ground) : null;
-	const water = options.water ? new WaterMeshPool(options.water) : null;
-	const ribbons = options.path ? new RibbonMeshPool(options.path) : null;
+	const water = options.water ? new BatchedWaterPool(options.water) : null;
+	const ribbons = options.path ? new BatchedRibbonPool(options.path) : null;
 	const ring = new StreamingRing({
 		source,
 		builder: stream,
@@ -119,16 +118,30 @@ export function createStreamingRuntime(options: StreamingOptions) {
 	});
 	const far = options.ground ? new StreamFarTerrain(Math.sqrt(ring.capacity)) : null;
 	if (far) ring.object.add(far.object);
+	if (water) ring.object.add(water.batch.object);
+	if (ribbons) ring.object.add(ribbons.batch.object);
+	const surfaces = { lastMs: 0, maxMs: 0, overflows: 0 };
 	const lookup = (cx: number, cz: number) => ring.chunkAt(cx, cz);
 	let ready = false,
 		relocating = true,
 		disposed = false;
 	return {
 		ring,
+		zones,
 		stream,
 		generator,
 		terrain,
 		far,
+		surfaces,
+		prepareFrame(camera: PerspectiveCamera) {
+			const start = performance.now();
+			water?.batch.sync(camera);
+			ribbons?.batch.sync(camera);
+			ring.updateWaterfalls(camera);
+			surfaces.lastMs = performance.now() - start;
+			surfaces.maxMs = Math.max(surfaces.maxMs, surfaces.lastMs);
+			surfaces.overflows = (water?.batch.overflows ?? 0) + (ribbons?.batch.overflows ?? 0);
+		},
 		collision: ring.collision,
 		get ready() {
 			return ready;

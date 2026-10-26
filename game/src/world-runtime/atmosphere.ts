@@ -20,6 +20,7 @@ import {
 	Vector2,
 	Vector3
 } from 'three';
+import { NIGHT_FOG_END } from '../render/fog-lod.ts';
 import { LOOK_GLSL, lookUniforms, patchLook } from '../render/look.ts';
 import type { Quality } from '../render/quality.ts';
 import { SUN_AZIMUTH_DEG, sunDirection } from '../render/shadows.ts';
@@ -281,7 +282,7 @@ export function createAtmosphere(size: number, waterLevel = 0) {
 		cloudTexture,
 		update(camera: PerspectiveCamera, time: number, quality: Quality, day: 'day' | 'night') {
 			sky.position.copy(camera.position);
-			const f = VIEW[quality].far;
+			const f = VIEW[quality].far * (day === 'night' ? NIGHT_FOG_END : 1);
 			if (f !== far) {
 				far = f;
 				dome.scale.setScalar(f);

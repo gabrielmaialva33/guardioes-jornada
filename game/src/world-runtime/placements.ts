@@ -51,7 +51,11 @@ export async function loadWorldPlacements(
 ) {
 	const plan = renderAssetPlan(world, level),
 		source = new Group(),
-		textures = new SharedModelTextures({ 'foliage-atlas': 256, 'trees-atlas': 448 }),
+		textures = new SharedModelTextures({
+			'foliage-atlas': 256,
+			'trees-atlas': 448,
+			...(streaming ? { 'decor-atlas': 432 } : {})
+		}),
 		models: LoadedModel[] = [],
 		prototypes: TreePrototype[] = [];
 	let pools: PoolSet | undefined, impostors: ReturnType<typeof createTreeImpostors> | undefined;

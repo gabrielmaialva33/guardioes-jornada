@@ -36,6 +36,22 @@ it('uses the authored pool and river in global coordinates for respawn and wadin
 	expect(sampleWater(lookup, -1000, -1000)).toBeNull();
 });
 
+it('treats the Vale spring and plunge basins as real water even outside the river ribbon', () => {
+	const zone = buildZone('vale'),
+		chunks = new Map(cutZone(zone, new Map([['vale', zone]])).chunks.map((c) => [c.key, c]));
+	const lookup = (cx: number, cz: number) => chunks.get(chunkId(cx, cz));
+	const basins = zone.level.content?.basins;
+	if (!basins?.length) throw new Error('basin fixture');
+	for (const basin of basins)
+		expect(
+			sampleWater(
+				lookup,
+				(basin.a[0] + basin.b[0]) * 0.5 + zone.offsetX,
+				(basin.a[1] + basin.b[1]) * 0.5 + zone.offsetZ
+			)
+		).toBeCloseTo(basin.water, 5);
+});
+
 it('has a deterministic day/dusk/night cycle and supports frozen debug/golden light', () => {
 	expect(lightAt(0)).toBe('day');
 	expect(lightAt(16 * 60)).toBe('dusk');

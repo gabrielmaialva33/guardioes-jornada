@@ -18,6 +18,7 @@ import { AvatarGroundContext } from './avatar-context.ts';
 import { buildMapCollision, prefabProxies } from './collision.ts';
 import { MapCheckpoints, riverSurfaceAt } from './navigation.ts';
 import { loadWorldPlacements, withoutPlacement } from './placements.ts';
+import { offsetLife, offsetLifeBindings } from './streaming/life-offset.ts';
 import { createStreamScene } from './streaming/stream-visual.ts';
 import { loadZoneMap, type ZoneMap, zoneSpawn } from './streaming/zone-loader.ts';
 import { createMapVisual } from './visual.ts';
@@ -116,8 +117,18 @@ export function createMapEnvironment(
 			: new AvatarGroundContext(collision, world, level),
 		loadLife: testing
 			? undefined
-			: (quality, signal, blobs, onHowl) =>
-					createLivingWorld({ world, level, quality, signal, blobs, onHowl, loadGlb: loadModel }),
+			: async (quality, signal, blobs, onHowl) => {
+					const bindings = offsetLifeBindings(ox, oz, blobs, onHowl);
+					const life = await createLivingWorld({
+						world,
+						level,
+						quality,
+						signal,
+						...bindings,
+						loadGlb: loadModel
+					});
+					return offsetLife(life, ox, oz);
+				},
 		story,
 		loadStoryAssets:
 			level && story

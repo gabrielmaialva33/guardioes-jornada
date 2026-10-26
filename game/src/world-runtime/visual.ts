@@ -49,15 +49,19 @@ export function createMapVisual(
 	if (farTerrain) object.add(farTerrain.object);
 	const detailed: Mesh[] = [];
 	const ownedGeometries: BufferGeometry[] = [];
-	const materials = createMapMaterials(world, level?.trails);
+	const materials = createMapMaterials(
+		options.streaming ? undefined : world,
+		options.streaming ? [] : level?.trails
+	);
 	const floorCover = level && !testing ? createGroundCover(world, level, materials.field) : undefined;
 	if (floorCover) object.add(floorCover.object);
 	const waterfallFoam = level && !testing && !options.streaming ? createWaterfallFoam(level) : undefined;
 	if (waterfallFoam) object.add(waterfallFoam.object);
-	const canopy = bakeCanopy(world);
-	lighting.uShadeMap.value = canopy.texture;
+	const canopy = options.streaming ? undefined : bakeCanopy(world);
+	lighting.uShadeMap.value = canopy?.texture ?? null;
+	lighting.uShadeOrigin.value.set(0, 0);
 	lighting.uShadeSize.value = world.size;
-	lighting.uShadeEnabled.value = visualStep() >= 3 ? 1 : 0;
+	lighting.uShadeEnabled.value = canopy && visualStep() >= 3 ? 1 : 0;
 	lighting.uHeightFog.value = visualStep() >= 4 ? 1 : 0;
 	const atmosphere = visualStep() >= 4 ? createAtmosphere(world.size, world.waterLevel) : undefined;
 	if (atmosphere) object.add(atmosphere.object);
@@ -234,13 +238,13 @@ export function createMapVisual(
 			atmosphere?.update(camera, time, quality, night ? 'night' : 'day');
 		},
 		dispose() {
-			if (lighting.uShadeMap.value === canopy.texture) {
+			if (canopy && lighting.uShadeMap.value === canopy.texture) {
 				lighting.uShadeEnabled.value = 0;
 				lighting.uShadeMap.value = null;
 			}
 			floorCover?.dispose();
 			waterfallFoam?.dispose();
-			canopy.dispose();
+			canopy?.dispose();
 			farTerrain?.dispose();
 			atmosphere?.dispose();
 			for (const g of ownedGeometries) g.dispose();

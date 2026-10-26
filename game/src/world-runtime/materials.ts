@@ -49,6 +49,7 @@ export function createMapMaterials(world?: SurvivalWorld, trails: readonly Trail
 		...materials,
 		textures: surfaces.textures,
 		field: surfaces.field,
+		setField: surfaces.setField,
 		load: (signal: AbortSignal) => (visualStep() >= 1 ? surfaces.load(signal) : Promise.resolve()),
 		dispose() {
 			surfaces.dispose();

@@ -5,6 +5,7 @@ import {
 	LinearMipmapLinearFilter,
 	SRGBColorSpace,
 	type Texture,
+	Vector2,
 	Vector3
 } from 'three';
 import atlasUrl from '../assets/skins/ground-atlas.png?url';
@@ -22,6 +23,7 @@ export function createSurfaces(world?: SurvivalWorld, trails: readonly Trail[] =
 		uGroundDetail: { value: 0 },
 		uGroundPaths: { value: field?.texture ?? (null as Texture | null) },
 		uGroundSize: { value: world?.size ?? 160 },
+		uGroundOrigin: { value: new Vector2() },
 		uGroundPathsEnabled: { value: field ? 1 : 0 },
 		uRockWarm: { value: new Color('#baa88b') },
 		uRockCool: { value: new Color('#54747a') },
@@ -38,6 +40,12 @@ export function createSurfaces(world?: SurvivalWorld, trails: readonly Trail[] =
 	let disposed = false;
 	return {
 		textures,
+		setField(texture: Texture, origin: Vector2, size: number) {
+			uniforms.uGroundPaths.value = texture;
+			uniforms.uGroundOrigin.value.copy(origin);
+			uniforms.uGroundSize.value = size;
+			uniforms.uGroundPathsEnabled.value = 1;
+		},
 		field,
 		patch(shader: ShaderSource, kind: SurfaceKind) {
 			Object.assign(shader.uniforms, uniforms, { uVisualTime: lighting.uVisualTime });
@@ -58,6 +66,7 @@ export function createSurfaces(world?: SurvivalWorld, trails: readonly Trail[] =
 ${attribute ? 'varying vec2 vSurface;' : ''}
 uniform sampler2D uGroundAtlas,uGroundPaths;
 uniform float uGroundSize,uGroundPathsEnabled;
+uniform vec2 uGroundOrigin;
 uniform vec3 uGroundWarm,uGroundCool,uGroundDry,uGroundLitter,uGroundSoil,uRockWarm,uRockCool;
 uniform float uGroundDetail;
 uniform vec3 uGrassMean,uSoilMean,uRockMean;
@@ -111,7 +120,7 @@ vec3 groundTile(vec2 p,vec2 tile) {
  float macro=groundFieldNoise(vStylizedWorld.xz/50.+13.);
  float meso=groundFieldNoise(vStylizedWorld.xz/8.+71.);
  float fine=groundFieldNoise(vStylizedWorld.xz*1.1);
- vec2 groundUV=vStylizedWorld.xz/uGroundSize;
+ vec2 groundUV=(vStylizedWorld.xz-uGroundOrigin)/uGroundSize;
  float inside=step(0.,groundUV.x)*step(0.,groundUV.y)*step(groundUV.x,1.)*step(groundUV.y,1.);
  float shade=uShadeEnabled>.5?mix(1.,texture2D(uShadeMap,groundUV).r,inside):1.;
  float pathDistance=8.;if(uGroundPathsEnabled>.5 && inside>.5)pathDistance=texture2D(uGroundPaths,groundUV).r*8.-2.;

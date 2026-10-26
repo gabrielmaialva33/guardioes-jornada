@@ -37,6 +37,19 @@ export function sampleHeight(lookup: ChunkLookup, x: number, z: number): number 
 export function sampleWater(lookup: ChunkLookup, x: number, z: number): number | null {
 	const chunk = lookup(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
 	if (!chunk) return null;
+	const basins = chunk.basins;
+	if (basins)
+		for (let i = 0; i < basins.length; i += 7) {
+			const dx = basins[i + 3] - basins[i + 1],
+				dz = basins[i + 4] - basins[i + 2];
+			const t = Math.max(
+				0,
+				Math.min(1, ((x - basins[i + 1]) * dx + (z - basins[i + 2]) * dz) / (dx * dx + dz * dz || 1))
+			);
+			const px = x - basins[i + 1] - t * dx,
+				pz = z - basins[i + 2] - t * dz;
+			if (px * px + pz * pz <= basins[i + 5] * basins[i + 5]) return basins[i + 6];
+		}
 	const story = chunk.story,
 		pool = story?.level.pool;
 	if (story && pool && pool.halfLength > 0) {
