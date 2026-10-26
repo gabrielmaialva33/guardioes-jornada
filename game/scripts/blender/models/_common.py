@@ -589,8 +589,8 @@ def apply_v2_foliage(ob, mode: str = "tree"):
             li0 = p.loop_indices[0]
             sr, sg, sb, _ = attr.data[li0].color_srgb
             h_hex = "#%02x%02x%02x" % (int(round(sr * 255)), int(round(sg * 255)), int(round(sb * 255)))
-            h_val, _l_val, _s_val = colorsys.rgb_to_hls(sr, sg, sb)
-            if h_hex in foliage_hexes or (0.20 <= h_val <= 0.48):
+            h_val, _l_val, s_val = colorsys.rgb_to_hls(sr, sg, sb)
+            if h_hex in foliage_hexes or (0.20 <= h_val <= 0.48 and s_val > 0.16):
                 # Exclude vertical grey stem on embaúba/juçara/jerivá (rock[1..2] below z=6.2)
                 avg_z = sum(co[loops[li].vertex_index].z for li in p.loop_indices) / p.loop_total
                 if h_hex == RAMPS["rock"][3].lower() and avg_z < 5.0:
