@@ -3,6 +3,7 @@ import { WebGLRenderer } from 'three';
 import { GAME_ABI, type GameBridge, type GameDispose } from '../abi.ts';
 import Root from './Root.svelte';
 import { pickQuality, readCapabilities } from './render/index.ts';
+import { golden } from './scene/golden.ts';
 
 declare const __PACK_SOFTWARE_TEST__: boolean;
 
@@ -23,7 +24,13 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 	const createRenderer = (canvas: HTMLCanvasElement) => {
 		let value: WebGLRenderer;
 		try {
-			value = new WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'low-power' });
+			value = new WebGLRenderer({
+				canvas,
+				antialias: false,
+				alpha: true,
+				preserveDrawingBuffer: golden.enabled,
+				powerPreference: 'low-power'
+			});
 		} catch (cause) {
 			throw new Error('game-webgl-unavailable', { cause });
 		}

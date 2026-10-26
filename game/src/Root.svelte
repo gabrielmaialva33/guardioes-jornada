@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { createLineupEnvironment } from './scene/lineup.ts';
+	import { golden } from './scene/golden.ts';
 	import { Canvas } from '@threlte/core';
 	import { onDestroy, onMount } from 'svelte';
 	import { NoToneMapping, SRGBColorSpace, type WebGLRenderer } from 'three';
@@ -8,6 +10,9 @@
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
 	import { InputModel, type ButtonRole } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
+	import { StoryGame } from './missions/story.ts';
+	import { storyView, type StoryView } from './missions/view.ts';
+	import StoryPanel from './missions/StoryPanel.svelte';
 	import AvatarChooser from './scene/AvatarChooser.svelte';
 	import { AVATAR_PRESETS, DEFAULT_AVATAR, KENNEY_SKINS } from './avatar/catalog.ts';
 	import { createLocalSave, type AvatarProfile } from './data/local-save.ts';
@@ -23,6 +28,9 @@
 	import { loadForest } from './scene/forest.ts';
 	import type { SceneEnvironment } from './scene/environment.ts';
 	import type { HudState } from './scene/types.ts';
+	import { createGameAudio } from './audio/engine.ts';
+	import { Soundscape } from './audio/soundscape.ts';
+	import SoundSettings from './audio/SoundSettings.svelte';
 
 	let {
 		bridge,
@@ -37,24 +45,38 @@
 	let portrait = $state(innerWidth < innerHeight);
 	let allowPortrait = $state(false);
 	let hasMoved = $state(false);
-	const gameSave = createLocalSave(DEFAULT_AVATAR);
-	let avatarProfile = $state.raw(gameSave.avatar());
+	const gameSave = createLocalSave(
+		DEFAULT_AVATAR,
+		golden.enabled ? { getItem: () => null, setItem: () => {} } : undefined
+	);
+	let avatarProfile = $state.raw(golden.enabled ? DEFAULT_AVATAR : gameSave.avatar());
 	let choosing = $state(false);
+	let missionMenu = $state(false);
 	let saveMessage = $state('');
 	let sceneRef: { setAvatarProfile: (profile: AvatarProfile) => Promise<void> } | undefined = $state();
 	let chooserGeneration = 0;
 	let disposed = false;
-	const rotate = $derived(portrait && !allowPortrait && !choosing);
+	const rotate = $derived(!golden.enabled && portrait && !allowPortrait && !choosing);
 	const showNotice = $derived(saveMessage || !hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
 	const query = new URLSearchParams(location.search);
 	const debugGraybox = query.has('graybox');
-	const mapData = debugGraybox
-		? null
-		: query.get('world') === 'survival'
-			? { world: generateWorld(20261025), level: undefined }
-			: buildStoryWorld();
-	const map = mapData ? createMapEnvironment(mapData.world, mapData.level, gameSave) : null;
+	const mapData =
+		debugGraybox || (golden.enabled && golden.lineup)
+			? null
+			: query.get('world') === 'survival'
+				? { world: generateWorld(golden.enabled ? golden.seed : 20261025), level: undefined }
+				: buildStoryWorld();
+	const story = mapData?.level
+		? new StoryGame(mapData.level, {
+				value: gameSave.story(),
+				persist: (data) => gameSave.setStory(data),
+				badge: () => bridge.earnBadge()
+			})
+		: undefined;
+	let storyUi = $state.raw<StoryView | undefined>(undefined);
+	let lastStoryKey = '';
+	const map = mapData ? createMapEnvironment(mapData.world, mapData.level, gameSave, story) : null;
 	const level = debugGraybox ? createGraybox() : null;
 	const forest = debugGraybox ? forestLayout() : null;
 	function oldEnvironment(): SceneEnvironment {
@@ -75,7 +97,8 @@
 			nextTarget() {}
 		};
 	}
-	const environment = map?.environment ?? oldEnvironment();
+	const environment =
+		golden.enabled && golden.lineup ? createLineupEnvironment() : (map?.environment ?? oldEnvironment());
 	const world = environment.collision;
 	const checkpoints =
 		map?.tracker ?? new CheckpointTracker(environment.start, environment.checkpoints, level?.killY ?? -20);
@@ -83,11 +106,52 @@
 		(query.has('debug') ? map?.debugPoses[query.get('pose') ?? ''] : undefined) ??
 		map?.checkpoint ??
 		environment.start;
-	const controller = new PlayerController(world, initial.spawn, { yaw: initial.yaw, checkpoints });
+	const goldenSpawn =
+		golden.enabled && golden.avatar && mapData
+			? {
+					x: golden.avatar[0],
+					z: golden.avatar[1],
+					y: mapData.world.heights[
+						Math.round(golden.avatar[1]) * mapData.world.grid + Math.round(golden.avatar[0])
+					]
+				}
+			: initial.spawn;
+	const controller = new PlayerController(world, goldenSpawn, {
+		yaw: golden.enabled && golden.avatar ? golden.avatar[2] : initial.yaw,
+		checkpoints
+	});
+	story?.repairBadge();
+	// Settings are written 400 ms after the last change (a slider drag fires many), and on exit.
+	let audioSaveTimer: ReturnType<typeof setTimeout> | undefined;
+	const saveAudio = () => {
+		audioSaveTimer = undefined;
+		gameSave.setAudio(soundscape.audio.settings());
+	};
+	const soundscape = new Soundscape({
+		audio: createGameAudio({
+			settings: gameSave.audio() ?? undefined,
+			onSettingsChange(settings) {
+				audioSettings = settings;
+				clearTimeout(audioSaveTimer);
+				audioSaveTimer = setTimeout(saveAudio, 400);
+			}
+		}),
+		map: mapData,
+		story
+	});
+	let audioSettings = $state.raw(soundscape.audio.settings());
+	// Entering the trail was a tap: while that activation lasts the context may start at once.
+	if ((navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive)
+		void soundscape.audio.unlock();
 	onDestroy(() => {
 		disposed = true;
 		chooserGeneration++;
 		world.dispose();
+		if (audioSaveTimer !== undefined) {
+			clearTimeout(audioSaveTimer);
+			saveAudio();
+		}
+		void soundscape.dispose();
 	});
 	function openChooser() {
 		chooserGeneration++;
@@ -122,6 +186,16 @@
 			controller.resume();
 		};
 		window.addEventListener('resize', resize, { signal: listeners.signal });
+		// UI taps on HUD and panel buttons; jump and the contextual action have their own sounds.
+		wrapper?.addEventListener(
+			'click',
+			(event) => {
+				const button = event.target instanceof Element ? event.target.closest('button') : null;
+				if (button && !button.matches('[data-game-button="jump"],[data-game-button="action"]'))
+					soundscape.uiTap();
+			},
+			{ signal: listeners.signal, capture: true }
+		);
 		return () => listeners.abort();
 	});
 	function playPortrait() {
@@ -130,7 +204,39 @@
 		controller.resume();
 		wrapper?.focus({ preventScroll: true });
 	}
+	function refreshStory() {
+		if (!story) return;
+		storyUi = storyView(story, controller.character.position);
+		soundscape.syncStory();
+	}
+	function storyChoice(id: string) {
+		story?.choose(id, controller.character.position);
+		refreshStory();
+		input.releaseAll();
+	}
+	function storyClose() {
+		story?.closeDialogue();
+		refreshStory();
+		input.releaseAll();
+		controller.resume();
+		wrapper?.focus({ preventScroll: true });
+	}
+	function restartStory() {
+		story?.restart();
+		backToBase();
+		refreshStory();
+		input.releaseAll();
+	}
 	function drawControls() {
+		if (story) {
+			const action = story.context(controller.character.position);
+			const key = `${story.revision}:${action?.id ?? ''}:${action?.disabled ?? false}`;
+			if (key !== lastStoryKey) {
+				lastStoryKey = key;
+				refreshStory();
+			}
+		}
+
 		if (saveMessage && controller.frame.speed > 0.1) saveMessage = '';
 		if (!hasMoved && controller.frame.speed > 0.1) hasMoved = true;
 		const stick = input.stick;
@@ -163,6 +269,7 @@
 <div
 	bind:this={wrapper}
 	class="secret-game"
+	class:golden={golden.enabled}
 	class:choosing
 	style:background={`linear-gradient(${LIGHT.daylight.skyTop}, ${LIGHT.daylight.horizon} 65%)`}
 	data-game-root
@@ -175,18 +282,19 @@
 			>{#if wrapper}<Graybox
 					{wrapper}
 					bind:this={sceneRef}
-					paused={rotate || choosing}
+					paused={rotate || choosing || missionMenu || !!storyUi?.dialogue}
 					{avatarProfile}
 					{controller}
 					{input}
 					{environment}
 					{bridge}
+					sound={soundscape}
 					onHud={(state) => (hud = state)}
 					onFrame={drawControls}
 				/>{/if}</Canvas
 		>
 	</div>
-	<div class="hud" inert={rotate || choosing}>
+	<div class="hud" inert={rotate || choosing || missionMenu || !!storyUi?.dialogue}>
 		<div class="top-bar">
 			<button
 				type="button"
@@ -216,8 +324,23 @@
 				onkeyup={keyboardButton}
 				onclick={openChooser}><HudIcon name="avatar" /></button
 			>
+			<button
+				type="button"
+				aria-label="Som"
+				aria-pressed={!audioSettings.muted.master}
+				title={audioSettings.muted.master ? 'Ligar o som' : 'Desligar o som'}
+				onpointerdown={(event) => event.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={() => soundscape.audio.mute(!audioSettings.muted.master)}
+				><HudIcon name={audioSettings.muted.master ? 'muted' : 'sound'} /></button
+			>
 		</div>
-		{#if showNotice}<p class="notice" class:sr-only={!!hud.debug} aria-live="polite">
+		{#if showNotice && (!story || !hud.ready)}<p
+				class="notice"
+				class:sr-only={!!hud.debug}
+				aria-live="polite"
+			>
 				{saveMessage || hud.notice}
 			</p>{/if}
 		<div
@@ -232,7 +355,9 @@
 		<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
 		{#if environment.kind === 'map'}<div class="mission" aria-live="polite">
 				<span>Exploração do mapa</span><strong>{hud.target ?? environment.target.name}</strong><span
-					>{hud.distance ?? 0} m · Toque na bússola para mudar o destino</span
+					>{hud.distance ?? 0} m · {story
+						? 'Escolha o destino na lista de missões'
+						: 'Toque na bússola para mudar o destino'}</span
 				>
 			</div>{/if}
 		{#if hud.splash}<div class="splash" role="status">Água funda. Voltando ao ponto seguro…</div>{/if}
@@ -260,11 +385,15 @@
 			<button
 				type="button"
 				data-game-button="action"
-				aria-label="Explorar"
-				title="Explorar"
+				aria-label={storyUi?.action?.label ?? 'Explorar'}
+				title={storyUi?.action?.label ?? 'Explorar'}
+				aria-disabled={story ? !storyUi?.action || !!storyUi.action.disabled : false}
 				onkeydown={keyboardButton}
 				onkeyup={keyboardButton}
-				onclick={(event) => activate(event, 'action')}><HudIcon name="explore" /></button
+				onclick={(event) => activate(event, 'action')}
+				><HudIcon name="explore" />{#if storyUi?.action}<span class="action-label"
+						>{storyUi.action.label}</span
+					>{/if}</button
 			>
 		</div>
 		<button
@@ -279,13 +408,35 @@
 			onclick={(event) => activate(event, 'jump')}><HudIcon name="jump" /></button
 		>
 	</div>
+	{#if storyUi && !rotate && !choosing}<StoryPanel
+			view={storyUi}
+			onmenu={(open) => {
+				missionMenu = open;
+				input.releaseAll();
+				controller.resume();
+				if (!open) wrapper?.focus({ preventScroll: true });
+			}}
+			onchoice={storyChoice}
+			onclose={storyClose}
+			onselect={(id) => {
+				story?.select(id);
+				refreshStory();
+			}}
+			onrestart={restartStory}
+			onexit={() => bridge.exit()}
+		/>{/if}
 	{#if choosing}<AvatarChooser
 			profile={avatarProfile}
 			presets={AVATAR_PRESETS}
 			kenneyUrls={KENNEY_SKINS}
 			onapply={applyAvatar}
 			onclose={closeChooser}
-		/>{/if}
+			>{#snippet sound()}<SoundSettings
+					settings={audioSettings}
+					onvolume={(bus, volume) => soundscape.audio.setBusVolume(bus, volume)}
+					onmute={(muted) => soundscape.audio.mute(muted)}
+				/>{/snippet}</AvatarChooser
+		>{/if}
 
 	{#if rotate}
 		<div
@@ -328,6 +479,14 @@
 </div>
 
 <style>
+	.secret-game.golden {
+		width: 960px;
+		height: 432px;
+		position: relative;
+	}
+	.golden > :global(:not(.world)) {
+		visibility: hidden;
+	}
 	.secret-game {
 		position: fixed;
 		inset: 0;
@@ -396,6 +555,21 @@
 		background: #173a2bdc;
 		font-size: 0.75rem;
 		line-height: 1.4;
+	}
+	.side-buttons button[data-game-button='action'] {
+		position: relative;
+	}
+	.action-label {
+		position: absolute;
+		right: calc(100% + 8px);
+		min-width: 7rem;
+		max-width: 11rem;
+		padding: 6px 8px;
+		border-radius: 8px;
+		background: #173a2be8;
+		font-size: 0.75rem;
+		line-height: 1.2;
+		pointer-events: none;
 	}
 	.side-buttons {
 		position: absolute;

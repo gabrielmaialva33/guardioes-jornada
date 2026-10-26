@@ -1,5 +1,10 @@
 export interface GameDebug {
+	goldenReady?: boolean;
+	visualTime?: number;
 	worldKind: string;
+	cameraYaw: number;
+	storyProgress: (number | undefined)[];
+	storyFinished: boolean;
 	fps: number;
 	frameP95Ms: number;
 	drawCalls: number;
@@ -31,6 +36,8 @@ export interface GameDebug {
 	grounded: boolean;
 	checkpoint: string;
 	animation: string;
+	/** Sound engine state, voices and the cost of the per-frame sound update (ms, last 256 frames). */
+	audio?: { state: string; voices: number; mean: number; p95: number; max: number; samples: number };
 }
 export interface HudState {
 	target?: string;
@@ -42,5 +49,6 @@ export interface HudState {
 	debug: GameDebug | null;
 }
 declare global {
+	var __gameGoldenMask: ((hide: boolean) => void) | undefined;
 	var __gameDebug: (() => GameDebug) | undefined;
 }

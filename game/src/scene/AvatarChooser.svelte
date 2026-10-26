@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { type Snippet, untrack } from 'svelte';
 	import { AVATAR_ATLAS } from '../avatar/catalog.ts';
 	import {
 		AVATAR_PARTS,
@@ -16,13 +16,16 @@
 		presets,
 		kenneyUrls,
 		onapply,
-		onclose
+		onclose,
+		sound
 	}: {
 		profile: AvatarProfile;
 		presets: readonly AvatarPreset[];
 		kenneyUrls: Readonly<Record<string, string>>;
 		onapply: (value: AvatarProfile) => Promise<void>;
 		onclose: () => void;
+		/** Sound controls, applied at once (outside the avatar draft). */
+		sound?: Snippet;
 	} = $props();
 	let draft = $state.raw<AvatarProfile>(untrack(() => ({ ...profile, colors: { ...profile.colors } })));
 	let message = $state('');
@@ -248,6 +251,7 @@
 				</div>
 			{/if}
 		</fieldset>
+		{@render sound?.()}
 		{#if message}<p role="status" class="message">{message}</p>{/if}
 		<footer>
 			<button type="button" onclick={onclose}>Cancelar</button><button

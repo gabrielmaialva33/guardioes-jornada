@@ -8,7 +8,13 @@ import { homedir } from 'node:os';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type BrowserContext, chromium } from '@playwright/test';
-import { decodeGameManifest } from './protocol.ts';
+import {
+	AUDIO_CODECS,
+	type AudioCodec,
+	decodeGameManifest,
+	type GameManifest,
+	requiredFiles
+} from './protocol.ts';
 import { createGraybox } from './src/engine/graybox.ts';
 
 const project = fileURLToPath(new URL('../', import.meta.url));
@@ -43,6 +49,17 @@ const manifests = await Promise.all(
 	)
 );
 assert.equal(new Set(manifests.map((manifest) => manifest.packId)).size, 3);
+/** What a device with `codec` downloads: raw bytes and the transfer the launcher announces (gzip where generated). */
+const download = (manifest: GameManifest, codec: AudioCodec) => {
+	const files = requiredFiles(manifest, codec);
+	return {
+		files: files.length,
+		bytes: files.reduce((sum, file) => sum + file.bytes, 0),
+		transfer: files.reduce((sum, file) => sum + (file.gzipBytes ?? file.bytes), 0)
+	};
+};
+const audioBytes = (manifest: GameManifest, codec: AudioCodec) =>
+	manifest.files.filter((file) => file.codec === codec).reduce((sum, file) => sum + file.bytes, 0);
 
 let served = 'A';
 let hold: { url: string; ready: () => void; release: Promise<void> } | undefined;
@@ -108,7 +125,14 @@ const browser = await chromium.launch({
 	]
 });
 const origin = 'http://127.0.0.1:4190';
-const result: Record<string, unknown> = { packIds: manifests.map((manifest) => manifest.packId) };
+const result: Record<string, unknown> = {
+	packIds: manifests.map((manifest) => manifest.packId),
+	packBytes: manifests.map((manifest) => ({
+		all: manifest.files.reduce((sum, file) => sum + file.bytes, 0),
+		audio: Object.fromEntries(AUDIO_CODECS.map((codec) => [codec, audioBytes(manifest, codec)])),
+		device: Object.fromEntries(AUDIO_CODECS.map((codec) => [codec, download(manifest, codec)]))
+	}))
+};
 try {
 	const context = await browser.newContext({
 		viewport: { width: 412, height: 915 },
@@ -291,6 +315,26 @@ try {
 		};
 	});
 	const page = await context.newPage();
+	// Every sound the page asks for, served by the worker or not: a device must only ever ask for its codec.
+	const audioRequests: string[] = [];
+	page.on('request', (request) => {
+		const path = new URL(request.url()).pathname;
+		if (/\.(webm|m4a)$/.test(path)) audioRequests.push(path);
+	});
+	/** The audio codec recorded in a pack's completion marker and the codecs of the sounds its cache holds. */
+	const packAudio = (packId: string) =>
+		page.evaluate(async (id) => {
+			const name = (await caches.keys()).find((key) => key.startsWith('guardioes-game:') && key.endsWith(id));
+			if (!name) throw new Error('no pack cache');
+			const cache = await caches.open(name);
+			const urls = (await cache.keys()).map((request) => new URL(request.url).pathname);
+			const marker = urls.find((url) => url.endsWith('/__complete__.json'));
+			return {
+				marker: marker ? (await (await cache.match(marker))?.json())?.audioCodec : undefined,
+				webm: urls.filter((url) => url.endsWith('.webm')).length,
+				m4a: urls.filter((url) => url.endsWith('.m4a')).length
+			};
+		}, packId);
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
 	const cdp = await context.newCDPSession(page);
@@ -330,10 +374,35 @@ try {
 		a.remove();
 	});
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
+	// Chrome plays Opus, so the launcher sizes and downloads the WebM sounds only.
+	const firstDownload = download(manifests[0], 'webm');
+	const announced = page.getByText(/Na primeira vez, baixa cerca de/);
+	await announced.waitFor();
+	const announcedText = (await announced.textContent())?.replace(/\s+/g, ' ').trim() ?? '';
+	const megabytes = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+	const expectedSize =
+		firstDownload.transfer < 1024 * 1024
+			? `${Math.ceil(firstDownload.transfer / 1024)} KB`
+			: `${megabytes.format(Math.ceil(firstDownload.transfer / 1024) / 1024)} MB`;
+	assert.ok(announcedText.includes(`cerca de ${expectedSize}`), `${announcedText} / ${expectedSize}`);
+	result.launcherSize = { announced: announcedText, expected: expectedSize, webm: firstDownload };
+	const beforeDownload = requests.length;
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).click();
 	await page.locator('[data-game-root] canvas').waitFor({ timeout: 30000 });
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
 	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	const downloadedA = requests
+		.slice(beforeDownload)
+		.filter((path) => path.startsWith(`/game-packs/${manifests[0].packId}/`));
+	assert.equal(downloadedA.filter((path) => path.endsWith('.m4a')).length, 0);
+	assert.equal(downloadedA.length, firstDownload.files);
+	const audioA = await packAudio(manifests[0].packId);
+	assert.deepEqual(audioA, {
+		marker: 'webm',
+		webm: manifests[0].files.filter((file) => file.codec === 'webm').length,
+		m4a: 0
+	});
+	result.packAAudio = { ...audioA, downloadedFiles: downloadedA.length };
 	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
 		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
 	const obby = createGraybox().obby;
@@ -504,6 +573,13 @@ try {
 	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
 		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[2].packId);
+	const audioC = await packAudio(manifests[2].packId);
+	assert.deepEqual(audioC, {
+		marker: 'webm',
+		webm: manifests[2].files.filter((file) => file.codec === 'webm').length,
+		m4a: 0
+	});
+	result.packCAudio = audioC;
 	result.atomicReplacementAndOfflineC = true;
 	// The fixture query must not mask missing map-only assets in the completed pack.
 	const storyUrl = new URL(page.url());
@@ -515,8 +591,23 @@ try {
 	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
 		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
 	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().worldKind), 'map');
-	assert.equal(requests.length, beforeStory);
+	// Chrome checks /service-worker.js for updates on its own timer; only page and pack requests count.
+	assert.deepEqual(
+		requests.slice(beforeStory).filter((path) => path !== '/service-worker.js'),
+		[]
+	);
 	result.defaultStoryWorldOfflineAtC = true;
+	// The map preloads its sounds behind the loading screen; nature (the forest bed) follows after the first frame.
+	for (const deadline = Date.now() + 15000; !audioRequests.some((path) => path.includes('forest-day')); ) {
+		assert.ok(Date.now() < deadline, 'the forest bed was never requested');
+		await page.waitForTimeout(100);
+	}
+	assert.ok(audioRequests.some((path) => path.endsWith('.webm')));
+	assert.deepEqual(
+		audioRequests.filter((path) => path.endsWith('.m4a')),
+		[]
+	);
+	result.audioRequests = { webm: audioRequests.length, m4a: 0 };
 	await page.screenshot({ path: join(output, 'story-offline-at-C.png') });
 	assert.deepEqual(errors, []);
 	assert.deepEqual(workerErrors, []);
