@@ -17,14 +17,23 @@ export class LifeRng {
 		this.#state[0] = seed >>> 0 || 0x9e3779b9;
 	}
 
-	/** Uniform in [0, 1). */
-	next(): number {
+	/** The last step()'s draw, uniform in [0, 1) (read it from the field: no number crosses a call). */
+	value = 0.5;
+
+	/** Draws into `value`. The per-frame paths use this instead of next(). */
+	step() {
 		const state = this.#state;
 		state[0] = (state[0] + 0x6d2b79f5) >>> 0;
 		let t = state[0];
 		t = Math.imul(t ^ (t >>> 15), t | 1);
 		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		this.value = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	}
+
+	/** Uniform in [0, 1). */
+	next(): number {
+		this.step();
+		return this.value;
 	}
 
 	/** Uniform in [min, max). */

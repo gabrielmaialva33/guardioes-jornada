@@ -166,11 +166,7 @@ function branch(tree: TreeRef, angle: number, from: number, to: number, height: 
 	for (let k = 0; k < 4; k++) {
 		const u = k / 3;
 		const r = (from + (to - from) * u) * crown.radius * s;
-		out.push(
-			tree.x + Math.sin(angle) * r,
-			tree.y + height * s + rise * u,
-			tree.z + Math.cos(angle) * r
-		);
+		out.push(tree.x + Math.sin(angle) * r, tree.y + height * s + rise * u, tree.z + Math.cos(angle) * r);
 	}
 	return out;
 }
@@ -224,8 +220,9 @@ function canopyRoutes(
 		const k = Math.floor(i / n);
 		const angle = bearings[i % n] + k * 2.4;
 		const crown = CROWNS[tree.kind];
-		// On top of a branch at the bottom of the leaf mass: under cover, still visible from below.
-		out.push({ route: branch(tree, angle, 0.22, 0.78, crown.base + 0.15, 0.25), tree });
+		// On top of a branch at the bottom of the leaf mass, toward its rim: the crowns are closed
+		// volumes, so an animal deeper inside would be hidden from the trail below.
+		out.push({ route: branch(tree, angle, 0.55, 0.95, crown.base + 0.15, 0.25), tree });
 	}
 	return out;
 }
@@ -359,7 +356,8 @@ export function oncaLoop(world: SurvivalWorld, homeX: number, homeZ: number): nu
 						if (best === null || score > best.score) best = { cx, cz, a, b, r, score };
 					}
 	const loop = best ?? { cx: homeX, cz: homeZ, a: 6, b: 6, r: 0, score: 0 };
-	const perimeter = Math.PI * (3 * (loop.a + loop.b) - Math.sqrt((3 * loop.a + loop.b) * (loop.a + 3 * loop.b)));
+	const perimeter =
+		Math.PI * (3 * (loop.a + loop.b) - Math.sqrt((3 * loop.a + loop.b) * (loop.a + 3 * loop.b)));
 	const count = Math.max(12, Math.ceil(perimeter));
 	const out: number[] = [];
 	for (let k = 0; k < count; k++) {
@@ -427,19 +425,37 @@ export function planLife(world: SurvivalWorld, level?: StoryLevel, seed: number 
 		const along = (route: number[]) => {
 			let length = 0;
 			for (let k = 3; k < route.length; k += 3)
-				length += Math.hypot(route[k] - route[k - 3], route[k + 1] - route[k - 2], route[k + 2] - route[k - 1]);
+				length += Math.hypot(
+					route[k] - route[k - 3],
+					route[k + 1] - route[k - 2],
+					route[k + 2] - route[k - 1]
+				);
 			return length;
 		};
 		switch (species) {
 			case 'mico-leao-dourado':
 				for (const { route, tree } of canopyRoutes(world, home.x, home.z, count, MICO_TREES, rng, 3)) {
 					if (companion < 0) companion = animals.length;
-					push({ route, loop: false, perches: null, start: rng.range(0, along(route)), arboreal: true, tree });
+					push({
+						route,
+						loop: false,
+						perches: null,
+						start: rng.range(0, along(route)),
+						arboreal: true,
+						tree
+					});
 				}
 				break;
 			case 'bugio-ruivo':
 				for (const { route, tree } of canopyRoutes(world, home.x, home.z, count, BROADLEAF, rng, 2))
-					push({ route, loop: false, perches: null, start: rng.range(0, along(route)), arboreal: true, tree });
+					push({
+						route,
+						loop: false,
+						perches: null,
+						start: rng.range(0, along(route)),
+						arboreal: true,
+						tree
+					});
 				break;
 			case 'muriqui': {
 				const rows = handholdRows(world, level, home.x, home.z);
@@ -460,7 +476,14 @@ export function planLife(world: SurvivalWorld, level?: StoryLevel, seed: number 
 			case 'preguica-de-coleira':
 				for (let i = 0; i < count; i++) {
 					const { route, tree } = slothBranch(world, home.x, home.z, rng);
-					push({ route, loop: false, perches: null, start: rng.range(0, along(route)), arboreal: true, tree });
+					push({
+						route,
+						loop: false,
+						perches: null,
+						start: rng.range(0, along(route)),
+						arboreal: true,
+						tree
+					});
 				}
 				break;
 			case 'tucano-de-bico-verde': {
@@ -479,7 +502,14 @@ export function planLife(world: SurvivalWorld, level?: StoryLevel, seed: number 
 			case 'onca-pintada': {
 				const route = oncaLoop(world, home.x, home.z);
 				for (let i = 0; i < count; i++)
-					push({ route, loop: true, perches: null, start: rng.range(0, along(route)), arboreal: false, tree: null });
+					push({
+						route,
+						loop: true,
+						perches: null,
+						start: rng.range(0, along(route)),
+						arboreal: false,
+						tree: null
+					});
 				break;
 			}
 		}
@@ -492,14 +522,23 @@ export function planLife(world: SurvivalWorld, level?: StoryLevel, seed: number 
 	const half = marker ? 8.5 : 6;
 	const meadow: Box = [bx - half, 0, bz - half, bx + half, 0, bz + half];
 	const meadowGround = maxGround(world, meadow);
-	meadow[1] = meadowGround.low + 0.6;
-	meadow[4] = meadowGround.high + 3.2;
+	// Low over the flowers, at a child's eye height (the avatar's eyes are 2.6 u up).
+	meadow[1] = meadowGround.low + 0.5;
+	meadow[4] = Math.max(meadowGround.low + 3.1, meadowGround.high + 1.2);
 
 	// Small birds (saíras) over the micos' fragment; once the corridor is planted they cross it.
 	const anchor = homes.find((h) => h.species === 'mico-leao-dourado')?.home ?? world.base;
-	const corridorEnd = level?.planting.filter((p) => p.mission === 1).reduce((z, p) => Math.max(z, p.z), 0) ?? 0;
+	const corridorEnd =
+		level?.planting.filter((p) => p.mission === 1).reduce((z, p) => Math.max(z, p.z), 0) ?? 0;
 	const north: Box = [anchor.x - 18, 0, anchor.z - 22, anchor.x + 18, 0, anchor.z + 2];
-	const across: Box = [anchor.x - 22, 0, anchor.z - 22, anchor.x + 14, 0, Math.max(anchor.z + 2, corridorEnd + 12)];
+	const across: Box = [
+		anchor.x - 22,
+		0,
+		anchor.z - 22,
+		anchor.x + 14,
+		0,
+		Math.max(anchor.z + 2, corridorEnd + 12)
+	];
 	const canopyTop = maxGround(world, across).high + 8;
 	for (const box of [north, across]) {
 		box[1] = canopyTop;

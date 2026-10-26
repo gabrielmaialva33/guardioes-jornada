@@ -57,18 +57,54 @@ const FLUTTER = 0.25;
 /** 1 / |(1, FLUTTER)|: the strongest gust with the strongest flutter has length 1. */
 const NORM = 1 / Math.sqrt(1 + FLUTTER * FLUTTER);
 
-/** Written by windAt(): the horizontal field (|x, z| ≤ 1) and the gust strength 0..1. */
+/**
+ * The field at a point: set atX, atZ, time and strength, call read(), use x, z
+ * and gust. Inputs travel through fields so the per-frame paths pass no
+ * number arguments (V8 boxes them in calls it does not inline).
+ */
 export class WindSample {
+	/** Output: the horizontal field (|x, z| ≤ 1) and the gust strength 0..1. */
 	x = 0;
 	z = 0;
 	gust = 0;
+	/** Input: the ground point, the clock (any value, it is wrapped) and the strength (0 with reduced motion). */
+	atX = 0;
+	atZ = 0;
+	time = 0;
+	strength = 1;
+
+	read(): this {
+		let t = this.time % WIND.period;
+		if (t < 0) t += WIND.period;
+		if (Number.isNaN(t)) t = 0;
+		const along = this.atX * WIND.dirX + this.atZ * WIND.dirZ;
+		const across = -this.atX * WIND.dirZ + this.atZ * WIND.dirX;
+		const gust =
+			GUST_MEAN +
+			GUST_WAVE * Math.sin(K_ALONG_1 * along - W_GUST * t + 0.7 * Math.sin(K_ACROSS_1 * across)) +
+			GUST_RIPPLE * Math.sin(K_ALONG_2 * along + K_ACROSS_2 * across - W_RIPPLE * t);
+		const flutter = FLUTTER * gust * Math.sin(K_ALONG_3 * along + K_ACROSS_3 * across - W_FLUTTER * t);
+		const s = this.strength * NORM;
+		this.x = (WIND.dirX * gust - WIND.dirZ * flutter) * s;
+		this.z = (WIND.dirZ * gust + WIND.dirX * flutter) * s;
+		this.gust = gust * this.strength;
+		return this;
+	}
+}
+
+/** A float uniform with its own class, so writing a new value updates it in place (no heap number). */
+export class FloatUniform {
+	value = 0;
+	constructor(value: number) {
+		this.value = value;
+	}
 }
 
 /** Shared uniforms of every wind-patched material; the living world refreshes them each frame. */
 export const windUniforms = {
 	uWindDirection: { value: [WIND.dirX, WIND.dirZ] as [number, number] },
-	uWindTime: { value: 0 },
-	uWindStrength: { value: 1 }
+	uWindTime: new FloatUniform(0.5),
+	uWindStrength: new FloatUniform(1)
 };
 
 /** Wraps a clock to the field's period. */
@@ -82,9 +118,23 @@ export function windTime(time: number): number {
  * motion (ART.md §7: wind sway goes to zero). Call once per frame.
  */
 export function updateWind(time: number, reducedMotion: boolean) {
-	windUniforms.uWindTime.value = windTime(time);
-	windUniforms.uWindStrength.value = reducedMotion ? 0 : 1;
+	windClock.time = time;
+	windClock.reducedMotion = reducedMotion;
+	windClock.update();
 }
+
+/** updateWind through fields, for the per-frame path: set time and reducedMotion, call update(). */
+export const windClock = {
+	time: 0.5,
+	reducedMotion: false,
+	update() {
+		let t = this.time % WIND.period;
+		if (t < 0) t += WIND.period;
+		if (Number.isNaN(t)) t = 0;
+		windUniforms.uWindTime.value = t;
+		windUniforms.uWindStrength.value = this.reducedMotion ? 0 : 1;
+	}
+};
 
 /**
  * The field at a ground point and a time (seconds, any value: it is wrapped),
@@ -92,19 +142,11 @@ export function updateWind(time: number, reducedMotion: boolean) {
  * nothing. The same math as WIND_GLSL's lifeWind().
  */
 export function windAt(x: number, z: number, time: number, strength: number, out: WindSample): WindSample {
-	const t = windTime(time);
-	const along = x * WIND.dirX + z * WIND.dirZ;
-	const across = -x * WIND.dirZ + z * WIND.dirX;
-	const gust =
-		GUST_MEAN +
-		GUST_WAVE * Math.sin(K_ALONG_1 * along - W_GUST * t + 0.7 * Math.sin(K_ACROSS_1 * across)) +
-		GUST_RIPPLE * Math.sin(K_ALONG_2 * along + K_ACROSS_2 * across - W_RIPPLE * t);
-	const flutter = FLUTTER * gust * Math.sin(K_ALONG_3 * along + K_ACROSS_3 * across - W_FLUTTER * t);
-	const s = strength * NORM;
-	out.x = (WIND.dirX * gust - WIND.dirZ * flutter) * s;
-	out.z = (WIND.dirZ * gust + WIND.dirX * flutter) * s;
-	out.gust = gust * strength;
-	return out;
+	out.atX = x;
+	out.atZ = z;
+	out.time = time;
+	out.strength = strength;
+	return out.read();
 }
 
 const f = (value: number) => {
@@ -174,10 +216,10 @@ export function windVertex(sample: 'vertex' | 'origin' = 'vertex') {
 		mat4 lifeWindModel = modelMatrix;
 	#endif
 	vec2 lifeWindPoint = ( lifeWindModel * vec4( ${sample === 'origin' ? 'vec3( 0.0 )' : 'transformed'}, 1.0 ) ).xz;
-	float lifeWindMask = smoothstep( uWindFrom, max( uWindTo, uWindFrom + 1e-3 ), transformed.y );
+	float lifeWindMask = smoothstep( uWindFrom, max( uWindTo, uWindFrom + 0.001 ), transformed.y );
 	vec2 lifeWindOffset = lifeWind( lifeWindPoint ).xy * ( uWindAmplitude * lifeWindMask );
 	mat3 lifeWindBasis = mat3( lifeWindModel );
-	float lifeWindScale2 = max( dot( lifeWindBasis[ 0 ], lifeWindBasis[ 0 ] ), 1e-8 );
+	float lifeWindScale2 = max( dot( lifeWindBasis[ 0 ], lifeWindBasis[ 0 ] ), 0.00000001 );
 	transformed += ( transpose( lifeWindBasis ) * vec3( lifeWindOffset.x, 0.0, lifeWindOffset.y ) ) / lifeWindScale2;
 `;
 }
@@ -206,10 +248,11 @@ export function patchWind(
 }
 
 /**
- * Makes a material sway in the shared wind. Call it AFTER stylize() or
- * houseMaterial(): those set customProgramCacheKey, and this extends it (and
- * chains onBeforeCompile), so a swaying and a still copy of the same material
- * never share a program. Returns the material.
+ * Makes a material sway in the shared wind: chains onBeforeCompile and extends
+ * customProgramCacheKey, so a swaying and a still copy of the same material
+ * never share a program. Safe before or after stylize() / houseMaterial()
+ * (stylize keeps the previous key since 84ff816); after is the usual order.
+ * Returns the material; its uniforms are in material.userData.lifeWind.
  */
 export function applyWind<T extends Material>(material: T, options: WindOptions): T {
 	const sample = options.sample ?? 'vertex';

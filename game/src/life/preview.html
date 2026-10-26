@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="data:," />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Vida da trilha · prévia</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				background: #8fd0f0;
+				overflow: hidden;
+				font-family: system-ui, sans-serif;
+			}
+			canvas {
+				display: block;
+			}
+			#hud {
+				position: fixed;
+				left: 8px;
+				top: 8px;
+				padding: 6px 8px;
+				border-radius: 6px;
+				background: rgb(13 35 24 / 70%);
+				color: #e9f4e4;
+				font: 12px/1.35 ui-monospace, monospace;
+				white-space: pre;
+				pointer-events: none;
+			}
+			nav {
+				position: fixed;
+				right: 8px;
+				top: 8px;
+				display: flex;
+				flex-wrap: wrap;
+				gap: 4px;
+				max-width: 50vw;
+				justify-content: end;
+			}
+			nav button {
+				font: 12px system-ui;
+				padding: 6px 8px;
+				border: 0;
+				border-radius: 6px;
+				background: #2d6a4f;
+				color: #fff;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="hud">Carregando…</div>
+		<nav id="shots"></nav>
+		<script type="module" src="./preview.ts"></script>
+	</body>
+</html>
