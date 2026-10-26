@@ -48,6 +48,7 @@ export function chunkArrays(chunk: WorldChunk): ArrayBufferView[] {
 	const c = chunk.collision;
 	return [
 		chunk.heights,
+		chunk.apron,
 		chunk.zones,
 		chunk.flags,
 		chunk.biome,

@@ -188,11 +188,18 @@ export class RiverLattice {
 		return null;
 	}
 
-	/** Can a node in column `fromI` drain into cell (i, j)? */
+	/**
+	 * Can a node in column `fromI` drain into cell (i, j)? Into a flow node or
+	 * the sea, never into the Reserva (but its waterfall pin, from the east, in
+	 * 'pinned' mode) nor into a node past the crest.
+	 */
 	#accepts(i: number, j: number, fromI: number): boolean {
-		if (!reserveCell(i, j)) return true;
-		const { waterfall } = RESERVE_RIVER;
-		return this.mode === 'pinned' && i === waterfall.i && j === waterfall.j && fromI === waterfall.i + 1;
+		if (reserveCell(i, j)) {
+			const { waterfall } = RESERVE_RIVER;
+			return this.mode === 'pinned' && i === waterfall.i && j === waterfall.j && fromI === waterfall.i + 1;
+		}
+		const kind = this.#base(i, j).kind;
+		return kind === NODE_KIND.flow || kind === NODE_KIND.sink;
 	}
 
 	/** Position, kind and downstream cell of (i, j). */
@@ -240,10 +247,9 @@ export class RiverLattice {
 				node.kind = NODE_KIND.sink;
 				node.target = SINK_WATER;
 			} else if (p.s <= CREST_S) {
-				node.kind = NODE_KIND.flow;
 				node.s = p.s;
 				node.target = riverWaterTarget(p);
-				this.#downstream(node);
+				if (this.#downstream(node)) node.kind = NODE_KIND.flow;
 			}
 		}
 		if (this.#nodes.size > 60000) this.#nodes.clear();
@@ -251,27 +257,37 @@ export class RiverLattice {
 		return node;
 	}
 
-	/** One of the three west neighbours by hash, avoiding the Reserva; straight along the column if all three are in it. */
-	#downstream(node: RiverNode) {
+	/**
+	 * One of the three west neighbours by hash that accepts the water; straight
+	 * along the column when all three are the Reserva's (the detour around it).
+	 * False when none accepts: a node just under the crest whose west
+	 * neighbours lie past it (the serra foot moves along z), which then holds
+	 * no river, so every flow node's water reaches the sea.
+	 */
+	#downstream(node: RiverNode): boolean {
 		const { i, j } = node;
 		const { feeder, waterfall } = RESERVE_RIVER;
 		if (this.mode === 'pinned' && i === feeder.i && j === feeder.j) {
 			node.di = waterfall.i;
 			node.dj = waterfall.j;
-			return;
+			return true;
 		}
 		const h = cellHash(i, j, this.#layers.river ^ 0x68e31da4);
 		const first = (h % 3) - 1;
 		const turn = (h >>> 8) & 1 ? 1 : -1;
+		let blocked = 0;
 		for (const delta of [first, first === 0 ? turn : 0, first === 0 ? -turn : -first]) {
 			if (this.#accepts(i - 1, j + delta, i)) {
 				node.di = i - 1;
 				node.dj = j + delta;
-				return;
+				return true;
 			}
+			if (reserveCell(i - 1, j + delta)) blocked++;
 		}
+		if (blocked < 3) return false;
 		node.di = i;
 		node.dj = j + (j < 1 ? -1 : j > 1 ? 1 : turn);
+		return true;
 	}
 
 	/** The node with its flow accumulation and water surface. */

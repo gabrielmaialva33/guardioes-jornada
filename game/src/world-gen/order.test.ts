@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../survival/random.ts';
-import { generateArea, generateChunk } from './chunk.ts';
 import { chunkChecksum } from './checksum.ts';
+import { clearWorldGenCaches, generateArea, generateChunk } from './chunk.ts';
 import { CHUNK_SIZE, WORLD_SEED } from './constants.ts';
-import { clearRiverCaches } from './rivers.ts';
 
 const CHUNKS: [number, number][] = [];
 for (let cz = -3; cz <= 6; cz++) for (let cx = -2; cx <= 8; cx++) CHUNKS.push([cx, cz]);
@@ -17,11 +16,11 @@ function checksums(order: [number, number][], seed: number): Map<string, number>
 
 describe('generation order', () => {
 	it('never changes a chunk', () => {
-		clearRiverCaches();
+		clearWorldGenCaches();
 		const forward = checksums(CHUNKS, WORLD_SEED);
-		clearRiverCaches();
+		clearWorldGenCaches();
 		const backward = checksums([...CHUNKS].reverse(), WORLD_SEED);
-		clearRiverCaches();
+		clearWorldGenCaches();
 		const rng = new Rng(7);
 		const shuffled = [...CHUNKS];
 		for (let k = shuffled.length - 1; k > 0; k--) {

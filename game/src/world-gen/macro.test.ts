@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RELIEF } from '../level/layout.ts';
+import { clamp, smoothstep } from '../survival/noise.ts';
 import { WADE_LIMIT, WATER_LEVEL } from '../survival/types.ts';
 import { layerSeeds, WORLD_SEED } from './constants.ts';
 import {
@@ -7,6 +8,7 @@ import {
 	COSTAO_FOOT,
 	CREST_S,
 	coastX,
+	farHeights,
 	macroFields,
 	macroHeight,
 	newMacroPoint,
@@ -26,22 +28,42 @@ describe('macro relief', () => {
 		}
 	});
 
-	it('reproduces LEVEL.md §3 there: restinga, baixada, encosta, then the serra', () => {
+	it("reproduces LEVEL.md §3 there: level/build.ts's relief without its noise, then the serra", () => {
+		const R = RELIEF;
+		/** level/build.ts shapeRelief at noise 0 and away from the map edges. */
+		const reserva = (i: number) => {
+			const baixada = clamp(
+				R.baixadaFrom + (R.baixadaTo - R.baixadaFrom) * smoothstep(R.restingaX, R.encostaFromX, i),
+				R.baixadaMin,
+				R.baixadaMax
+			);
+			let h = R.restingaY + (baixada - R.restingaY) * smoothstep(R.restingaX - 1, R.restingaX + 4, i);
+			const encosta =
+				i <= R.encostaToX
+					? R.encostaFromY +
+						((R.encostaToY - R.encostaFromY) * clamp(i - R.encostaFromX, 0, R.encostaToX - R.encostaFromX)) /
+							(R.encostaToX - R.encostaFromX)
+					: R.encostaToY + (R.eastY - R.encostaToY) * smoothstep(R.encostaToX, R.serraFromX, i);
+			h += (encosta - h) * smoothstep(R.encostaFromX - 6, R.encostaFromX + 2, i);
+			return h;
+		};
 		const h = (x: number) => macroHeight(x, COSTAO_FOOT);
-		for (let x = 0; x <= 8; x++) expect(h(x)).toBe(RELIEF.restingaY);
+		for (let x = 0; x <= R.serraFromX; x += 0.5) expect(h(x), `x ${x}`).toBeCloseTo(reserva(x), 12);
+		for (let x = 0; x <= 8; x++) expect(h(x)).toBe(R.restingaY);
 		for (let x = 14; x <= 104; x++) {
-			expect(h(x)).toBeGreaterThanOrEqual(RELIEF.baixadaFrom);
-			expect(h(x)).toBeLessThanOrEqual(RELIEF.baixadaTo);
+			expect(h(x)).toBeGreaterThanOrEqual(R.baixadaFrom);
+			expect(h(x)).toBeLessThanOrEqual(R.baixadaTo);
 		}
-		expect(h(RELIEF.encostaFromX)).toBeCloseTo(RELIEF.encostaFromY, 9);
 		expect(h(118)).toBeCloseTo(4.5, 9);
-		expect(h(RELIEF.encostaToX)).toBeCloseTo(RELIEF.encostaToY, 9);
-		expect(h(RELIEF.serraFromX)).toBeCloseTo(7.5, 9);
-		for (let x = 137; x <= 160; x++) {
-			expect(h(x)).toBeGreaterThanOrEqual(RELIEF.serraFromY);
-			expect(h(x)).toBeLessThanOrEqual(RELIEF.serraToY);
+		expect(h(R.encostaToX)).toBeCloseTo(R.encostaToY, 9);
+		expect(h(R.serraFromX)).toBeCloseTo(7.5, 9);
+		// The serra edge, LEVEL.md §3's 10–18 (the Reserva's massif tops it at 11–18), then on up.
+		for (let x = 136; x <= 160; x++) {
+			expect(h(x)).toBeGreaterThanOrEqual(10);
+			expect(h(x)).toBeLessThanOrEqual(R.serraToY);
 		}
 		expect(h(160)).toBeGreaterThan(17);
+		expect(h(250)).toBeGreaterThan(24);
 		for (let x = -200; x < -12; x++) expect(h(x)).toBeLessThan(WATER_LEVEL);
 	});
 
@@ -112,5 +134,30 @@ describe('macro relief', () => {
 			samplePoint(x, z, coastX(z, layers), serraFoot(z, layers), fields, p);
 			expect(p.floor).toBeLessThanOrEqual(p.ground);
 		}
+	});
+
+	it('samples the horizon ring from the macro, cheaply, or with the detail', () => {
+		const cells = 50;
+		const step = 40;
+		const x0 = -300;
+		const z0 = 2000;
+		const far = farHeights(x0, z0, cells, step);
+		expect(far).toHaveLength((cells + 1) * (cells + 1));
+		const p = newMacroPoint();
+		const detailed = farHeights(x0, z0, cells, step, WORLD_SEED, true);
+		for (let j = 0; j <= cells; j += 7)
+			for (let i = 0; i <= cells; i += 5) {
+				const x = x0 + i * step;
+				const z = z0 + j * step;
+				const coast = coastX(z, layers);
+				const foot = serraFoot(z, layers);
+				expect(far[j * (cells + 1) + i]).toBe(Math.fround(macroHeight(x - coast, foot)));
+				expect(detailed[j * (cells + 1) + i]).toBe(
+					Math.fround(samplePoint(x, z, coast, foot, fields, p).ground)
+				);
+			}
+		// Sea to the west, the serra and planalto to the east.
+		expect(far[25 * (cells + 1)]).toBeLessThan(WATER_LEVEL);
+		expect(far[25 * (cells + 1) + cells]).toBeGreaterThan(40);
 	});
 });

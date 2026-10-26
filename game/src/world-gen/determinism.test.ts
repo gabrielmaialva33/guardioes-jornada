@@ -46,8 +46,10 @@ describe('world-gen determinism', () => {
 				'macro.ts',
 				'math.ts',
 				'protocol.ts',
+				'reserva-edge.ts',
 				'rivers.ts',
 				'scatter.ts',
+				'stitch.ts',
 				'worker.ts'
 			])
 		);

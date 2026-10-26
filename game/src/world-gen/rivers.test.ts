@@ -10,8 +10,8 @@ import {
 	RIVER_FLAG,
 	RIVER_PIECE_SHIFT,
 	RIVER_PIECES,
-	type RiverSegment,
 	RiverLattice,
+	type RiverSegment,
 	riverColumn,
 	riverRow
 } from './rivers.ts';

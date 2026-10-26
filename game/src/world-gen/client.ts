@@ -104,7 +104,7 @@ export class ChunkCache {
 
 export interface ClientOptions {
 	seed?: number;
-	/** Cache cap in bytes (default 16 MiB, ~450 chunks). */
+	/** Cache cap in bytes (default 16 MiB, ~490 chunks of ~34 KB). */
 	byteCap?: number;
 }
 

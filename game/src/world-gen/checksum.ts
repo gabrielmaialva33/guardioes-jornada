@@ -67,7 +67,11 @@ class Hasher {
 	}
 }
 
-/** Checksum of everything in a chunk but its `checksum` field. */
+/**
+ * Checksum of everything in a chunk but its `checksum` and its `apron`: the
+ * apron repeats the neighbours' heights (borders.test.ts checks it bit for
+ * bit), so it adds no generator path of its own.
+ */
 export function chunkChecksum(c: WorldChunk): number {
 	const hasher = new Hasher();
 	for (const v of [c.macroVersion, c.detailVersion, c.seed, c.cx, c.cz, c.x0, c.z0, c.size, c.grid])

@@ -47,6 +47,7 @@ import {
 	TREE_SCALE,
 	WOODED
 } from './biomes.ts';
+import { chunkChecksum } from './checksum.ts';
 import {
 	CHUNK_SIDE,
 	CHUNK_SIZE,
@@ -57,16 +58,32 @@ import {
 	MACRO_VERSION,
 	WORLD_SEED
 } from './constants.ts';
-import { chunkChecksum } from './checksum.ts';
-import { coastX, macroFields, newMacroPoint, samplePoint, serraFoot } from './macro.ts';
-import { CARVE_FAR, carve, newRiverSample, type RiverSegment, riverLattice } from './rivers.ts';
+import { clearMacroCaches, coastX, macroFields, newMacroPoint, samplePoint, serraFoot } from './macro.ts';
+import {
+	CARVE_FAR,
+	carve,
+	clearRiverCaches,
+	newRiverSample,
+	type RiverSegment,
+	riverLattice
+} from './rivers.ts';
 import { blueNoise } from './scatter.ts';
+import { clearStitchCaches, type EastStitch, eastStitch, touchesEastBand } from './stitch.ts';
 
 /** Floats per river segment in WorldChunk.rivers: ax, az, aWater, bx, bz, bWater, halfWidth, depth. */
 export const RIVER_STRIDE = 8;
+/**
+ * The apron: the ring of heights one unit outside a chunk's 41 × 41 grid,
+ * 43 + 43 + 41 + 41 = 168 floats in this order: the north row (z0 − 1) and
+ * the south row (z0 + 41), each from x0 − 1 to x0 + 41, then the west column
+ * (x0 − 1) and the east column (x0 + 41), each from z0 to z0 + 40. They are
+ * the neighbours' heights bit for bit, so normals are seamless without them.
+ */
+export const APRON_LENGTH = 4 * CHUNK_SIDE + 4;
 /** Minimum distance between trees and rocks (one layer, so they never overlap), and between decorations. */
 export const TREE_SPACING = 3.8;
-export const DECO_SPACING = 2.6;
+/** Denser than survival's 2.6 u grid spacing: the hash-priority scatter keeps about half of a full packing. */
+export const DECO_SPACING = 2.2;
 /** Decorations keep this far from any tree-layer point. */
 const DECO_CLEARANCE = 1;
 /** Steepest ground a tree grows on (survival's). */
@@ -106,6 +123,14 @@ export interface WorldChunk {
 	waterLevel: number;
 	/** grid² ground heights, row-major: index j · grid + i is (x0 + i, z0 + j). Edges equal the neighbours'. */
 	heights: Float32Array;
+	/**
+	 * APRON_LENGTH heights around the grid (layout at APRON_LENGTH; read it with
+	 * heightWithApron), equal to the neighbour chunks' bit for bit. Next to the
+	 * Reserva: its own heights on the stitched east side (x = 159), the
+	 * procedural ground on the sides still closed. Not in the checksum: it only
+	 * repeats the neighbours' heights, which borders.test.ts checks.
+	 */
+	apron: Float32Array;
 	/** grid² survival ZONE values (biomes.ts BIOME_ZONE, or river). */
 	zones: Uint8Array;
 	/** grid² survival FLAG bits (walkable, river, cleared, forest). */
@@ -161,6 +186,7 @@ export function generateChunk(cx: number, cz: number, seed: number = WORLD_SEED)
 	const z0 = cz * CHUNK_SIZE;
 	if (isHandMade(cx, cz)) return finish(handMadeChunk(cx, cz, seed));
 	const area = generateArea(x0, z0, CHUNK_SIZE, CHUNK_SIZE, seed);
+	const apron = apronOf(x0, z0, seed, area.segments);
 	const rivers = area.segments.filter((g) => touches(g, x0, z0, x0 + CHUNK_SIZE, z0 + CHUNK_SIZE));
 	const river = new Float32Array(rivers.length * RIVER_STRIDE);
 	rivers.forEach((g, k) => {
@@ -179,6 +205,7 @@ export function generateChunk(cx: number, cz: number, seed: number = WORLD_SEED)
 		handMade: false,
 		waterLevel: WATER_LEVEL,
 		heights: area.heights,
+		apron,
 		zones: area.zones,
 		flags: area.flags,
 		biome: area.biome,
@@ -225,6 +252,7 @@ function handMadeChunk(cx: number, cz: number, seed: number): WorldChunk {
 		handMade: true,
 		waterLevel: WATER_LEVEL,
 		heights: new Float32Array(0),
+		apron: new Float32Array(0),
 		zones: new Uint8Array(0),
 		flags: new Uint8Array(0),
 		biome: new Uint8Array(0),
@@ -252,12 +280,25 @@ function handMadeChunk(cx: number, cz: number, seed: number): WorldChunk {
 	};
 }
 
+export interface AreaOptions {
+	/** Apply the east stitch band (default true); false gives the bare procedural ground, for tests. */
+	stitch?: boolean;
+}
+
 /**
  * Everything in [x0, x0 + width] × [z0, z0 + depth] (vertices on the closed
  * rectangle, placements in the half-open one). Generation order, the size of
  * the rectangle and earlier calls never change a value.
  */
-export function generateArea(x0: number, z0: number, width: number, depth: number, seed: number): Area {
+export function generateArea(
+	x0: number,
+	z0: number,
+	width: number,
+	depth: number,
+	seed: number,
+	options: AreaOptions = {}
+): Area {
+	const stitch = bandFor(x0, z0, x0 + width, z0 + depth, seed, options.stitch !== false);
 	const fields = macroFields(seed);
 	const layers = fields.layers;
 	const sideX = width + 1;
@@ -286,7 +327,7 @@ export function generateArea(x0: number, z0: number, width: number, depth: numbe
 			const q = j * sideX + i;
 			samplePoint(x, z, coast, foot, fields, p);
 			carve(x, z, p.ground, segments, r);
-			const h = r.height;
+			const h = stitched(stitch, x, z, r.height);
 			heights[q] = h;
 			wetness[q] = r.wet;
 			const exposure = needsExposure(p.s) ? exposureOf(fields.exposure.at(x, z), p.s) : 0;
@@ -311,8 +352,8 @@ export function generateArea(x0: number, z0: number, width: number, depth: numbe
 		TREE_SPACING,
 		x0 - DECO_CLEARANCE,
 		z0 - DECO_CLEARANCE,
-		x1 + 1,
-		z1 + 1
+		x1 + DECO_CLEARANCE,
+		z1 + DECO_CLEARANCE
 	);
 	const trees: Item[] = [];
 	const rocks: Item[] = [];
@@ -388,6 +429,68 @@ export function generateArea(x0: number, z0: number, width: number, depth: numbe
 		rocks: pack(ROCK_KINDS, rocks, heights, sideX, x0, z0),
 		decorations: pack(DECORATION_KINDS, decorations, heights, sideX, x0, z0)
 	};
+}
+
+/** The east band if the rectangle (grown by the apron) can touch it. */
+function bandFor(
+	x0: number,
+	z0: number,
+	x1: number,
+	z1: number,
+	seed: number,
+	on: boolean
+): EastStitch | null {
+	return on && touchesEastBand(x0 - 1, z0 - 1, x1 + 1, z1 + 1) ? eastStitch(seed) : null;
+}
+
+/** The band's height where it decides the vertex, the procedural ground elsewhere. */
+function stitched(stitch: EastStitch | null, x: number, z: number, ground: number): number {
+	if (!stitch) return ground;
+	const h = stitch.height(x, z);
+	return Number.isNaN(h) ? ground : h;
+}
+
+/** The apron ring of chunk (x0, z0): the same per-vertex pipeline as the grid. */
+function apronOf(x0: number, z0: number, seed: number, segments: readonly RiverSegment[]): Float32Array {
+	const fields = macroFields(seed);
+	const stitch = bandFor(x0, z0, x0 + CHUNK_SIZE, z0 + CHUNK_SIZE, seed, true);
+	const p = newMacroPoint();
+	const r = newRiverSample();
+	const out = new Float32Array(APRON_LENGTH);
+	let k = 0;
+	const put = (x: number, z: number, coast: number, foot: number) => {
+		samplePoint(x, z, coast, foot, fields, p);
+		out[k++] = stitched(stitch, x, z, carve(x, z, p.ground, segments, r).height);
+	};
+	for (const z of [z0 - 1, z0 + CHUNK_SIDE]) {
+		const coast = coastX(z, fields.layers);
+		const foot = serraFoot(z, fields.layers);
+		for (let x = x0 - 1; x <= x0 + CHUNK_SIDE; x++) put(x, z, coast, foot);
+	}
+	for (const x of [x0 - 1, x0 + CHUNK_SIDE])
+		for (let z = z0; z < z0 + CHUNK_SIDE; z++)
+			put(x, z, coastX(z, fields.layers), serraFoot(z, fields.layers));
+	return out;
+}
+
+/**
+ * Height of vertex (i, j) of a chunk, i and j in −1..41: the grid inside,
+ * the apron on the ring (for normals by central differences on every vertex).
+ */
+export function heightWithApron(chunk: WorldChunk, i: number, j: number): number {
+	const side = CHUNK_SIDE;
+	if (i >= 0 && i < side && j >= 0 && j < side) return chunk.heights[j * side + i];
+	if (j === -1) return chunk.apron[i + 1];
+	if (j === side) return chunk.apron[side + 2 + i + 1];
+	if (i === -1) return chunk.apron[2 * (side + 2) + j];
+	return chunk.apron[2 * (side + 2) + side + j];
+}
+
+/** Forgets every memo (river nodes, macro fields, the stitch band): results never depend on them. */
+export function clearWorldGenCaches() {
+	clearRiverCaches();
+	clearMacroCaches();
+	clearStitchCaches();
 }
 
 /**

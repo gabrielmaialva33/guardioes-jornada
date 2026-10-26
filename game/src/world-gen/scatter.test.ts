@@ -45,9 +45,10 @@ describe('seamless scattering', () => {
 		const xs = whole.filter((_, k) => k % 3 === 0);
 		const zs = whole.filter((_, k) => k % 3 === 1);
 		expect(minDistance(xs, zs)).toBeGreaterThanOrEqual(r);
-		// About half the densest packing (f-mundo-infinito.md §3.5 measured 52%).
-		const packing = (160 * 120) / ((r * r * Math.sqrt(3)) / 2);
-		expect(xs.length / packing).toBeGreaterThan(0.4);
+		// About half as dense as Bridson's maximal sampling (f-mundo-infinito.md §3.5 measured 52%).
+		const bridson = poissonDisk(new Rng(seed), ox, oz, ox + 160, oz + 120, r).length / 2;
+		expect(xs.length / bridson).toBeGreaterThan(0.45);
+		expect(xs.length / bridson).toBeLessThan(0.65);
 	});
 
 	it('beats per-chunk Bridson, which breaks the spacing at the seams', () => {
@@ -77,10 +78,12 @@ describe('seamless scattering', () => {
 					const c = generateChunk(cx + a, cz + b, WORLD_SEED);
 					for (const family of ['trees', 'rocks', 'decorations'] as const)
 						union[family].push(...items(c[family]));
-					for (const p of [c.trees, c.rocks])
-						for (let k = 0; k < p.count; k++) solid[0].push(p.x[k]), solid[1].push(p.z[k]);
-					for (let k = 0; k < c.decorations.count; k++)
-						deco[0].push(c.decorations.x[k]), deco[1].push(c.decorations.z[k]);
+					for (const p of [c.trees, c.rocks]) {
+						solid[0].push(...p.x);
+						solid[1].push(...p.z);
+					}
+					deco[0].push(...c.decorations.x);
+					deco[1].push(...c.decorations.z);
 				}
 			for (const family of ['trees', 'rocks', 'decorations'] as const) {
 				expect(union[family].sort(), family).toEqual(items(area[family]).sort());

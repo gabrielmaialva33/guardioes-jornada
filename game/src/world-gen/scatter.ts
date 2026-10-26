@@ -26,7 +26,8 @@ export function blueNoise(
 	z1: number,
 	out: number[] = []
 ): number[] {
-	const cell = r * 0.7071;
+	// r/√2: at most one point per cell. Math.sqrt is correctly rounded, so exact everywhere.
+	const cell = r * Math.sqrt(0.5);
 	// Candidates in cells farther than this can never be within r.
 	const reach = 2;
 	// One spare cell per side: a rounded x0 / cell must never skip a candidate just inside x0.

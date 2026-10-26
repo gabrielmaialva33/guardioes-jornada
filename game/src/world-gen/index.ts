@@ -12,7 +12,18 @@ export {
 	BIOMES,
 	type Biome
 } from './biomes.ts';
-export { type Area, generateArea, generateChunk, heightIn, RIVER_STRIDE, type WorldChunk } from './chunk.ts';
+export {
+	APRON_LENGTH,
+	type Area,
+	type AreaOptions,
+	clearWorldGenCaches,
+	generateArea,
+	generateChunk,
+	heightIn,
+	heightWithApron,
+	RIVER_STRIDE,
+	type WorldChunk
+} from './chunk.ts';
 export {
 	CHUNK_CELLS,
 	CHUNK_SIDE,
@@ -30,6 +41,7 @@ export {
 	COSTAO_FOOT,
 	CREST_S,
 	coastX,
+	farHeights,
 	macroHeight,
 	PLANALTO_S,
 	serraFoot
@@ -42,3 +54,4 @@ export {
 	riverLattice,
 	STREAM_ACC
 } from './rivers.ts';
+export { BAND_SLOPE, eastWeight } from './stitch.ts';

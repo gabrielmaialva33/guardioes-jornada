@@ -15,7 +15,14 @@
  */
 import { clamp, fbm, valueNoise } from '../survival/noise.ts';
 import { WATER_LEVEL } from '../survival/types.ts';
-import { type LayerSeeds, layerSeeds, outsideReserveZ, reserveDistance, STITCH_BAND } from './constants.ts';
+import {
+	type LayerSeeds,
+	layerSeeds,
+	outsideReserveZ,
+	reserveDistance,
+	STITCH_BAND,
+	WORLD_SEED
+} from './constants.ts';
 import { CoarseField, smooth as smoothstep } from './math.ts';
 
 /** Coast-to-serra-foot distance at the Reserva and at the costões. */
@@ -69,6 +76,10 @@ export class MacroFields {
 
 const fieldsBySeed = new Map<number, MacroFields>();
 
+export function clearMacroCaches() {
+	fieldsBySeed.clear();
+}
+
 /** The shared fields of a seed. */
 export function macroFields(seed: number): MacroFields {
 	let fields = fieldsBySeed.get(seed);
@@ -98,13 +109,17 @@ export function serraFoot(z: number, layers: LayerSeeds): number {
 	return COSTAO_FOOT + (BAIXADA_FOOT - COSTAO_FOOT) * t * a;
 }
 
-/** The serra above the encosta's 7.5 u, by distance s past the foot: 11 at s 4–10, 18 at 30, 24 at 60, 44 at ~170, crest 52, planalto 44. */
+/**
+ * The serra above the encosta's 7.5 u, by distance s past the foot: 10 at s 4,
+ * just under 18 at 28 (the Reserva's east edge, x 160), 24 at 60, 44 at ~170,
+ * the crest's 52 at 240, then the planalto's 44.
+ */
 export function serraRise(s: number): number {
 	if (s <= 0) return 0;
 	return (
 		3.5 * smoothstep(0, 6, s) +
 		7 * smoothstep(4, 30, s) +
-		6 * smoothstep(25, 60, s) +
+		6 * smoothstep(28, 60, s) +
 		20 * smoothstep(55, 175, s) +
 		8 * smoothstep(160, CREST_S, s) -
 		8 * smoothstep(CREST_S + 10, CREST_S + 100, s)
@@ -240,4 +255,38 @@ export function samplePoint(
 export function riverWaterTarget(p: MacroPoint): number {
 	if (p.e < 0) return WATER_LEVEL;
 	return WATER_LEVEL + Math.min(1, 0.0025 * p.e) + 0.85 * Math.max(0, p.floor - 1.5);
+}
+
+/**
+ * Heights for the horizon ring (ART.md §5, f-mundo-infinito.md §4.10): a
+ * (cells + 1)² grid from (x0, z0) every `step` u, row-major. By default the
+ * macro height alone (no warp, no detail, no rivers): a closed form, about
+ * 0.1 µs a sample, which the fog makes indistinguishable from the chunks'
+ * ground. With `detail`, the chunks' uncarved ground (warp, hills, ridges,
+ * morros), several times dearer. The Reserva and its band read as the macro.
+ */
+export function farHeights(
+	x0: number,
+	z0: number,
+	cells: number,
+	step: number,
+	seed: number = WORLD_SEED,
+	detail = false
+): Float32Array {
+	const fields = macroFields(seed);
+	const side = cells + 1;
+	const out = new Float32Array(side * side);
+	const p = newMacroPoint();
+	for (let j = 0; j < side; j++) {
+		const z = z0 + j * step;
+		const coast = coastX(z, fields.layers);
+		const foot = serraFoot(z, fields.layers);
+		for (let i = 0; i < side; i++) {
+			const x = x0 + i * step;
+			out[j * side + i] = detail
+				? samplePoint(x, z, coast, foot, fields, p).ground
+				: macroHeight(x - coast, foot);
+		}
+	}
+	return out;
 }

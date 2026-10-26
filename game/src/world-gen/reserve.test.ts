@@ -3,14 +3,10 @@ import { buildStoryWorld } from '../level/build.ts';
 import { STORY_SEED } from '../level/layout.ts';
 import { subSeed } from '../survival/random.ts';
 import { BLOCK_SIZE, WORLD_SIZE } from '../survival/types.ts';
-import { generateChunk } from './chunk.ts';
 import { chunkChecksum } from './checksum.ts';
+import { generateChunk } from './chunk.ts';
 import { CHUNK_SIZE, isHandMade, RESERVE, WORLD_SEED } from './constants.ts';
 import { chunkBytes } from './protocol.ts';
-
-/** level/build.test.ts's pins: generating the endless world must leave the Reserva exactly as it is. */
-const GOLDEN_WORLD = 0x58158de7;
-const GOLDEN_LEVEL = 0x4e8295c1;
 
 describe('the hand-made Reserva', () => {
 	it('is chunks (0..3, 0..3), the level square', () => {
@@ -48,11 +44,12 @@ describe('the hand-made Reserva', () => {
 			}
 	});
 
-	it('keeps its golden checksums after the endless world is generated around it', () => {
+	it('comes out of level/build.ts the same after the endless world is generated around it', () => {
+		const before = buildStoryWorld();
 		for (let cz = -2; cz <= 5; cz++) for (let cx = -2; cx <= 5; cx++) generateChunk(cx, cz, WORLD_SEED);
-		const { world, level } = buildStoryWorld();
-		expect(world.checksum).toBe(GOLDEN_WORLD);
-		expect(level.checksum).toBe(GOLDEN_LEVEL);
+		const after = buildStoryWorld();
+		expect(after.world.checksum).toBe(before.world.checksum);
+		expect(after.level.checksum).toBe(before.level.checksum);
 	});
 
 	it("derives the world seed from the level's story seed", () => {

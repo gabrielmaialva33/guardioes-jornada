@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Rng } from '../survival/random.ts';
 import type { Placements } from '../survival/types.ts';
 import { BIOME_COUNT } from './biomes.ts';
-import { generateArea, generateChunk, RIVER_STRIDE, type WorldChunk } from './chunk.ts';
+import { generateArea, generateChunk, heightWithApron, RIVER_STRIDE, type WorldChunk } from './chunk.ts';
 import { CHUNK_SIDE, CHUNK_SIZE, isHandMade, WORLD_SEED } from './constants.ts';
 
 const S = CHUNK_SIDE;
@@ -68,6 +68,15 @@ describe('chunk borders', () => {
 				for (let w = 0; w < BIOME_COUNT; w++)
 					expect(a.biomeWeights[qa * BIOME_COUNT + w], at).toBe(b.biomeWeights[qb * BIOME_COUNT + w]);
 			}
+			// Each apron holds the other chunk's next row or column in.
+			for (let k = -1; k <= S; k++) {
+				const [ai, aj, bi, bj] = dir === 'east' ? [S, k, 1, k] : [k, S, k, 1];
+				const [bi2, bj2, ai2, aj2] = dir === 'east' ? [-1, k, S - 2, k] : [k, -1, k, S - 2];
+				if (k >= 0 && k < S) {
+					expect(bits(heightWithApron(a, ai, aj)), at).toBe(bits(heightWithApron(b, bi, bj)));
+					expect(bits(heightWithApron(b, bi2, bj2)), at).toBe(bits(heightWithApron(a, ai2, aj2)));
+				}
+			}
 			// The collision grid's shared edge too.
 			const C = CHUNK_SIZE / 2 + 1;
 			for (let k = 0; k < C; k++) {
@@ -109,6 +118,45 @@ describe('chunk borders', () => {
 				const union = [...placementsNear(a[family], near), ...placementsNear(b[family], near)].sort();
 				expect(union, `${cx},${cz} ${dir} ${family}`).toEqual(placementsNear(area[family], near));
 				expect(new Set(union).size).toBe(union.length);
+			}
+		}
+	});
+
+	it('give every chunk an apron equal to the ring of a bigger area, corners included', () => {
+		for (const [cx, cz] of [
+			[4, 1],
+			[4, -1],
+			[3, 4],
+			[5, 2],
+			[-1, 0],
+			[9, -6],
+			[-700, 1500]
+		]) {
+			const c = generateChunk(cx, cz, WORLD_SEED);
+			expect(c.apron).toHaveLength(168);
+			const area = generateArea(cx * CHUNK_SIZE - 1, cz * CHUNK_SIZE - 1, S + 1, S + 1, WORLD_SEED);
+			for (let j = -1; j <= S; j++)
+				for (let i = -1; i <= S; i++)
+					expect(bits(heightWithApron(c, i, j)), `${cx},${cz} (${i},${j})`).toBe(
+						bits(area.heights[(j + 1) * area.sideX + i + 1])
+					);
+		}
+	});
+
+	it('stay bit-identical through the east stitch band', () => {
+		const band: [number, number, 'east' | 'south'][] = [
+			[3, -1, 'east'],
+			[3, 4, 'east'],
+			[4, -2, 'south'],
+			[4, 4, 'south']
+		];
+		for (let cz = -1; cz <= 3; cz++) band.push([4, cz, 'east'], [4, cz, 'south']);
+		for (const [cx, cz, dir] of band) {
+			const a = generateChunk(cx, cz, WORLD_SEED);
+			const b = generateChunk(dir === 'east' ? cx + 1 : cx, dir === 'south' ? cz + 1 : cz, WORLD_SEED);
+			for (let k = 0; k < S; k++) {
+				const [qa, qb] = edge(dir, k);
+				expect(bits(a.heights[qa]), `${cx},${cz} ${dir}`).toBe(bits(b.heights[qb]));
 			}
 		}
 	});
