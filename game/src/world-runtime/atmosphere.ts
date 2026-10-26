@@ -262,6 +262,7 @@ export function createAtmosphere(size: number) {
 				sunMaterial.uniforms.uSun.value.set(light.sun);
 				cloudMaterial.uniforms.uTint.value.set(day === 'night' ? '#486477' : '#ffffff');
 				mountains.material.color.set(day === 'night' ? '#426250' : '#ffffff');
+				carpetMesh.material.color.set(day === 'night' ? '#486454' : '#ffffff');
 				sea.material.color.set(
 					day === 'night'
 						? '#294d50'
