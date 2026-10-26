@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { T, useStage, useTask, useThrelte } from '@threlte/core';
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import { Color, Group, PerspectiveCamera, Ray, Vector3 } from 'three';
+	import { Group, PerspectiveCamera, Ray, Vector3 } from 'three';
 	import { golden } from './golden.ts';
 	import { lighting } from '../render/stylized.ts';
 	import { LIGHT } from '../style/palette.ts';
@@ -199,7 +199,7 @@
 			proxyDraws: proxies.object.children.length,
 			floraDraws: forest?.pools.drawCalls ?? 0,
 			floraInstances: environment.placements,
-			qualityReason: choice.reason,
+			qualityReason: golden.enabled ? 'golden-forced' : choice.reason,
 			shadowRenders: shadows.renders,
 			fogNear: fogSettings(quality).near,
 			fogFar: camera.far,
