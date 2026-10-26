@@ -5,7 +5,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 
-const output = join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/controls-v2');
+const output =
+	process.env.GAME_CONTROLS_DIR ?? join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/controls-v2');
+const origin = process.env.GAME_MEASURE_URL ?? 'http://localhost:5196/';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
 	channel: 'chrome',
@@ -16,7 +18,8 @@ const results: unknown[] = [];
 try {
 	for (const viewport of [
 		{ width: 915, height: 412 },
-		{ width: 412, height: 915 }
+		{ width: 412, height: 915 },
+		{ width: 360, height: 800 }
 	]) {
 		const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true });
 		await context.routeWebSocket('**', (socket) => socket.onMessage(() => {}));
@@ -26,7 +29,7 @@ try {
 		page.on('console', (m) => {
 			if (m.type() === 'error') errors.push(m.text());
 		});
-		await page.goto('http://localhost:5196/?debug');
+		await page.goto(`${origin}?debug`);
 		if (viewport.height > viewport.width)
 			await page.getByRole('button', { name: 'Jogar assim mesmo' }).click();
 		await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
@@ -61,11 +64,12 @@ try {
 		const top = await page.locator('.top-bar button').evaluateAll((nodes) =>
 			nodes.map((n) => {
 				const r = n.getBoundingClientRect();
-				return { w: r.width, h: r.height, y: r.y };
+				return { w: r.width, h: r.height, y: r.y, x: r.x, right: r.right };
 			})
 		);
 		assert.equal(top.length, 7);
 		assert.ok(top.every((r) => r.w >= 44 && r.h >= 44 && r.y < 60));
+		assert.ok(top.every((r) => r.x >= 0 && r.right <= viewport.width));
 		await page.getByRole('button', { name: 'Som e controles', exact: true }).click();
 		await page.getByRole('checkbox', { name: 'Modo canhoto' }).check();
 		await page.getByRole('checkbox', { name: 'Botões maiores' }).check();
@@ -96,7 +100,7 @@ try {
 	});
 	await context.routeWebSocket('**', (s) => s.onMessage(() => {}));
 	const page = await context.newPage();
-	await page.goto('http://localhost:5196/?debug&pose=mirante');
+	await page.goto(`${origin}?debug&pose=mirante`);
 	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
 	await page.waitForTimeout(400);
 	const canopy = await page.evaluate(() => globalThis.__gameDebug?.());

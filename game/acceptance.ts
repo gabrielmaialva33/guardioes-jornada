@@ -440,14 +440,28 @@ try {
 	result.grayboxAtSummit = await page.evaluate(() => globalThis.__gameDebug?.());
 	assert.ok(await page.evaluate(() => Number(localStorage.getItem('guardioes-secret-badge')) > 0));
 	await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
-	assert.equal(await page.locator('.presets .preset').count(), 18);
-	assert.equal(await page.locator('.chooser canvas').count(), 0);
+	assert.equal(
+		await page.getByRole('radiogroup', { name: 'Visuais prontos' }).getByRole('radio').count(),
+		18
+	);
+	// The avatar editor's live preview: one canvas with a WebGL context of its own, force-lost on close.
+	assert.equal(await page.locator('.editor canvas.view').count(), 1);
 	await page.getByRole('tab', { name: 'Skins da Kenney', exact: true }).click();
-	await page.getByRole('button', { name: 'Skin da Kenney r', exact: true }).click();
+	await page.getByRole('radio', { name: 'Skin R', exact: true }).click();
 	await page.getByRole('button', { name: 'Usar este personagem', exact: true }).click();
 	await page.getByRole('dialog').waitFor({ state: 'hidden' });
 	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarStyle), 'kenney');
-	result.avatarChooser = { presets: 18, previewCanvases: 0, savedSkin: 'r' };
+	const editorContexts = await page.evaluate(() => {
+		const m = (window as unknown as { __packMetrics: { contexts: number; maxContexts: number } })
+			.__packMetrics;
+		const seen = { contexts: m.contexts, maxContexts: m.maxContexts };
+		// The lifecycle cycles below keep checking one context at a time for the game itself.
+		m.maxContexts = m.contexts;
+		return seen;
+	});
+	assert.equal(editorContexts.contexts, 1);
+	assert.ok(editorContexts.maxContexts <= 2);
+	result.avatarChooser = { presets: 18, previewCanvases: 1, savedSkin: 'r', editorContexts };
 
 	await page.getByRole('button', { name: 'Voltar à jornada', exact: true }).click();
 	await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
