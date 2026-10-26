@@ -202,10 +202,10 @@ export class StoryGame {
 		};
 		const iara = this.level.landmarks.find((l) => l.kind === 'npc-iara');
 		if (iara) offer('iara', 'Falar com Iara', iara, 3);
-		if (!this.data.started) return candidates[0] ?? null;
-		if (this.companion) offer('pet', 'Fazer carinho no mico', this.companion, 2);
 		if (this.#inside('mirante', feet) && Math.abs(feet.y - this.level.mirante.y) < 0.3)
 			offer('binoculars', 'Observar a reserva', this.level.mirante, 4);
+		if (!this.data.started) return candidates[0] ?? null;
+		if (this.companion) offer('pet', 'Fazer carinho no mico', this.companion, 2);
 		for (const c of this.level.collectibles) {
 			if (c.kind === 'jucara-fruit' && !this.data.fruits.includes(c.id))
 				offer(c.id, 'Colher sementes de juçara', c, c.radius + 0.35);
