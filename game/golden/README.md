@@ -11,6 +11,7 @@ change, compared against the last approved baseline, measured, and laid next to 
 | `sheet.ts`        | Per pose: `before \| after \| ref 1 \| ref 2`, plus one page per configuration                                    |
 | `lib.ts`          | Shared paths, argument parsing, ImageMagick calls and the image metrics                                           |
 | `avatar-sheet.ts` | Contact sheet of the avatar's contexts and gestures (P10), 4 phases each, real `avatar.glb` in Chrome; no server  |
+| `loading-sheet.ts` | Loading screen (P11) at 0/40/90 % on phone portrait, landscape and desktop, error states, reduced motion, layout checks; no server |
 
 No npm dependency beyond `@playwright/test` and `vite` (already in the repo); images go through the system `magick` (7.x).
 Playwright's bundled browsers are not needed: the scripts launch `channel: 'chrome'`.
@@ -25,6 +26,7 @@ node game/golden/compare.ts --set after                 # vs baseline; exit 1 wh
 node game/golden/sheet.ts --after after                 # before | after | references
 node game/golden/compare.ts --approve after             # after becomes the baseline (old one goes to history/)
 node game/golden/avatar-sheet.ts                        # sheets/avatar/avatar-p10.png (needs no dev server)
+node game/golden/loading-sheet.ts                       # sheets/loading/*.png + checks.json (needs no dev server)
 ```
 
 Useful options:
