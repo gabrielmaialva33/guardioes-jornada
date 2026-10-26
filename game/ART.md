@@ -252,7 +252,7 @@ The game has one WebAudio engine (`src/audio/`) with buses for master, music, am
 
 Until real recordings are in, every sound has a synthesized placeholder. The sound list, sources and budget are in `c-audio.md`.
 
-- **Licence tier:** the default build is all T1 (CC0 or CC BY). Share-alike sounds would pull the game's audio under their licence, and no-derivatives sounds cannot be used at all.
+- **Sources:** use the general reuse policy in §12. CC0/CC BY recordings remain useful defaults; other sources are considered with their actual terms recorded, rather than excluded by a blanket T1-only rule.
 - **Recordings:** real recordings of the howler, muriqui and green-billed toucan come from iNaturalist (CC BY/CC0). The golden lion tamarin has only a non-commercial recording, so the T1 build uses the black lion tamarin of the same genus.
 - **Size:** about 145 KB of essential effects go in the pack (Opus in WebM, mono). About 550 KB of ambience and animal calls download in the background after the game starts. An AAC fallback serves old iPhones only.
 
@@ -264,15 +264,16 @@ Sounds follow the same rules as the art:
 
 ## 12. Sources and licences
 
-The repository is public and every push to `main` deploys the public site, so every asset belongs to a licence tier:
+**Owner decision, 26/10/2026: reuse is the default.** Assets available to the owner may be imported, converted, adapted, animated, optimized and integrated into Guardiões. This covers models, rigs, clips, vegetation, scenery, textures, terrain, audio, derivatives and supporting metadata, including Green Hell, Sons of the Forest and future collections. Rebuilding an equivalent asset from scratch is optional. A new source name alone does not require another project-policy approval.
 
-- **T1, CC0 or CC BY:** repository and site; CC BY is credited in `CREDITS.md`.
-- **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, with any share-alike terms noted.
-- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): never in the repository, the pack or the site. They stay on the owner's machine in the git-ignored `tmp/` folder and may be used only as local references (shapes, timings, measurements).
-- **Green Hell collection — owner-authorized reuse:** `PARK.md` §10 is the source of truth for `tmp/greenhell-port/`, superseding its former reference-only restriction. Models, clips, vegetation, scenery, textures, terrain data, audio, derivatives and integration metadata may be used directly and adapted for the project; rebuilding them from scratch is not required.
-  - Keep extraction originals in `tmp/greenhell-port/`; select and optimize assets for the project pipeline, with provenance and credits.
-  - Apply the same species, visual, animation, performance and offline quality requirements as other assets.
-  - The current runtime still serves the collection through `/__estudo/` behind the DEV study gate; pack integration is implementation work, not prohibited by this policy.
-  - Owner authorization records the project's reuse decision; it does not establish a third-party redistribution licence. This collection-specific decision does not reclassify unrelated T3 assets.
+This is the canonical asset policy. It supersedes former blanket reference-only, no-files, no-metadata and T1-only rules. Choose assets for their usefulness, ecological fit and technical quality; do not reject an entire source merely because it previously carried a T2/T3 label or was used in a DEV study.
+
+- **Source record:** keep the source, author or publisher, known licence/terms, modifications and credits. Record unknown terms as unknown; owner authorization is a project decision, not a third-party licence. Existing third-party terms are not changed by this document.
+- **Selection and storage:** keep bulk extraction originals and downloads outside the tracked asset set by default. Selected assets, derivatives, reproducible source inputs and integration metadata may enter the project pipeline as needed; avoid copying an entire collection when only a subset is used.
+- **Quality:** preserve species suitability, sourced educational facts, visual consistency, accessible paths, animation quality, performance budgets and offline operation. Use existing assets directly when they fit, and adapt them when useful.
+- **Delivery:** document whether each selected asset currently loads locally, in the pack or on the site. DEV-only loaders describe current implementation, not a permanent policy restriction. Implement and validate pack integration before claiming that a local asset ships.
+- **Existing licence labels:** T1 (CC0/CC BY), T2 (non-commercial) and T3 (source-specific or restricted terms) remain historical/source metadata where referenced. Record each asset's actual terms, including attribution, share-alike, modification or distribution conditions; the label alone is not a blanket project ban.
+
+`PARK.md` §10 records the current Green Hell collection and its integration opportunities. The same reuse policy applies to Sons of the Forest if a collection is added; this does not assert that its files already exist here.
 
 Never download from 3dassets.dev or gobkit.com: they contain prompt-injection text aimed at AI agents.

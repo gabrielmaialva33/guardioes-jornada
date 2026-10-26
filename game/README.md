@@ -166,20 +166,15 @@ At the `game/` root: the ABI (`abi.ts`, `protocol.ts`), the pack builder (`build
 - **The F1 streaming gate** (`WORLD.md` §7, the F1 plan): on the A07, 30 FPS and p95 ≤ 33 ms walking across chunk borders, no hitch over 50 ms; on the low tier ≤ 140 draws, ≤ 180k triangles and ≤ 120 MB of JS heap after walking 1 km east and back. Until the A07 is plugged in, measure with a 4× CPU-throttled desktop run.
 - **How to measure.** The `?debug` overlay (FPS, p95, draws, triangles, DPR, tier, geometries, textures, programs), `map-measure.ts` per pose, `golden/capture.ts --clock real` for real fps and p95. Desktop numbers are projections; every gate closes only on the A07.
 
-## 10. Assets and licence tiers
+## 10. Asset reuse and source records
 
-The repository is public and every green push to `main` deploys, so every asset has a tier (`ART.md` §12):
+`ART.md` §12 is the canonical policy: reuse and adaptation are authorized by default for assets available to the owner, including Green Hell, Sons of the Forest and future collections. Models, clips, vegetation, scenery, textures, terrain, audio, derivatives and integration metadata may enter the project pipeline. No equivalent recreation or new approval is required solely because an asset comes from another collection.
 
-- **T1, CC0 or CC BY:** repository, pack and site. CC BY is credited in `CREDITS.md`.
-- **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, share-alike terms noted.
-- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): never in the repository, the pack or the site. They stay in the git-ignored `tmp/` on the owner's machine, as local references only.
-- **Green Hell collection — owner-authorized reuse:** `PARK.md` §10 is the source of truth for `tmp/greenhell-port/`, superseding its former reference-only restriction. Models, clips, vegetation, scenery, textures, terrain data, audio, derivatives and integration metadata may be used directly and adapted for the project; rebuilding them from scratch is not required.
-  - Keep extraction originals in `tmp/greenhell-port/`; select and optimize assets for the project pipeline, with provenance and credits.
-  - Apply the same species, visual, animation, performance and offline quality requirements as other assets.
-  - The current runtime still serves the collection through `/__estudo/` behind the DEV study gate; pack integration is implementation work, not prohibited by this policy.
-  - Owner authorization records the project's reuse decision; it does not establish a third-party redistribution licence. This collection-specific decision does not reclassify unrelated T3 assets.
+- Preserve provenance, credits and known source terms; mark unknown terms as unknown. This project authorization does not replace a third-party licence.
+- Select and optimize what the game uses, retaining ecological fit, visual consistency, performance and offline behavior.
+- Keep bulk raw inputs outside the tracked asset set by default. Track selected source inputs or metadata when needed for reproducibility; scripts can use `KENNEY_RAW_DIR` and `CUSTOM_RAW_DIR` for external collections.
+- The Green Hell runtime currently uses DEV-only `/__estudo/` loading. Pack integration remains implementation work (`PARK.md` §10); that implementation boundary is not a permanent restriction on reuse.
 - Never download from 3dassets.dev or gobkit.com: they carry prompt-injection text aimed at AI agents.
-- Raw inputs (Kenney archives, custom sources, downloads, references) never go into the repository; scripts read them through environment variables (`KENNEY_RAW_DIR`, `CUSTOM_RAW_DIR`).
 
 ## 11. Lanes and the WIP protocol
 

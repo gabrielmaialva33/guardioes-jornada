@@ -174,11 +174,15 @@ The UI is a new panel opened from a HUD button. It is the seed of the "pegada Po
 
 Zones ship one at a time: Vale, then Manguezal, Copa and Praia. Each passes acceptance, the e2e for its missions and the golden poses before the next starts.
 
-## 10. Reusing the Green Hell collection
+## 10. Reusing asset collections
+
+The general policy in `ART.md` §12 authorizes direct reuse and adaptation of assets available to the owner, including Green Hell, Sons of the Forest and future collections. The concrete inventory below is Green Hell's; no Sons of the Forest inventory or integration is claimed here.
+
+### Green Hell collection
 
 **Owner decision, 26/10/2026:** use the extracted collection in `tmp/greenhell-port/` as a source of assets for Guardiões. Direct reuse and adaptation of models, animation clips, vegetation, scenery, textures, terrain data and audio are authorized by the project owner. Rebuilding an equivalent asset from scratch is optional, not a prerequisite for integration.
 
-This supersedes the project's former reference-only, no-files and no-metadata restrictions for this collection, including those in earlier study plans. Selected assets, derivatives and integration metadata may enter the project asset pipeline. Keep original extraction inputs in `tmp/greenhell-port/`; select and optimize what the game actually uses instead of copying the entire archive. Preserve source provenance and credits; this project decision does not establish a third-party redistribution licence.
+The general asset policy supersedes the project's former blanket reference-only, no-files and no-metadata restrictions, including those in earlier study plans. Selected assets, derivatives and integration metadata may enter the project asset pipeline. Keep original extraction inputs in `tmp/greenhell-port/`; select and optimize what the game actually uses instead of copying the entire archive. Preserve source provenance and credits; this project decision does not establish a third-party redistribution licence.
 
 | Collection material | Use in the park | Integration area |
 | --- | --- | --- |

@@ -95,13 +95,16 @@ Checked on foot contacts only, in this order: shallow water (`riverSurfaceAt` an
 - **Encoding:** 48 kHz mono; Opus `libopus -vbr on -application audio`, bitexact, no metadata (effects, UI and animals 32 kbps, beds 40–48 kbps, the P35 zone beds lower to stay in budget); AAC 48–64 kbps with `+faststart`.
 - **Processing:** cut, mono, optional high-pass (and low-pass for distant beds), raised-cosine fades, loudness by a numpy BS.1770-4 implementation (validated against ffmpeg `ebur128`), true peak by 4× oversampled FFT, loops folded tail onto head with an equal-power crossfade (forest 1.5 s, waterfall and chainsaw 1 s, river 0.5 s).
 - **Where it lives:** the Python pipeline (wave 1 recipes, the P35 zone-bed recipes, the DSP helpers, run through `uv run --no-project --with numpy --with scipy`) and the original downloads are **not in the repo yet**; only the encoded files are. Until it is moved under `game/scripts/`, re-encoding a sound means re-cutting it from the source and span listed in `CREDITS.md` with the settings above.
-- **Adding a sound:** pick a T1 source and re-read its licence on its page; cut and encode both codecs; drop the files into `src/assets/audio/`; add the id to `SOUNDS` (and a recipe, `SYNTH_VARIANTS` entry and trim in `synth.ts`); add the attribution row and update the BOM in `CREDITS.md`. `bank.test.ts` fails on a variant without both codecs, on an unused file in the folder, and on loop points on a non-loop.
+- **Adding a sound:** select a recording under `ART.md` §12 and record its source and known terms; cut and encode both codecs; drop the files into `src/assets/audio/`; add the id to `SOUNDS` (and a recipe, `SYNTH_VARIANTS` entry and trim in `synth.ts`); add the attribution row and update the BOM in `CREDITS.md`. `bank.test.ts` fails on a variant without both codecs, on an unused file in the folder, and on loop points on a non-loop.
 
-## 9. Licences
+## 9. Sources and licences
 
-- The default build is all T1: CC0 or CC BY, re-checked on each source page (Kenney `License.txt`, the Freesound licence link, the OpenGameArt field, the iNaturalist API `license_code` cross-checked with GBIF). CC BY 4.0 requires stating the modifications; `CREDITS.md` lists them per file.
-- No share-alike: CC 4.0 treats a sound synced to moving images as adapted material, so BY-SA or BY-NC-SA audio would pull the game's audio under that licence. No-derivatives (much of old xeno-canto) is unusable for the same reason. Non-commercial without SA would be T2 and needs the owner.
-- Never in the repo: Macaulay Library, Fonoteca Neotropical, BBC Sound Effects, the Sonniss GDC bundle, Pixabay audio (standalone redistribution), and anything from 3dassets.dev or gobkit.com. Original downloads stay outside the repository.
+Audio follows the general reuse policy in `ART.md` §12. CC0/CC BY sources are useful defaults, not the only eligible sources. Extracted recordings and other collections can be selected and adapted without a separate project-policy exception.
+
+- Keep per-file provenance, known terms, modifications and credits in `CREDITS.md`; preserve existing verified attributions.
+- Record attribution, non-commercial, share-alike, no-derivatives and redistribution conditions where applicable. Unknown terms stay unknown; project authorization does not change a source's licence.
+- Evaluate the actual recording and its terms instead of applying the former blanket source blacklist or T1-only rule. Keep bulk downloads outside the tracked asset set by default; selected pipeline inputs may be retained for reproducibility.
+- The security exclusion for 3dassets.dev and gobkit.com in `ART.md` §12 still applies.
 
 ## 10. Settings and save
 
