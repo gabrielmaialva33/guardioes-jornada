@@ -119,6 +119,10 @@ const head = new Vector3();
 const ray = new Ray();
 
 export class OrbitCamera {
+	mode: 'classic' | 'follow' = 'classic';
+	extraOcclusion: ((focus: Vec3, direction: Vec3, reach: number) => number | null) | undefined;
+	#sincePan = 3;
+	#hasPose = false;
 	yaw = 0;
 	pitch = INITIAL_PITCH;
 	/** Distance the zoom aims for, after the hyperbolic steps; the spring follows it. */
@@ -164,6 +168,7 @@ export class OrbitCamera {
 	 * dragging down looks down; touch slows its pitch away from the horizon.
 	 */
 	look(dx: number, dy: number, source: LookSource) {
+		if (dx !== 0 || dy !== 0) this.#sincePan = 0;
 		if (source === 'mouse') this.rotate(-dx * MOUSE_SENSITIVITY_X, -dy * MOUSE_SENSITIVITY_Y);
 		else {
 			const pitchDelta = -dy * TOUCH_SENSITIVITY_Y;
@@ -189,6 +194,12 @@ export class OrbitCamera {
 		const pose = this.pose;
 		const firstPerson = this.firstPerson;
 		const shiftLock = this.shiftLock && !firstPerson;
+		this.#sincePan += dt;
+		if (this.mode === 'follow' && this.#hasPose && !firstPerson && !shiftLock && this.#sincePan >= 2) {
+			const desired = Math.atan2(pose.position.x - feet.x, pose.position.z - feet.z),
+				delta = wrapAngle(desired - this.yaw);
+			if (Math.abs(delta) > 0.4 * dt) this.yaw = wrapAngle(this.yaw + delta);
+		}
 		const sinYaw = Math.sin(this.yaw);
 		const cosYaw = Math.cos(this.yaw);
 		const sinPitch = Math.sin(this.pitch);
@@ -214,6 +225,8 @@ export class OrbitCamera {
 		let limit = this.maxDistance;
 		if (world && this.zoomGoal > CAMERA_OPAQUE_DISTANCE)
 			limit = Math.min(limit, this.#clearance(world, lens, Math.max(this.#spring.x, this.zoomGoal)));
+		const foliageLimit = this.extraOcclusion?.(pose.focus, back, Math.max(this.#spring.x, this.zoomGoal));
+		if (foliageLimit !== undefined && foliageLimit !== null) limit = Math.min(limit, foliageLimit);
 		springStep(this.#spring, this.zoomGoal, ZOOM_STIFFNESS, dt);
 		if (this.#spring.x > limit) {
 			this.#spring.x = limit;
@@ -238,6 +251,7 @@ export class OrbitCamera {
 		pose.shiftLock = shiftLock;
 		pose.avatarOpacity = 1 - this.#transparency;
 		pose.bodyYaw = firstPerson || shiftLock ? wrapAngle(this.yaw + Math.PI) : null;
+		this.#hasPose = true;
 		return pose;
 	}
 

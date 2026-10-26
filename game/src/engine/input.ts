@@ -71,7 +71,17 @@ export interface Rect {
 }
 
 /** Roblox's touch layout for a screen size, for hit-testing here and drawing the HUD. */
+export interface TouchOptions {
+	leftHanded?: boolean;
+	largeButtons?: boolean;
+	insets?: { left: number; right: number; top: number; bottom: number };
+}
 export interface TouchLayout {
+	thumbstickSize: number;
+	ringSize: number;
+	outerRingSize: number;
+	ghostX: number;
+	ghostY: number;
 	bigScreen: boolean;
 	stickZone: Rect;
 	jumpButton: Rect;
@@ -88,21 +98,28 @@ export interface ThumbstickView {
 	y: number;
 }
 
-export function touchLayout(width: number, height: number): TouchLayout {
-	const bigScreen = Math.min(width, height) > BIG_SCREEN_MIN_AXIS;
+export function touchLayout(width: number, height: number, options: TouchOptions = {}): TouchLayout {
+	const bigScreen = Math.min(width, height) > BIG_SCREEN_MIN_AXIS || options.largeButtons === true;
 	const zone = width >= height ? STICK_ZONE_LANDSCAPE : STICK_ZONE_PORTRAIT;
 	const jump = bigScreen ? JUMP_BUTTON_BIG : JUMP_BUTTON;
+	const insets = options.insets ?? { left: 0, right: 0, top: 0, bottom: 0 },
+		ring = bigScreen ? 40 : 20;
 	return {
 		bigScreen,
+		thumbstickSize: bigScreen ? 90 : 45,
+		ringSize: ring,
+		outerRingSize: bigScreen ? 148 : 74,
+		ghostX: options.leftHanded ? width - insets.right - ring * 3.3 : insets.left + ring * 3.3,
+		ghostY: height - insets.bottom - ring * 2.8,
 		stickZone: {
-			x: 0,
+			x: options.leftHanded ? width * (1 - zone.width) : 0,
 			y: height * (1 - zone.height),
 			width: width * zone.width,
 			height: height * zone.height
 		},
 		jumpButton: {
-			x: width - jump.right - jump.size,
-			y: height - jump.bottom - jump.size,
+			x: options.leftHanded ? insets.left + jump.right : width - insets.right - jump.right - jump.size,
+			y: height - insets.bottom - jump.bottom - jump.size,
 			width: jump.size,
 			height: jump.size
 		},
@@ -164,6 +181,9 @@ export class InputModel {
 		zoomDelta: 0
 	};
 	#layout = touchLayout(0, 0);
+	#width = 0;
+	#height = 0;
+	#options: TouchOptions = {};
 	readonly #pointers = new Map<number, Pointer>();
 	/** Touch look pointers in arrival order: one orbits, the first two pinch. */
 	readonly #looks: number[] = [];
@@ -191,9 +211,16 @@ export class InputModel {
 	}
 
 	resize(width: number, height: number) {
-		this.#layout = touchLayout(width, height);
+		this.#width = width;
+		this.#height = height;
+		this.#layout = touchLayout(width, height, this.#options);
 	}
 
+	configure(options: TouchOptions) {
+		this.releaseAll();
+		this.#options = { ...this.#options, ...options };
+		this.resize(this.#width, this.#height);
+	}
 	/** Returns true when the pointer got a role (capture it and prevent the default). */
 	pointerDown(sample: PointerSample): boolean {
 		if (this.#pointers.has(sample.id)) return false;

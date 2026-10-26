@@ -222,3 +222,30 @@ it('attaches without global side effects and detaches every listener', () => {
 	frame = model.sample(1 / 60);
 	expect([frame.moveX, frame.moveY, frame.jumpPressed]).toEqual([0, 0, false]);
 });
+it('mirrors the landscape stick and jump for left-handed play, with exact Roblox visual dimensions', () => {
+	const normal = touchLayout(915, 412),
+		left = touchLayout(915, 412, { leftHanded: true });
+	expect(normal).toMatchObject({
+		thumbstickSize: 45,
+		ringSize: 20,
+		outerRingSize: 74,
+		deadZone: 2,
+		maxRadius: 20
+	});
+	expect(left.stickZone.x).toBeCloseTo(915 * 0.6);
+	expect(left.jumpButton.x).toBe(25);
+	const large = touchLayout(915, 412, { largeButtons: true });
+	expect(large.jumpButton.width).toBe(120);
+	expect(large.thumbstickSize).toBe(90);
+	const safe = touchLayout(915, 412, { insets: { left: 20, right: 30, top: 0, bottom: 10 } });
+	expect(safe.jumpButton.x).toBe(915 - 30 - 25 - 70);
+	expect(safe.jumpButton.y).toBe(412 - 10 - 20 - 70);
+});
+it('keeps preferences on resize and lets a right thumb move after the handedness swap', () => {
+	const m = new InputModel();
+	m.configure({ leftHanded: true });
+	m.resize(915, 412);
+	m.pointerDown(touch(1, 800, 300));
+	m.pointerMove(touch(1, 800, 280));
+	expect(m.sample(1 / 60).moveY).toBe(1);
+});

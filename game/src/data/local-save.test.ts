@@ -139,3 +139,20 @@ it('keeps the sound settings in their own section, cleaned, next to the other se
 	disk.setItem(GAME_SAVE_KEY, '{broken');
 	expect(createLocalSave(profile, disk).setAudio({ volume: { master: 1 }, muted: {} })).toBe(false);
 });
+it('persists handedness, large controls and one-time hints while preserving future sections', () => {
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, future: { value: 7 } }));
+	expect(save.controls().leftHanded).toBe(false);
+	expect(save.setControls({ version: 1, leftHanded: true, largeButtons: true, hintsSeen: ['lock'] })).toBe(
+		true
+	);
+	expect(createLocalSave(profile, disk).controls()).toMatchObject({
+		leftHanded: true,
+		largeButtons: true,
+		hintsSeen: ['lock']
+	});
+	expect(JSON.parse(disk.getItem(GAME_SAVE_KEY) ?? '{}').future).toEqual({ value: 7 });
+	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, controls: { version: 99, valuable: true } }));
+	expect(save.setControls({ version: 1, leftHanded: false, largeButtons: false, hintsSeen: [] })).toBe(false);
+});

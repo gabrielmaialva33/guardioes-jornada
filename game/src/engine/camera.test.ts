@@ -163,3 +163,20 @@ it('writes a pose that looks at the focus', () => {
 	const toFocus = new Vector3().subVectors(pose.focus, three.position).normalize();
 	expect(three.getWorldDirection(new Vector3()).dot(toFocus)).toBeCloseTo(1, 9);
 });
+it('touch follow recentres on a translating subject but leaves two seconds after a manual pan', () => {
+	const camera = new OrbitCamera();
+	camera.mode = 'follow';
+	camera.update(1 / 60, { x: 0, y: 0, z: 0 }, null);
+	camera.update(1 / 60, { x: 1, y: 0, z: 0 }, null);
+	expect(camera.yaw).toBeLessThan(0);
+	camera.look(5, 0, 'touch');
+	const yaw = camera.yaw;
+	camera.update(1, { x: 3, y: 0, z: 0 }, null);
+	expect(camera.yaw).toBe(yaw);
+});
+it('combines the trunk BVH popper with an independent canopy clearance', () => {
+	const camera = new OrbitCamera();
+	camera.extraOcclusion = () => 2;
+	const pose = camera.update(1 / 60, { x: 0, y: 0, z: 0 }, null);
+	expect(pose.distance).toBeLessThanOrEqual(2);
+});
