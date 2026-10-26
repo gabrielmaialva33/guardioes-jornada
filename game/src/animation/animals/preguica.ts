@@ -1,5 +1,5 @@
 /**
- * Preguiça-de-coleira (Bradypus torquatus), endemic to the Atlantic Forest.
+ * Preguiça-de-coleira (Bradypus crinitus, the southern maned sloth), endemic to the Atlantic Forest.
  *
  * It hangs below a branch on its hooked claws and is mostly still: maned sloths
  * rest for most of the day (Chiarello 1998, J. Zool. 246:1–10). When it moves,

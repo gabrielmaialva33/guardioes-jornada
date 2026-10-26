@@ -10,6 +10,7 @@ import type { Pose } from '../skeleton.ts';
 import { AnimalAnimator } from './animal-animator.ts';
 import type { Behaviour } from './behaviour.ts';
 import { BugioBehaviour } from './bugio.ts';
+import { GroundBehaviour, type GroundSpecies, type Herd, isGroundSpecies } from './ground.ts';
 import { AnimationLod, type LodOptions } from './lod.ts';
 import { MicoBehaviour } from './mico.ts';
 import type { AnimalMotion, AnimalWorld } from './motion.ts';
@@ -94,6 +95,11 @@ export interface AnimalOptions {
 	loop?: boolean;
 	/** Toucan perches. */
 	perches?: readonly Perch[];
+	/** Ground species: per route point, 1 where it is in water (it swims there). */
+	water?: ArrayLike<number> | null;
+	/** Ground species: the herd it moves with, and its place along the route relative to the leader (u). */
+	herd?: Herd | null;
+	offset?: number;
 	/** Mico: start as the player's companion. */
 	companion?: boolean;
 	/** Start arc length, handhold or perch index. */
@@ -112,7 +118,13 @@ const routeOf = (options: AnimalOptions, species: SpeciesId): Route => {
 };
 
 export type AnyAnimal = Animal<
-	MicoBehaviour | MuriquiBehaviour | BugioBehaviour | OncaBehaviour | PreguicaBehaviour | TucanoBehaviour
+	| MicoBehaviour
+	| MuriquiBehaviour
+	| BugioBehaviour
+	| OncaBehaviour
+	| PreguicaBehaviour
+	| TucanoBehaviour
+	| GroundBehaviour
 >;
 
 /** Builds one animal of a species with its behaviour. Load time only (allocates). */
@@ -125,13 +137,31 @@ export function createAnimal(
 	options: AnimalOptions
 ): Animal<PreguicaBehaviour>;
 export function createAnimal(
-	species: 'tucano-de-bico-verde',
+	species: 'tucano-de-bico-verde' | 'saira-sete-cores' | 'sabia-laranjeira' | 'jacutinga',
 	options: AnimalOptions
 ): Animal<TucanoBehaviour>;
+export function createAnimal(
+	species: 'onca-parda' | 'jaguatirica',
+	options: AnimalOptions
+): Animal<OncaBehaviour>;
+export function createAnimal(species: GroundSpecies, options: AnimalOptions): Animal<GroundBehaviour>;
 export function createAnimal(species: SpeciesId, options?: AnimalOptions): AnyAnimal;
 export function createAnimal(species: SpeciesId, options: AnimalOptions = {}): AnyAnimal {
 	const base = { seed: options.seed };
 	const wrap = { hasHead: options.hasHead, lod: options.lod };
+	if (isGroundSpecies(species))
+		return new Animal(
+			new GroundBehaviour({
+				...base,
+				species,
+				route: routeOf(options, species),
+				water: options.water,
+				start: options.start,
+				herd: options.herd,
+				offset: options.offset
+			}),
+			wrap
+		);
 	switch (species) {
 		case 'mico-leao-dourado': {
 			const route = options.route ? routeOf(options, species) : null;
@@ -156,8 +186,10 @@ export function createAnimal(species: SpeciesId, options: AnimalOptions = {}): A
 				wrap
 			);
 		case 'onca-pintada':
+		case 'onca-parda':
+		case 'jaguatirica':
 			return new Animal(
-				new OncaBehaviour({ ...base, route: routeOf(options, species), start: options.start }),
+				new OncaBehaviour({ ...base, species, route: routeOf(options, species), start: options.start }),
 				wrap
 			);
 		case 'preguica-de-coleira':
@@ -166,11 +198,14 @@ export function createAnimal(species: SpeciesId, options: AnimalOptions = {}): A
 				wrap
 			);
 		case 'tucano-de-bico-verde':
-			if (!options.perches || options.perches.length === 0)
-				throw new Error('tucano-de-bico-verde needs perches');
+		case 'saira-sete-cores':
+		case 'sabia-laranjeira':
+		case 'jacutinga':
+			if (!options.perches || options.perches.length === 0) throw new Error(`${species} needs perches`);
 			return new Animal(
-				new TucanoBehaviour({ ...base, perches: options.perches, start: options.start }),
+				new TucanoBehaviour({ ...base, species, perches: options.perches, start: options.start }),
 				wrap
 			);
 	}
+	throw new Error(`no behaviour for ${species}`);
 }

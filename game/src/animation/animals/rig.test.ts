@@ -4,9 +4,21 @@ import { AVATAR_HEIGHT } from '../../engine/constants.ts';
 import { applyToRig } from '../rig.ts';
 import { AnimalAnimator } from './animal-animator.ts';
 import { instance, meshBounds, pointOf } from './fixtures.test-helper.ts';
+import { gameHeight, MEASURES, P23_SPECIES } from './measures.ts';
 import { AnimalMotion } from './motion.ts';
-import { HEAD, MODELS, type ModelId } from './rigs.ts';
+import { HEAD, MODEL_IDS, MODELS, type ModelId } from './rigs.ts';
 import { SPECIES, SPECIES_IDS, type SpeciesId } from './species.ts';
+
+/** ART.md §3 heights of the hand-tuned species, and the P23 ones from their measured size (× 1.5 / 0.47 m). */
+const TUNED_HEIGHTS = {
+	'mico-leao-dourado': 0.9,
+	'bugio-ruivo': 1.4,
+	muriqui: 1.7,
+	'preguica-de-coleira': 1.4,
+	'onca-pintada': 2.2,
+	'tucano-de-bico-verde': 0.9
+};
+const P23_HEIGHTS = Object.fromEntries(P23_SPECIES.map((id) => [id, gameHeight(MEASURES[id].height)]));
 
 /** Drives the animator into a posture for `seconds` and applies it to the real node tree at the origin. */
 function posed(species: SpeciesId, setup: (motion: AnimalMotion) => void, seconds = 1.5) {
@@ -63,7 +75,8 @@ describe('binding the real Cube Pets nodes', () => {
 
 	it('MODELS holds the measures of the meshes: head top, silhouette top and body length', async () => {
 		const near = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThan(1e-3);
-		for (const model of ['monkey', 'tiger', 'koala', 'parrot'] as ModelId[]) {
+		// Every model, the P23 ones included (their measures are re-taken when bichos_mata.py changes a shape).
+		for (const model of MODEL_IDS as readonly ModelId[]) {
 			const boxes = await meshBounds(model);
 			const m = MODELS[model];
 			const legs = Object.keys(boxes).filter((name) => name.startsWith('leg-'));
@@ -84,14 +97,7 @@ describe('binding the real Cube Pets nodes', () => {
 	});
 
 	it('scales each species by its ART.md height, feet to the top of the head', () => {
-		const heights: Record<SpeciesId, number> = {
-			'mico-leao-dourado': 0.9,
-			'bugio-ruivo': 1.4,
-			muriqui: 1.7,
-			'preguica-de-coleira': 1.4,
-			'onca-pintada': 2.2,
-			'tucano-de-bico-verde': 0.9
-		};
+		const heights = { ...TUNED_HEIGHTS, ...P23_HEIGHTS } as Record<SpeciesId, number>;
 		for (const id of SPECIES_IDS) {
 			const species = SPECIES[id];
 			const model = MODELS[species.model];

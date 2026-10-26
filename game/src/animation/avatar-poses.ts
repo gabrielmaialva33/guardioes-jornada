@@ -224,6 +224,60 @@ export const SIT = cycle(
 	1
 );
 
+// --- Park traversal (P28) -----------------------------------------------------
+
+/** Palm contact in the native 2.7-unit rig; shared with the zipline bar mesh. */
+export const HANG_GRIP = {
+	height: 1.8 + 0.9 * Math.cos(Math.PI / 6),
+	forward: -0.1 + 0.9 * Math.sin(Math.PI / 6)
+} as const;
+export const HANG = cycle(
+	[
+		key({
+			armL: { r: [-150, 0, 0] },
+			armR: { r: [-150, 0, 0] },
+			head: { r: [-5, 0, 0] },
+			legL: { r: [8, 0, 3] },
+			legR: { r: [12, 0, -3] }
+		})
+	],
+	1
+);
+
+const LADDER_REACH = key({
+	root: { p: [0, 0, -0.14] },
+	head: { r: [-10, 0, 0] },
+	armL: { r: [-150, 0, 0] },
+	armR: { r: [-115, 0, 0] },
+	legL: { r: [5, 0, 0] },
+	legR: { r: [-45, 0, 0] }
+});
+const LADDER_PASS = key({
+	root: { p: [0, 0, -0.14] },
+	head: { r: [-10, 0, 0] },
+	armL: { r: [-130, 0, 0] },
+	armR: { r: [-130, 0, 0] },
+	legL: { r: [-12, 0, 0] },
+	legR: { r: [-25, 0, 0] }
+});
+/** One cycle covers two rungs; the animator adjusts hand-height separation to the actual spacing. */
+export const LADDER_CLIMB = cycle([LADDER_REACH, LADDER_PASS, mirror(LADDER_REACH), mirror(LADDER_PASS)], 1);
+
+/** Seated lower body from SIT. The working side is +x; ROW_RIGHT mirrors it at compile time. */
+const rowingKey = (pitch: number, twist: number, reach: number) =>
+	key({
+		root: { p: [0, -0.074, 0] },
+		torso: { r: [pitch, twist, 0] },
+		head: { r: [-pitch * 0.5, -twist * 0.5, 0] },
+		armL: { r: [-62 + reach, -12, 28] },
+		armR: { r: [-70 + reach, -35, 65] },
+		legL: { r: [-90, 0, 3] },
+		legR: { r: [-90, 0, -3] }
+	});
+const ROW_KEYS = [rowingKey(7, 8, -22), rowingKey(4, 0, 0), rowingKey(-6, -10, 25), rowingKey(0, 0, 8)];
+export const ROW_LEFT = cycle(ROW_KEYS, (Math.PI * 2) / 5, 'smooth');
+export const ROW_RIGHT = cycle(ROW_KEYS.map(mirror), (Math.PI * 2) / 5, 'smooth');
+
 // --- Emotes ------------------------------------------------------------------
 
 const WAVE_UP = (roll: number) =>

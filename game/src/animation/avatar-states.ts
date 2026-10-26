@@ -16,7 +16,18 @@ import { COYOTE_TIME, JUMP_SPEED, STUD } from '../engine/constants.ts';
 import { ANIMATE } from './animate-timings.ts';
 import { EMOTES, type EmoteId } from './avatar-poses.ts';
 
-export const SLOTS = ['idle', 'walk', 'jump', 'fall', 'climb', 'swim', 'sit', 'emote'] as const;
+export const SLOTS = [
+	'idle',
+	'walk',
+	'jump',
+	'fall',
+	'climb',
+	'swim',
+	'sit',
+	'emote',
+	'hang',
+	'row'
+] as const;
 
 /** 'walk' is the walk/run blend. */
 export type AvatarState = (typeof SLOTS)[number];
@@ -29,6 +40,8 @@ const CLIMB = 4;
 const SWIM = 5;
 const SIT = 6;
 const EMOTE = 7;
+const HANG = 8;
+const ROW = 9;
 
 /** Index of each state in SLOTS and `weights`. */
 export const SLOT_INDEX = Object.fromEntries(SLOTS.map((slot, i) => [slot, i])) as Readonly<
@@ -63,6 +76,9 @@ export interface MotionInput {
 	climbing: boolean;
 	swimming: boolean;
 	sitting: boolean;
+	/** Attached traversal takes priority over airborne locomotion. Optional for existing callers. */
+	hanging?: boolean;
+	rowing?: boolean;
 	/**
 	 * Optional context; the state machine ignores it, the animator's layers read it.
 	 * 'narrow': river stones, the bridge, a log (arms out, short steps, a wobble);
@@ -192,7 +208,14 @@ export class AvatarStateMachine {
 		this.#jumpTimer = Math.max(0, jumpLeft);
 
 		const moving = speed > ANIMATE.speedThreshold;
-		const still = grounded && !moving && !input.sitting && !input.climbing && !input.swimming;
+		const still =
+			grounded &&
+			!moving &&
+			!input.sitting &&
+			!input.climbing &&
+			!input.swimming &&
+			!input.hanging &&
+			!input.rowing;
 		const steering = (Number.isFinite(input.intent) ? input.intent : 0) > INTENT_DEADZONE;
 		if (this.#pendingEmote !== null) {
 			if (still && !steering) {
@@ -241,7 +264,13 @@ export class AvatarStateMachine {
 		let next = current;
 		let fade = 0;
 		let lead = dt;
-		if (input.sitting) {
+		if (input.hanging) {
+			next = HANG;
+			fade = ANIMATE.climbFade;
+		} else if (input.rowing) {
+			next = ROW;
+			fade = ANIMATE.sitFade;
+		} else if (input.sitting) {
 			next = SIT;
 			fade = ANIMATE.sitFade;
 		} else if (input.climbing) {

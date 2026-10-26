@@ -1,5 +1,9 @@
 /**
- * Onça-pintada (Panthera onca).
+ * Onça-pintada (Panthera onca), and the other big-cat trail walkers that share
+ * this behaviour: the onça-parda (Puma concolor) and the jaguatirica (Leopardus
+ * pardalis), with their own speeds (FELIDS, from species.ts) and activity.
+ *
+ * The onça-pintada:
  *
  * Calm by design: it walks its trail with a lateral-sequence walk (the felid
  * pattern near 25% phase; Usherwood & Self Davies 2017), sits, lies down to
@@ -11,14 +15,32 @@
  */
 import { STUD } from '../../engine/constants.ts';
 import { Behaviour, type BehaviourOptions } from './behaviour.ts';
+import { isActive } from './ground.ts';
 import { type AnimalWorld, PLAYER_EYES } from './motion.ts';
 import { type Route, RouteCursor, StepDistance } from './route.ts';
 import { clamp, DEG, wrapAngle } from './scalar.ts';
+import { SPECIES } from './species.ts';
 
 export const ONCA_STATES = ['idle', 'move', 'sit', 'rest'] as const;
 export type OncaState = (typeof ONCA_STATES)[number];
 
-export const ONCA = {
+export interface FelidTuning {
+	readonly walkSpeed: number;
+	readonly leaveSpeed: number;
+	readonly accel: number;
+	readonly avoidRadius: number;
+	readonly watchRadius: number;
+	readonly notice: number;
+	readonly move: readonly [number, number];
+	readonly idle: readonly [number, number];
+	readonly sit: readonly [number, number];
+	readonly rest: readonly [number, number];
+	readonly glance: readonly [number, number];
+	readonly glanceYaw: number;
+	readonly fade: number;
+}
+
+export const ONCA: FelidTuning = {
 	/** Calm walk, u/s (about 0.9 body lengths per second), and a brisker walk when moving off. */
 	walkSpeed: 1.8,
 	leaveSpeed: 2.3,
@@ -37,16 +59,42 @@ export const ONCA = {
 	glanceYaw: 40 * DEG,
 	/** Longer posture fades for a heavy cat getting up or lying down. */
 	fade: 0.6
-} as const;
+};
+
+/** The cats that share this behaviour. */
+export type FelidSpecies = 'onca-pintada' | 'onca-parda' | 'jaguatirica';
+
+/**
+ * The puma and the ocelot: the onça's timings and radii (so the scene's LEVEL.md 15 u
+ * mapping applies to them too: they walk away at 15 u like the onça), with walking
+ * speeds from their own size by AJ83 (species.ts: the derived walk; leaving 1.3× it).
+ */
+const felid = (id: 'onca-parda' | 'jaguatirica', extra: Partial<FelidTuning>): FelidTuning => {
+	const walk = SPECIES[id].stride.slowSpeed;
+	return { ...ONCA, walkSpeed: walk, leaveSpeed: walk * 1.3, ...extra };
+};
+
+export const FELIDS: Readonly<Record<FelidSpecies, FelidTuning>> = {
+	'onca-pintada': ONCA,
+	'onca-parda': felid('onca-parda', {}),
+	// Smaller and quicker to settle; rests in thick cover by day (nocturnal).
+	jaguatirica: felid('jaguatirica', { fade: 0.4, sit: [4, 10] })
+};
+
+/** Outside its active period a cat mostly rests (the jaguatirica by day). */
+const OFF_PERIOD_REST = 0.75;
 
 export interface OncaOptions extends BehaviourOptions {
 	/** Its trail; closed routes loop, open ones are walked back and forth. */
 	route: Route;
 	start?: number;
+	/** Default 'onca-pintada'. */
+	species?: FelidSpecies;
 }
 
 export class OncaBehaviour extends Behaviour<OncaState> {
 	readonly states = ONCA_STATES;
+	readonly tuning: FelidTuning;
 	readonly route: Route;
 	readonly cursor = new RouteCursor();
 	/** True while it is moving off because the player came close. */
@@ -62,23 +110,27 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 	#playerDistance = Number.POSITIVE_INFINITY;
 	#dx = 0;
 	#dz = 0;
+	#active = true;
 	/** The player's eyes above its own, u: what it raises its head by to watch the player. */
 	readonly #eyeRise: number;
 
 	constructor(options: OncaOptions) {
-		super('onca-pintada', 'idle', options);
+		const species = options.species ?? 'onca-pintada';
+		super(species, 'idle', options);
+		this.tuning = FELIDS[species];
 		this.#eyeRise = PLAYER_EYES - this.species.eyeHeight;
 		this.route = options.route;
 		this.cursor.s = options.start ?? 0;
 		this.route.locate(this.cursor);
 		this.motion.yaw = this.drive.targetYaw = this.cursor.yaw;
 		this.#place();
-		this.enter('idle', ONCA.idle[0]);
+		this.enter('idle', this.tuning.idle[0]);
 	}
 
 	protected sense(world: AnimalWorld) {
 		this.#playerX = world.playerX;
 		this.#playerZ = world.playerZ;
+		this.#active = isActive(this.species.activity, world.light);
 	}
 
 	protected advance(_world: AnimalWorld) {
@@ -90,16 +142,16 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		this.#playerDistance = distance;
 
 		// Personal space: after noticing, get up and move off, never toward the player.
-		if (distance < ONCA.avoidRadius) {
+		if (distance < this.tuning.avoidRadius) {
 			this.#near += h;
-			if (this.#near >= ONCA.notice) {
+			if (this.#near >= this.tuning.notice) {
 				const ahead = this.cursor.dx * dx + this.cursor.dz * dz;
 				if (this.state !== 'move') {
 					if (ahead > 0) this.#reverse();
 					this.leaving = true;
 					// A fixed duration: this reaction happens at substep granularity, and a draw
 					// here would shift the decisions' random sequence between frame rates.
-					this.enter('move', ONCA.move[1]);
+					this.enter('move', this.tuning.move[1]);
 				} else if (ahead > 0) {
 					this.#reverse();
 					this.leaving = true;
@@ -107,20 +159,20 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 			}
 		} else {
 			this.#near = 0;
-			if (distance > ONCA.avoidRadius * 1.5) this.leaving = false;
+			if (distance > this.tuning.avoidRadius * 1.5) this.leaving = false;
 		}
 
 		let cruise = 0;
-		if (this.state === 'move') cruise = this.leaving ? ONCA.leaveSpeed : ONCA.walkSpeed;
+		if (this.state === 'move') cruise = this.leaving ? this.tuning.leaveSpeed : this.tuning.walkSpeed;
 		// Cornered at the end of an open trail: stop and watch rather than turn back past the player.
 		if (this.leaving && !this.route.closed) {
 			const left = this.cursor.direction > 0 ? this.route.length - this.cursor.s : this.cursor.s;
-			if (left < ONCA.walkSpeed * 0.5) cruise = 0;
+			if (left < this.tuning.walkSpeed * 0.5) cruise = 0;
 		}
 		// Wait to finish turning around before walking on.
 		const aligned = Math.abs(wrapAngle(this.drive.targetYaw - motion.yaw)) < 0.35;
 		this.drive.cruise = aligned ? cruise : 0;
-		this.drive.rampRate = ONCA.accel;
+		this.drive.rampRate = this.tuning.accel;
 		this.ramp();
 		this.#speed = this.drive.speed;
 		motion.speed = this.drive.speed;
@@ -140,34 +192,39 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 
 	protected decide(_world: AnimalWorld) {
 		const rng = this.rng;
+		if (!this.#active && this.state !== 'rest' && rng.chance(OFF_PERIOD_REST)) {
+			this.leaving = false;
+			this.enter('rest', rng.range(this.tuning.rest[0], this.tuning.rest[1]) * 2);
+			return;
+		}
 		const roll = rng.next();
 		switch (this.state) {
 			case 'move':
 				this.leaving = false;
-				if (roll < 0.6) this.enter('idle', rng.range(ONCA.idle[0], ONCA.idle[1]));
-				else if (roll < 0.85) this.enter('sit', rng.range(ONCA.sit[0], ONCA.sit[1]));
-				else this.enter('rest', rng.range(ONCA.rest[0], ONCA.rest[1]));
+				if (roll < 0.6) this.enter('idle', rng.range(this.tuning.idle[0], this.tuning.idle[1]));
+				else if (roll < 0.85) this.enter('sit', rng.range(this.tuning.sit[0], this.tuning.sit[1]));
+				else this.enter('rest', rng.range(this.tuning.rest[0], this.tuning.rest[1]));
 				break;
 			case 'idle':
-				if (roll < 0.6) this.enter('move', rng.range(ONCA.move[0], ONCA.move[1]));
-				else if (roll < 0.85) this.enter('sit', rng.range(ONCA.sit[0], ONCA.sit[1]));
-				else this.enter('rest', rng.range(ONCA.rest[0], ONCA.rest[1]));
+				if (roll < 0.6) this.enter('move', rng.range(this.tuning.move[0], this.tuning.move[1]));
+				else if (roll < 0.85) this.enter('sit', rng.range(this.tuning.sit[0], this.tuning.sit[1]));
+				else this.enter('rest', rng.range(this.tuning.rest[0], this.tuning.rest[1]));
 				break;
 			case 'sit':
-				if (roll < 0.5) this.enter('idle', rng.range(ONCA.idle[0], ONCA.idle[1]));
-				else if (roll < 0.8) this.enter('rest', rng.range(ONCA.rest[0], ONCA.rest[1]));
-				else this.enter('move', rng.range(ONCA.move[0], ONCA.move[1]));
+				if (roll < 0.5) this.enter('idle', rng.range(this.tuning.idle[0], this.tuning.idle[1]));
+				else if (roll < 0.8) this.enter('rest', rng.range(this.tuning.rest[0], this.tuning.rest[1]));
+				else this.enter('move', rng.range(this.tuning.move[0], this.tuning.move[1]));
 				break;
 			default:
-				if (roll < 0.5) this.enter('sit', rng.range(ONCA.sit[0], ONCA.sit[1]));
-				else this.enter('idle', rng.range(ONCA.idle[0], ONCA.idle[1]));
+				if (roll < 0.5) this.enter('sit', rng.range(this.tuning.sit[0], this.tuning.sit[1]));
+				else this.enter('idle', rng.range(this.tuning.idle[0], this.tuning.idle[1]));
 		}
 	}
 
 	protected finish(_world: AnimalWorld) {
 		const motion = this.motion;
 		motion.posture = this.state === 'sit' ? 'sit' : this.state === 'rest' ? 'lie' : 'stand';
-		motion.fade = ONCA.fade;
+		motion.fade = this.tuning.fade;
 		motion.speed = this.#speed;
 		motion.lookYaw = this.#lookYaw;
 		motion.lookPitch = this.#lookPitch;
@@ -179,7 +236,7 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		const dx = this.#dx;
 		const dz = this.#dz;
 		const distance = this.#playerDistance;
-		if (distance < ONCA.watchRadius) {
+		if (distance < this.tuning.watchRadius) {
 			this.#lookYaw = wrapAngle(Math.atan2(dx, dz) - motion.yaw);
 			this.#lookPitch = clamp(Math.atan2(this.#eyeRise, distance), 0, 0.3);
 			return;
@@ -191,8 +248,8 @@ export class OncaBehaviour extends Behaviour<OncaState> {
 		}
 		this.#glance -= this.clock.h;
 		if (this.#glance <= 0) {
-			this.#glance = this.cosmetic.range(ONCA.glance[0], ONCA.glance[1]);
-			this.#lookYaw = this.cosmetic.range(-ONCA.glanceYaw, ONCA.glanceYaw);
+			this.#glance = this.cosmetic.range(this.tuning.glance[0], this.tuning.glance[1]);
+			this.#lookYaw = this.cosmetic.range(-this.tuning.glanceYaw, this.tuning.glanceYaw);
 		}
 	}
 

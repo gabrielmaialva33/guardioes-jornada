@@ -53,7 +53,33 @@ export const LIMB_FR = 5;
 export const LIMB_BL = 6;
 export const LIMB_BR = 7;
 
-export type ModelId = 'monkey' | 'tiger' | 'koala' | 'parrot';
+/** The four original Cube Pets bases, then the P23 species models (game/scripts/blender/models/bichos_mata.py). */
+export const MODEL_IDS = [
+	'monkey',
+	'tiger',
+	'koala',
+	'parrot',
+	'capivara',
+	'anta',
+	'cateto',
+	'veado',
+	'cachorro-do-mato',
+	'onca-parda',
+	'tapiti',
+	'jaguatirica',
+	'caranguejo',
+	'tatu',
+	'jabuti',
+	'sapo',
+	'passaro',
+	'jacutinga',
+	'colhereiro'
+] as const;
+
+export type ModelId = (typeof MODEL_IDS)[number];
+
+/** Bird models (wings in slots 4–5, legs in 6–7). */
+export const BIRD_MODELS: readonly ModelId[] = ['parrot', 'passaro', 'jacutinga', 'colhereiro'];
 
 /**
  * Native measures of each base in its own units, from the GLB node translations
@@ -155,6 +181,278 @@ export const MODELS: Readonly<Record<ModelId, ModelMeasures>> = {
 		tailPivot: [0, 0.71875, -0.495],
 		tailTip: [0, 0.8, -0.45],
 		bodyCentre: [0, 0.62, 0.09]
+	},
+	// P23 models, measured the same way from the packed GLBs on 26/10/2026 (head pivot at the
+	// neck; models without a tail get a pivot behind the rump and a zero tip, as the koala).
+	/** Beaver reshaped: no tail, a deep blunt square muzzle, tiny ears, body 1.25x longer behind. */
+	capivara: {
+		...PET_HIPS,
+		height: 1.53,
+		top: 1.53,
+		eyeY: 0.922,
+		bodyLength: 1.711,
+		totalLength: 1.711,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.34,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.69],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.806, -0.234]
+	},
+	/** Pig reshaped: body 1.5x longer behind, the forward trunk, small rimmed ears (the top), the nape crest. */
+	anta: {
+		...PET_HIPS,
+		height: 1.545,
+		top: 1.545,
+		eyeY: 0.922,
+		bodyLength: 2.088,
+		totalLength: 2.088,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.42,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.77],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.826, -0.339]
+	},
+	/** Hog without tusks and back ridges; the top is the dorsal crest. */
+	cateto: {
+		...PET_HIPS,
+		height: 1.516,
+		top: 1.55,
+		eyeY: 0.922,
+		bodyLength: 1.46,
+		totalLength: 1.46,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.6],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.866, -0.156]
+	},
+	/** Deer with spike antlers instead of branched ones (the top is a spike tip). */
+	veado: {
+		...PET_HIPS,
+		height: 1.653,
+		top: 1.653,
+		eyeY: 0.922,
+		bodyLength: 1.635,
+		totalLength: 1.635,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.6],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.806, -0.194]
+	},
+	/** Fox recoloured: the ears are the top. */
+	'cachorro-do-mato': {
+		...PET_HIPS,
+		height: 1.686,
+		top: 1.686,
+		eyeY: 0.922,
+		bodyLength: 1.56,
+		totalLength: 2.308,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.719, -0.495],
+		tailTip: [0, 0.393, -0.879],
+		bodyCentre: [0, 0.902, -0.156]
+	},
+	/** Lion without the mane, body 1.2x longer behind. */
+	'onca-parda': {
+		...PET_HIPS,
+		height: 1.503,
+		top: 1.503,
+		eyeY: 0.972,
+		bodyLength: 1.546,
+		totalLength: 2.009,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.3,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.819, -0.658],
+		tailTip: [0.07, 0.927, -0.295],
+		bodyCentre: [0, 0.806, -0.219]
+	},
+	/** Bunny with ears shortened to 62%; the top is the ear tips. */
+	tapiti: {
+		...PET_HIPS,
+		height: 1.672,
+		top: 1.672,
+		eyeY: 0.922,
+		bodyLength: 1.395,
+		totalLength: 1.395,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.6],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.908, -0.189]
+	},
+	/** Cat with flat rosette patches. */
+	jaguatirica: {
+		...PET_HIPS,
+		height: 1.586,
+		top: 1.586,
+		eyeY: 0.861,
+		bodyLength: 1.327,
+		totalLength: 1.806,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.819, -0.548],
+		tailTip: [-0.05, 0.855, -0.414],
+		bodyCentre: [0, 0.857, -0.156]
+	},
+	/** Crab with four more static walking legs; width 2.34 with the claws. */
+	caranguejo: {
+		...PET_HIPS,
+		height: 1.431,
+		top: 1.431,
+		eyeY: 0.922,
+		bodyLength: 1.347,
+		totalLength: 1.347,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0.25,
+		hipZBack: -0.25,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.6],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.739, -0.181]
+	},
+	/** Custom (bichos_mata.py): low, long; the top is the shell. */
+	tatu: {
+		...PET_HIPS,
+		height: 0.886,
+		top: 0.9,
+		eyeY: 0.6,
+		bodyLength: 2.4,
+		totalLength: 3.275,
+		hipY: 0.24,
+		hipX: 0.26,
+		hipZFront: 0.3,
+		hipZBack: -0.36,
+		legLength: 0.24,
+		bodyY: 0.181,
+		tailPivot: [0, 0.52, -1.08],
+		tailTip: [0.025, -0.291, -0.888],
+		bodyCentre: [0, 0.55, -0.22]
+	},
+	/** Custom: the top is the shell; the head node (rig height) is low in front. */
+	jabuti: {
+		...PET_HIPS,
+		height: 0.62,
+		top: 0.964,
+		eyeY: 0.48,
+		bodyLength: 2.03,
+		totalLength: 2.03,
+		hipY: 0.26,
+		hipX: 0.42,
+		hipZFront: 0.4,
+		hipZBack: -0.4,
+		legLength: 0.26,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.75],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.562, -0.06]
+	},
+	/** Custom: squat; the top is the parotoid glands. */
+	sapo: {
+		...PET_HIPS,
+		height: 0.74,
+		top: 0.78,
+		eyeY: 0.52,
+		bodyLength: 1.31,
+		totalLength: 1.31,
+		hipY: 0.3,
+		hipX: 0.3,
+		hipZFront: 0.3,
+		hipZBack: -0.26,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.401, -0.61],
+		tailTip: [0, 0, 0],
+		bodyCentre: [0, 0.46, -0.11]
+	},
+	/** Chick without its head tufts, with a tail: the saíra and the sabiá. */
+	passaro: {
+		...PET_HIPS,
+		height: 1.431,
+		top: 1.431,
+		eyeY: 0.894,
+		bodyLength: 1.35,
+		totalLength: 1.835,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0,
+		hipZBack: 0,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.72, -0.5],
+		tailTip: [-0.173, 0.182, -0.594],
+		bodyCentre: [0, 0.806, -0.156]
+	},
+	/** Parrot with a cracid bill and dewlap; the top is the (white) crest. */
+	jacutinga: {
+		...PET_HIPS,
+		height: 1.572,
+		top: 1.681,
+		eyeY: 0.894,
+		bodyLength: 1.565,
+		totalLength: 2.034,
+		hipY: 0.3,
+		hipX: 0.25,
+		hipZFront: 0,
+		hipZBack: 0,
+		legLength: 0.3,
+		bodyY: 0.181,
+		tailPivot: [0, 0.719, -0.495],
+		tailTip: [0, 0.737, -0.599],
+		bodyCentre: [0, 0.931, -0.156]
+	},
+	/** Parrot with 3x longer, thinner legs (hips at 0.9) and the flat spoon bill: the colhereiro. */
+	colhereiro: {
+		...PET_HIPS,
+		height: 2.031,
+		top: 2.031,
+		eyeY: 1.494,
+		bodyLength: 2.071,
+		totalLength: 2.54,
+		hipY: 0.9,
+		hipX: 0.25,
+		hipZFront: 0,
+		hipZBack: 0,
+		legLength: 0.9,
+		bodyY: 0.781,
+		tailPivot: [0, 1.319, -0.495],
+		tailTip: [0, 0.737, -0.599],
+		bodyCentre: [0, 1.406, -0.156]
 	}
 };
 
@@ -169,31 +467,53 @@ const QUADRUPED_NODES = {
 	legBR: 'leg-back-right'
 } as const;
 
+const quadrupedRig = (model: ModelId): RigConfig<QuadrupedJoint> => ({
+	height: MODELS[model].height,
+	nodes: QUADRUPED_NODES
+});
+
+const BIRD_NODES = {
+	root: 'root',
+	body: 'body',
+	head: 'head',
+	tail: 'tail',
+	wingL: 'wing-left',
+	wingR: 'wing-right',
+	legL: 'leg-front-left',
+	legR: 'leg-front-right'
+} as const;
+
+const birdRig = (model: ModelId): RigConfig<BirdJoint> => ({
+	height: MODELS[model].height,
+	nodes: BIRD_NODES
+});
+
 /** Joint maps per base; `height` is the native rig height pose offsets are fractions of. */
-export const MODEL_RIGS: {
+export const MODEL_RIGS: Readonly<Record<ModelId, RigConfig<QuadrupedJoint> | RigConfig<BirdJoint>>> & {
 	readonly monkey: RigConfig<QuadrupedJoint>;
-	readonly tiger: RigConfig<QuadrupedJoint>;
-	readonly koala: RigConfig<QuadrupedJoint>;
 	readonly parrot: RigConfig<BirdJoint>;
 } = {
-	monkey: { height: MODELS.monkey.height, nodes: QUADRUPED_NODES },
-	tiger: { height: MODELS.tiger.height, nodes: QUADRUPED_NODES },
-	koala: { height: MODELS.koala.height, nodes: QUADRUPED_NODES },
-	parrot: {
-		height: MODELS.parrot.height,
-		nodes: {
-			root: 'root',
-			body: 'body',
-			head: 'head',
-			tail: 'tail',
-			wingL: 'wing-left',
-			wingR: 'wing-right',
-			legL: 'leg-front-left',
-			legR: 'leg-front-right'
-		}
-	}
+	monkey: quadrupedRig('monkey'),
+	tiger: quadrupedRig('tiger'),
+	koala: quadrupedRig('koala'),
+	parrot: birdRig('parrot'),
+	capivara: quadrupedRig('capivara'),
+	anta: quadrupedRig('anta'),
+	cateto: quadrupedRig('cateto'),
+	veado: quadrupedRig('veado'),
+	'cachorro-do-mato': quadrupedRig('cachorro-do-mato'),
+	'onca-parda': quadrupedRig('onca-parda'),
+	tapiti: quadrupedRig('tapiti'),
+	jaguatirica: quadrupedRig('jaguatirica'),
+	caranguejo: quadrupedRig('caranguejo'),
+	tatu: quadrupedRig('tatu'),
+	jabuti: quadrupedRig('jabuti'),
+	sapo: quadrupedRig('sapo'),
+	passaro: birdRig('passaro'),
+	jacutinga: birdRig('jacutinga'),
+	colhereiro: birdRig('colhereiro')
 };
 
-export const isBird = (model: ModelId) => model === 'parrot';
+export const isBird = (model: ModelId) => BIRD_MODELS.includes(model);
 
 export const layoutOf = (model: ModelId) => (isBird(model) ? BIRD_LAYOUT : QUADRUPED_LAYOUT);

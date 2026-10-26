@@ -16,6 +16,7 @@ import { compileKey, JOINT_STRIDE, type JointKey, type Layout, type Vec3Tuple } 
 import {
 	BIRD_LAYOUT,
 	type BirdJoint,
+	isBird,
 	JOINT_COUNT,
 	MODELS,
 	type ModelId,
@@ -36,7 +37,11 @@ export const POSTURES = [
 	'howl',
 	'perch',
 	'fly',
-	'roost'
+	'roost',
+	'graze',
+	'alert',
+	'swim',
+	'withdraw'
 ] as const;
 
 export type Posture = (typeof POSTURES)[number];
@@ -162,6 +167,88 @@ const HANG_ARM: PostureDef<QuadrupedSlot> = {
 	}
 };
 
+// --- P23 ground species -------------------------------------------------------
+
+/**
+ * Grazing, rooting, sniffing or pecking: the head pitched down to the ground (the Cube
+ * Pets head pivots at the neck, so about 45° brings the face to the grass) and the body
+ * tipped a little forward. The chewing bob comes from the animator's feeding layer.
+ */
+const GRAZE = (head: number, tail = -110, body = 5): PostureDef<QuadrupedSlot> => ({
+	key: {
+		body: { r: [body, 0, 0], p: [0, -0.02, 0.02] },
+		head: { r: [head, 0, 0] },
+		tail: { r: [tail, 0, 0] },
+		...legs({ r: [6, 0, 0] }, { r: [-3, 0, 0] })
+	}
+});
+
+/** Alert: head up, body drawn up and back, tail raised a little (the look layer aims the head). */
+const ALERT = (tail = -95): PostureDef<QuadrupedSlot> => ({
+	key: {
+		body: { r: [-5, 0, 0], p: [0, 0.02, -0.01] },
+		head: { r: [-14, 0, 0] },
+		tail: { r: [tail, 0, 0] }
+	}
+});
+
+/** A rabbit's alert: sitting up on its haunches, forepaws off the ground (periscoping). */
+const SIT_UP: PostureDef<QuadrupedSlot> = {
+	key: {
+		body: { r: [-38, 0, 0], p: [0, 0.04, -0.12] },
+		head: { r: [22, 0, 0] },
+		...legs({ r: [-30, 0, 0], p: [0, 0.18, 0.06] }, { r: [-80, 0, 0], p: [0, -0.08, 0.06] })
+	}
+};
+
+/**
+ * Swimming (capivara, anta): the behaviour sets the body at the waterline; here the head
+ * is raised clear and the legs reach back to paddle (the gait layer moves them).
+ */
+const SWIM: PostureDef<QuadrupedSlot> = {
+	key: {
+		body: { r: [-6, 0, 0] },
+		head: { r: [-14, 0, 0] },
+		...legs({ r: [-20, 0, 0] }, { r: [25, 0, 0] })
+	}
+};
+
+/** A tortoise drawing its head and legs into the shell, which sinks onto the ground. */
+const WITHDRAW_SHELL: PostureDef<QuadrupedSlot> = {
+	key: {
+		body: { p: [0, -0.1, 0] },
+		head: { p: [0, -0.04, -0.34] },
+		...legs({ p: [0, 0.12, -0.04] }, { p: [0, 0.12, 0.04] })
+	}
+};
+
+/** A crab tucking its legs in as it backs into the burrow (the behaviour sinks it). */
+const WITHDRAW_CRAB: PostureDef<QuadrupedSlot> = {
+	key: {
+		body: { p: [0, -0.12, 0] },
+		...legs({ r: [0, 0, 25], p: [0, 0.12, 0] }, { r: [0, 0, 25], p: [0, 0.12, 0] })
+	}
+};
+
+/** Lying with the legs folded under (ungulates, rodents; the cat's sphinx is CAT_LIE). */
+const QUAD_LIE = (tail = -100): PostureDef<QuadrupedSlot> => ({
+	key: {
+		body: { r: [2, 0, 0], p: [0, -0.17, 0] },
+		head: { r: [8, 0, 0] },
+		tail: { r: [tail, 0, 0] },
+		...legs({ r: [-80, 0, 0], p: [0, -0.16, 0.05] }, { r: [-75, 0, 6], p: [0.03, -0.16, 0.03] })
+	}
+});
+
+/** A low animal settling on its belly (tortoise, toad, armadillo): the body drops, the legs splay. */
+const BELLY_LIE: PostureDef<QuadrupedSlot> = {
+	key: {
+		body: { p: [0, -0.08, 0] },
+		head: { r: [6, 0, 0] },
+		...legs({ r: [0, 0, 20], p: [0, 0.06, 0] }, { r: [0, 0, 20], p: [0, 0.06, 0] })
+	}
+};
+
 /** Tail tip of the curled Cube Pets tail rotated by `tailX` (deg), in root space. */
 function tailTip(model: ModelId, tailX: number): Vec3Tuple {
 	const { tailPivot, tailTip: tip } = MODELS[model];
@@ -259,6 +346,26 @@ const ROOST: PostureDef<BirdSlot> = {
 	}
 };
 
+/** Pecking or probing the ground or the mud: body tipped forward, bill down. */
+const PECK = (body: number, head: number): PostureDef<BirdSlot> => ({
+	key: {
+		body: { r: [body, 0, 0] },
+		head: { r: [head, 0, 0] },
+		tail: { r: [-30, 0, 0] },
+		...pair('wingL', 'wingR', { r: [0, 0, WINGS_FOLDED] })
+	}
+});
+
+/** Standing tall on the ground, wings folded, head up (a wading bird's watch). */
+const BIRD_ALERT: PostureDef<BirdSlot> = {
+	key: {
+		body: { r: [-8, 0, 0] },
+		head: { r: [-10, 0, 0] },
+		tail: { r: [-60, 0, 0] },
+		...pair('wingL', 'wingR', { r: [0, 0, WINGS_FOLDED] })
+	}
+};
+
 /** Wing angle (deg) folded against the body, used by the flap layer. */
 export const WING_FOLDED = WINGS_FOLDED;
 /** Wing angle (deg) spread in the 'fly' key. */
@@ -287,6 +394,57 @@ function quadrupedTable(species: SpeciesId): PostureTable<QuadrupedSlot> {
 			return { stand: QUAD_STAND(-112), sit: CAT_SIT, lie: CAT_LIE };
 		case 'preguica-de-coleira':
 			return { 'hang-under': hangUnder(species, false), 'hang-curl': hangUnder(species, true) };
+		// P23. Rodents and ungulates graze; capybaras and tapirs swim (UFRGS: the tapir is a
+		// skilled swimmer; capybaras spend the hot hours in water, ADW).
+		case 'capivara':
+			return {
+				stand: QUAD_STAND(0),
+				sit: CAT_SIT,
+				lie: QUAD_LIE(),
+				graze: GRAZE(42),
+				alert: ALERT(),
+				swim: SWIM
+			};
+		case 'anta':
+		case 'anta-filhote':
+			return { stand: QUAD_STAND(0), lie: QUAD_LIE(), graze: GRAZE(46), alert: ALERT(), swim: SWIM };
+		case 'cateto':
+			// Rooting with the snout: the head goes all the way down.
+			return { stand: QUAD_STAND(0), lie: QUAD_LIE(), graze: GRAZE(50, 0, 8), alert: ALERT() };
+		case 'veado-mateiro':
+			return { stand: QUAD_STAND(0), lie: QUAD_LIE(), graze: GRAZE(48), alert: ALERT() };
+		case 'cachorro-do-mato':
+			// Sniffing along the ground for fruit, insects and crabs; tail low.
+			return {
+				stand: QUAD_STAND(-120),
+				sit: CAT_SIT,
+				lie: CAT_LIE,
+				graze: GRAZE(40, -130),
+				alert: ALERT(-100)
+			};
+		case 'onca-parda':
+		case 'jaguatirica':
+			// Cats: as the onça (a low tail with the tip up); no graze, they sniff with the alert look.
+			return { stand: QUAD_STAND(-112), sit: CAT_SIT, lie: CAT_LIE, alert: ALERT(-100) };
+		case 'tapiti':
+			return { stand: QUAD_STAND(0), lie: QUAD_LIE(), graze: GRAZE(40), alert: SIT_UP };
+		case 'caranguejo-uca':
+			// Feeding on mud and leaf bits: the body tips forward and bobs.
+			return { stand: QUAD_STAND(0), graze: GRAZE(10, 0, 8), withdraw: WITHDRAW_CRAB, alert: ALERT(0) };
+		case 'tatu-galinha':
+			// Digging for insects with the snout; it rests in a burrow (here: lying flat).
+			return { stand: QUAD_STAND(-8), lie: BELLY_LIE, graze: GRAZE(40, -20, 10), alert: ALERT(-5) };
+		case 'jabuti-tinga':
+			return {
+				stand: QUAD_STAND(0),
+				lie: BELLY_LIE,
+				graze: GRAZE(30, 0, 4),
+				withdraw: WITHDRAW_SHELL,
+				alert: ALERT(0)
+			};
+		case 'sapo-cururu':
+			// Sits and waits; snapping up an insect is a quick head dip.
+			return { stand: QUAD_STAND(0), lie: BELLY_LIE, graze: GRAZE(25, 0, 4), alert: ALERT(0) };
 		default:
 			return {};
 	}
@@ -294,7 +452,24 @@ function quadrupedTable(species: SpeciesId): PostureTable<QuadrupedSlot> {
 
 function birdTable(species: SpeciesId): PostureTable<BirdSlot> {
 	const model = SPECIES[species].model;
-	return { perch: PERCH, fly: FLY(model), roost: ROOST };
+	switch (species) {
+		case 'colhereiro':
+			// A wading bird: walks and sweeps its spoon bill through the shallow mud; flies in at dusk.
+			return {
+				stand: PERCH,
+				graze: PECK(28, 48),
+				alert: BIRD_ALERT,
+				fly: FLY(model),
+				perch: PERCH,
+				roost: ROOST
+			};
+		case 'saira-sete-cores':
+		case 'sabia-laranjeira':
+		case 'jacutinga':
+			return { perch: PERCH, fly: FLY(model), roost: ROOST, graze: PECK(22, 40), alert: BIRD_ALERT };
+		default:
+			return { perch: PERCH, fly: FLY(model), roost: ROOST };
+	}
 }
 
 function compileTable<S extends string>(
@@ -338,7 +513,7 @@ function compileTable<S extends string>(
 export function buildPostures(species: SpeciesId): PostureSet {
 	const { model } = SPECIES[species];
 	const height = MODELS[model].height;
-	if (model === 'parrot') return compileTable(BIRD_LAYOUT, birdTable(species), height);
+	if (isBird(model)) return compileTable(BIRD_LAYOUT, birdTable(species), height);
 	return compileTable(QUADRUPED_LAYOUT, quadrupedTable(species), height);
 }
 

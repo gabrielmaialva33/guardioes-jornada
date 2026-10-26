@@ -19,6 +19,12 @@ export class AnimalMotion {
 	posture: Posture = 'stand';
 	/** Crossfade into a newly requested posture, seconds. */
 	fade: number = DURATION.state;
+	/**
+	 * Seconds since the behaviour's state changed, at the end of the update (Behaviour
+	 * fills it). The animator starts a new posture's fade that far along (at most one
+	 * update), so a far-LOD update that spans a state change fades exactly as frames do.
+	 */
+	postureAge = 0;
 
 	// --- Locomotion (ground and branches) ---
 	/** Distance actually covered during this update, u (turning on the spot counts its foot travel). The gait advances by it only. */
@@ -95,6 +101,9 @@ export class AnimalMotion {
 	}
 }
 
+/** Time of day as the animals read it: night is the survival mode's lighting (ART.md §1). */
+export type Light = 'day' | 'dusk' | 'night';
+
 /** The player's eye height above its feet, u (the avatar is 3 u tall; its head spans 2.1–3 u). */
 export const PLAYER_EYES = 2.6;
 
@@ -116,6 +125,8 @@ export interface AnimalWorld {
 	groundY: number;
 	/** prefers-reduced-motion or the game toggle (ART.md §7). */
 	reducedMotion: boolean;
+	/** Day, dusk or night: nocturnal and crepuscular species rest more by day (default 'day'). */
+	light: Light;
 }
 
 export function createAnimalWorld(): AnimalWorld {
@@ -128,6 +139,7 @@ export function createAnimalWorld(): AnimalWorld {
 		playerGrounded: true,
 		playerJumped: false,
 		groundY: Number.NaN,
-		reducedMotion: false
+		reducedMotion: false,
+		light: 'day'
 	};
 }

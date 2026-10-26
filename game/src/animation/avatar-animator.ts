@@ -31,9 +31,14 @@ import {
 	EMOTES,
 	type EmoteId,
 	FALL,
+	HANG,
+	HANG_GRIP,
 	IDLE_VARIANTS,
 	JUMP,
+	LADDER_CLIMB,
 	REACH,
+	ROW_LEFT,
+	ROW_RIGHT,
 	RUN,
 	RUN_STRIDE,
 	SIT,
@@ -181,6 +186,16 @@ export interface AvatarInput extends MotionInput {
 	reducedMotion: boolean;
 	/** A dialogue is open: the looping `talk` gesture plays whenever the avatar stands still. */
 	talking: boolean;
+	/** Speed of the attached Zipline, u/s (not the constrained character's planar speed). */
+	ziplineSpeed?: number;
+	/** Canoe.stroke in radians and its signed propulsion speed, excluding the river current. */
+	canoeStroke?: number;
+	canoeSpeed?: number;
+	/** Working side supplied by the canoe mesh: +1 is avatar-left (+x). */
+	paddleSide?: -1 | 1;
+	/** Positive rung spacing opts into the ladder-specific climb. Distance is measured from its first rung. */
+	ladderRungSpacing?: number;
+	ladderDistance?: number;
 }
 
 export function createAvatarInput(): AvatarInput {
@@ -201,6 +216,14 @@ export function createAvatarInput(): AvatarInput {
 		lookTarget: null,
 		reducedMotion: false,
 		talking: false,
+		hanging: false,
+		rowing: false,
+		ziplineSpeed: 0,
+		canoeStroke: 0,
+		canoeSpeed: 0,
+		paddleSide: 1,
+		ladderRungSpacing: 0,
+		ladderDistance: undefined,
 		surface: 'ground',
 		slope: 0,
 		edgeAhead: Number.POSITIVE_INFINITY
@@ -252,6 +275,8 @@ const CLIMBING = SLOT_INDEX.climb;
 const SWIMMING = SLOT_INDEX.swim;
 const SITTING = SLOT_INDEX.sit;
 const EMOTING = SLOT_INDEX.emote;
+const HANGING = SLOT_INDEX.hang;
+const ROWING = SLOT_INDEX.row;
 
 const ROOT = AVATAR_LAYOUT.index.root * JOINT_STRIDE;
 const TORSO = AVATAR_LAYOUT.index.torso * JOINT_STRIDE;
@@ -281,6 +306,9 @@ export class AvatarAnimator {
 	/** Foot that touched down during the last update, for step dust and sounds. */
 	footstep: Foot | null = null;
 	climbPhase = 0;
+	rowPhase = 0;
+	readonly hangSwing = new Spring(8);
+	#zipLag = 0;
 	swimPhase = 0;
 	/** Torso pitch the breathing layer added in the last update, radians. */
 	breathing = 0;
@@ -394,6 +422,8 @@ export class AvatarAnimator {
 		this.pose.reset();
 		this.phase = this.cadence = this.playbackRate = this.climbPhase = this.swimPhase = this.breathing = 0;
 		this.footstep = null;
+		this.rowPhase = this.#zipLag = 0;
+		this.hangSwing.reset();
 		this.lean.reset();
 		this.bank.reset();
 		this.squash.reset();
@@ -427,10 +457,23 @@ export class AvatarAnimator {
 		const weights = states.weights;
 		const speed = Math.max(0, Number.isFinite(input.speed) ? input.speed : 0);
 		const verticalSpeed = Number.isFinite(input.verticalSpeed) ? input.verticalSpeed : 0;
-		const onFoot = input.grounded && !input.climbing && !input.swimming && !input.sitting;
+		const onFoot =
+			input.grounded &&
+			!input.climbing &&
+			!input.swimming &&
+			!input.sitting &&
+			!input.hanging &&
+			!input.rowing;
 		const stud = this.#stud;
 		this.#dt = dt;
 		this.#speed = speed;
+		if (input.hanging || input.rowing || input.climbing) {
+			this.lean.reset();
+			this.bank.reset();
+			this.squash.reset();
+			this.slopeLean.reset();
+			this.narrow = this.water = this.teeter = 0;
+		}
 		this.#followContext(input, onFoot);
 
 		// Distance-driven cycles: shorter steps on narrow footing, slower ones wading.
@@ -447,8 +490,24 @@ export class AvatarAnimator {
 			}
 			this.phase = wrap01(next);
 		}
-		if (input.climbing)
-			this.climbPhase = wrap01(this.climbPhase + (verticalSpeed * dt) / (CLIMB_STRIDE * stud));
+		const rung = input.ladderRungSpacing;
+		const ladder = typeof rung === 'number' && Number.isFinite(rung) && rung > 0;
+		if (input.climbing) {
+			const travel = input.ladderDistance;
+			this.climbPhase =
+				ladder && typeof travel === 'number' && Number.isFinite(travel)
+					? wrap01(travel / (2 * rung))
+					: wrap01(this.climbPhase + (verticalSpeed * dt) / (ladder ? 2 * rung : CLIMB_STRIDE * stud));
+		}
+		const stroke = input.canoeStroke;
+		const canoeSpeed =
+			typeof input.canoeSpeed === 'number' && Number.isFinite(input.canoeSpeed) ? input.canoeSpeed : 0;
+		const rowPower = Math.min(1, Math.abs(canoeSpeed) / 4);
+		if (input.rowing)
+			this.rowPhase =
+				typeof stroke === 'number' && Number.isFinite(stroke)
+					? wrap01((stroke / TAU) * (canoeSpeed < 0 ? -1 : 1))
+					: 0;
 		if (input.swimming)
 			this.swimPhase = wrap01(
 				this.swimPhase +
@@ -468,8 +527,13 @@ export class AvatarAnimator {
 		head.time = 0;
 		head.weight = weights[JUMPING];
 		JUMP.sampleInto(out, head);
-		head.weight = weights[SITTING];
+		head.weight = weights[SITTING] + weights[ROWING] * (1 - rowPower);
 		SIT.sampleInto(out, head);
+		head.weight = weights[HANGING];
+		HANG.sampleInto(out, head);
+		head.time = this.rowPhase;
+		head.weight = weights[ROWING] * rowPower;
+		(input.paddleSide === -1 ? ROW_RIGHT : ROW_LEFT).sampleInto(out, head);
 		if (weights[FALLING] > 0) {
 			this.#fallTime = (this.#fallTime + dt) % FALL.period;
 			head.time = this.#fallTime / FALL.period;
@@ -478,7 +542,7 @@ export class AvatarAnimator {
 		}
 		head.time = this.climbPhase;
 		head.weight = weights[CLIMBING];
-		CLIMB.sampleInto(out, head);
+		(ladder ? LADDER_CLIMB : CLIMB).sampleInto(out, head);
 		if (weights[SWIMMING] > 0) {
 			this.#treadTime = (this.#treadTime + dt) % SWIM_IDLE.period;
 			head.time = this.swimPhase;
@@ -498,9 +562,67 @@ export class AvatarAnimator {
 		this.#applyContext(input);
 		this.#applyGesture(input);
 		this.#applyLayers(input, onFoot);
+		this.#applyTraversal(input);
 		// Styles with nothing dangling (and no style) skip the head tracking.
 		if (this.hair.style !== null) this.#swayHair(input);
 		return pose;
+	}
+
+	/** Attached poses do not inherit landing squash, balance or acceleration lean. */
+	#applyTraversal(input: AvatarInput) {
+		const w = this.states.weights,
+			out = this.pose.data;
+
+		const zipSpeed =
+			typeof input.ziplineSpeed === 'number' && Number.isFinite(input.ziplineSpeed)
+				? Math.max(0, input.ziplineSpeed)
+				: 0;
+		this.#zipLag += (zipSpeed - this.#zipLag) * (1 - Math.exp(-5 * this.#dt));
+		if (input.reducedMotion || !input.hanging) {
+			this.hangSwing.reset();
+			this.#zipLag = zipSpeed;
+		} else {
+			this.hangSwing.target = Math.max(-0.12, Math.min(0.12, (zipSpeed - this.#zipLag) * 0.025));
+			this.hangSwing.dt = this.#dt;
+			this.hangSwing.update();
+		}
+		const swing = this.hangSwing.value * w[HANGING];
+		// Rotate around the grip, not the feet: both palms stay on the bar during pendulum lag.
+		const gy = HANG_GRIP.height / RIG_HEIGHT,
+			gz = HANG_GRIP.forward / RIG_HEIGHT;
+		out[ROOT] += swing;
+		out[ROOT + 4] += gy * (1 - Math.cos(swing)) + gz * Math.sin(swing);
+		out[ROOT + 5] += gz * (1 - Math.cos(swing)) - gy * Math.sin(swing);
+		const spacing = input.ladderRungSpacing;
+		if (w[CLIMBING] > 0 && typeof spacing === 'number' && Number.isFinite(spacing) && spacing > 0) {
+			const reach = (GESTURE.armReach * this.#height) / RIG_HEIGHT;
+			const shoulder = (1.8 * this.#height) / RIG_HEIGHT;
+			const high = Math.floor((shoulder + reach * Math.cos(Math.PI / 6)) / spacing) * spacing;
+			const travel = this.climbPhase * 2 * spacing;
+			let leftHeight = high - travel,
+				rightHeight = high - spacing - travel;
+			if (travel < spacing) {
+				const t = travel / spacing;
+				rightHeight += 2 * spacing * t * t * (3 - 2 * t);
+			} else {
+				const t = (travel - spacing) / spacing;
+				rightHeight += 2 * spacing;
+				leftHeight += 2 * spacing * t * t * (3 - 2 * t);
+			}
+			// During each half-cycle one palm holds a rung's world height, the other reaches two rungs up.
+			const left = -Math.acos(Math.max(-0.98, Math.min(0.98, (shoulder - leftHeight) / reach)));
+			const right = -Math.acos(Math.max(-0.98, Math.min(0.98, (shoulder - rightHeight) / reach)));
+			// Replace the clip's fixed arm pitch by a spacing-aware hand-height difference.
+			out[ARM_L] += (left - out[ARM_L]) * w[CLIMBING];
+			out[ARM_R] += (right - out[ARM_R]) * w[CLIMBING];
+		}
+		if (!input.reducedMotion && w[ROWING] > 0) {
+			const power =
+				typeof input.canoeSpeed === 'number' && Number.isFinite(input.canoeSpeed)
+					? Math.min(1, Math.abs(input.canoeSpeed) / 4)
+					: 0;
+			out[ROOT + 4] += ((Math.sin(this.rowPhase * TAU) * 0.035) / this.#height) * power * w[ROWING];
+		}
 	}
 
 	/** Moves the narrow, water and teeter weights toward this update's context. */
@@ -561,7 +683,13 @@ export class AvatarAnimator {
 
 		// Slope: lean into an uphill, brace (lean back, arms forward and out) going down.
 		const slope = input.slope;
-		const onFoot = input.grounded && !input.climbing && !input.swimming && !input.sitting;
+		const onFoot =
+			input.grounded &&
+			!input.climbing &&
+			!input.swimming &&
+			!input.sitting &&
+			!input.hanging &&
+			!input.rowing;
 		let slopeTarget = 0;
 		let brace = 0;
 		if (onFoot && typeof slope === 'number' && Number.isFinite(slope)) {
@@ -808,7 +936,7 @@ export class AvatarAnimator {
 		out[ROOT + 2] += bank.value;
 
 		// Squash and stretch: the spring sits at 0, take-off and landing kick it.
-		if (!reduced) {
+		if (!reduced && !input.hanging && !input.rowing && !input.climbing) {
 			if (states.landed)
 				this.squash.kick(-LAYERS.landSquash * Math.min(1, Math.max(0, states.landingSpeed / JUMP_SPEED)));
 			if (states.jumped) this.squash.kick(LAYERS.jumpStretch);

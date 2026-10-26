@@ -19,12 +19,17 @@ function make(species: SpeciesId): AnyAnimal {
 			muriqui.behaviour.brachiate(6);
 			return muriqui;
 		}
-		case 'tucano-de-bico-verde': {
-			const tucano = createAnimal(species, { seed: 31, perches: PERCHES, lod });
-			tucano.behaviour.flyTo(1);
-			return tucano;
+		case 'tucano-de-bico-verde':
+		case 'saira-sete-cores':
+		case 'sabia-laranjeira':
+		case 'jacutinga': {
+			const bird = createAnimal(species, { seed: 31, perches: PERCHES, lod });
+			bird.behaviour.flyTo(1);
+			return bird;
 		}
 		case 'onca-pintada':
+		case 'onca-parda':
+		case 'jaguatirica':
 			return createAnimal(species, { seed: 31, route: [0, 0, 0, 30, 0, 0, 30, 0, 30], loop: true, lod });
 		case 'mico-leao-dourado':
 			return createAnimal(species, { seed: 31, route: straight(10, 3), lod });
@@ -72,8 +77,9 @@ describe('animation LOD', () => {
 				// Within 1.5° per joint and 2 mm-scale offsets; placement within 2 cm of world.
 				expect(d.rotation).toBeLessThan(0.026);
 				// The head carries the larger share of a glance (1 − bodyLook), and the look
-				// spring sees a glance that lands mid-update one LOD step late: 2.6°.
-				expect(d.head).toBeLessThan(0.045);
+				// spring sees a glance that lands mid-update one LOD step late: 2.9° (the
+				// jaguatirica's, a small cat's quicker spring with the onça's wide glances).
+				expect(d.head).toBeLessThan(0.05);
 				expect(d.offset).toBeLessThan(0.004);
 				expect(d.placement).toBeLessThan(0.04);
 				expect(d.yaw).toBeLessThan(0.02);

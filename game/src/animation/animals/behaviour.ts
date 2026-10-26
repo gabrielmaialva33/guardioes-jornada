@@ -49,6 +49,12 @@ export class BehaviourClock {
 	timer = 0;
 	/** Total time stepped, seconds. */
 	total = 0;
+	/**
+	 * Seconds until an event the behaviour times itself (a toucan's landing), set at the
+	 * end of each advance(); the next substep stops there so the event lands exactly at
+	 * any frame rate. Infinity when there is none.
+	 */
+	horizon = Number.POSITIVE_INFINITY;
 }
 
 /** Turning and speed ramps along a route (see Behaviour.turn and Behaviour.ramp). */
@@ -129,6 +135,7 @@ export abstract class Behaviour<S extends string = string> {
 		for (let guard = 0; left > 1e-9 && guard < 64; guard++) {
 			let h = Math.min(left, MAX_SUBSTEP);
 			if (clock.timer > 1e-9 && clock.timer < h) h = clock.timer;
+			if (clock.horizon > 1e-9 && clock.horizon < h) h = clock.horizon;
 			clock.h = h;
 			const distance = motion.distance;
 			const speed = motion.speed;
@@ -159,6 +166,7 @@ export abstract class Behaviour<S extends string = string> {
 			if (clock.timer <= 1e-9) this.decide(world);
 		}
 		this.finish(world);
+		motion.postureAge = clock.inState;
 	}
 
 	/** Restarts the state machine and the random stream (respawn, teleport). */
@@ -166,6 +174,7 @@ export abstract class Behaviour<S extends string = string> {
 		this.rng.reset(this.#seed);
 		this.cosmetic.reset(this.#seed ^ 0x9e3779b9);
 		this.clock.inState = this.clock.timer = this.clock.total = 0;
+		this.clock.horizon = Number.POSITIVE_INFINITY;
 	}
 
 	/** Called once per step before the substeps: read per-frame events here. */

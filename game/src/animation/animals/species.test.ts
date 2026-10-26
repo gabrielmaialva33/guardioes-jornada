@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type AnyAnimal, createAnimal } from './animal.ts';
 import { allFinite, holds, run, straight } from './fixtures.test-helper.ts';
+import { gameHeight, MEASURES, P23_SPECIES } from './measures.ts';
 import { MICO_STATES } from './mico.ts';
 import { createAnimalWorld } from './motion.ts';
 import { MURIQUI_HOLDS } from './muriqui.ts';
@@ -9,6 +10,17 @@ import { POSTURES, posturesOf, SUSPENDED } from './postures.ts';
 import { SLOTH_LIMB_ORDER } from './preguica.ts';
 import { SPECIES, SPECIES_IDS, type SpeciesId } from './species.ts';
 import { TUCANO } from './tucano.ts';
+
+/** ART.md §3 heights of the hand-tuned species, and the P23 ones from their measured size (× 1.5 / 0.47 m). */
+const TUNED_HEIGHTS = {
+	'mico-leao-dourado': 0.9,
+	'bugio-ruivo': 1.4,
+	muriqui: 1.7,
+	'preguica-de-coleira': 1.4,
+	'onca-pintada': 2.2,
+	'tucano-de-bico-verde': 0.9
+};
+const P23_HEIGHTS = Object.fromEntries(P23_SPECIES.map((id) => [id, gameHeight(MEASURES[id].height)]));
 
 const PERCHES = [
 	{ x: 0, y: 6, z: 0, yaw: Math.PI / 2, halfLength: 0.6 },
@@ -23,8 +35,13 @@ function make(species: SpeciesId, seed = 1): AnyAnimal {
 		case 'muriqui':
 			return createAnimal(species, { seed, route: holds(10, 1.15, 8), start: 0 });
 		case 'tucano-de-bico-verde':
+		case 'saira-sete-cores':
+		case 'sabia-laranjeira':
+		case 'jacutinga':
 			return createAnimal(species, { seed, perches: PERCHES });
 		case 'onca-pintada':
+		case 'onca-parda':
+		case 'jaguatirica':
 			return createAnimal(species, { seed, route: [0, 0, 0, 20, 0, 0, 20, 0, 20, 0, 0, 20], loop: true });
 		default:
 			return createAnimal(species, { seed, route: straight(6, 5) });
@@ -33,15 +50,8 @@ function make(species: SpeciesId, seed = 1): AnyAnimal {
 
 describe('scale (ART.md §3)', () => {
 	it('matches the art direction heights', () => {
-		const expected: Record<SpeciesId, number> = {
-			'mico-leao-dourado': 0.9,
-			'bugio-ruivo': 1.4,
-			muriqui: 1.7,
-			'preguica-de-coleira': 1.4,
-			'onca-pintada': 2.2,
-			'tucano-de-bico-verde': 0.9
-		};
-		for (const id of SPECIES_IDS) expect(SPECIES[id].size).toBe(expected[id]);
+		const expected = { ...TUNED_HEIGHTS, ...P23_HEIGHTS } as Record<SpeciesId, number>;
+		for (const id of SPECIES_IDS) expect(SPECIES[id].size).toBeCloseTo(expected[id], 9);
 	});
 
 	it('keeps the spring tempo physical: √(L_mico / L) of the real scaled body length', () => {

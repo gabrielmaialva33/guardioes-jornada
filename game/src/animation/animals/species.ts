@@ -44,10 +44,25 @@
  * - [ICMBio] species sheets and action plans cited in assets-report.md §3.3.
  * - [AJ83] Alexander & Jayes 1983, "A dynamic similarity hypothesis for the gaits
  *   of quadrupedal mammals", J. Zool. 201:135–152.
+ *
+ * The P23 species (capivara … guará) are not tuned by hand: their size, speeds, strides
+ * and gait kinds are derived from measures.ts by AJ83's rules (speed √(F g h), stride
+ * 2.3 h F^0.3, h the drawn hip), so a measured table retunes them in one place.
  */
 import { SPRING } from '../../style/motion.ts';
 import type { SpringPreset } from './damped-spring.ts';
-import { MODELS, type ModelId } from './rigs.ts';
+import {
+	type Activity,
+	froudeSpeed,
+	froudeStride,
+	type GaitKind,
+	type GaitMeasure,
+	gameHeight,
+	MEASURES,
+	P23_SPECIES,
+	type P23Species
+} from './measures.ts';
+import { isBird, MODELS, type ModelId } from './rigs.ts';
 import { DEG } from './scalar.ts';
 
 export const SPECIES_IDS = [
@@ -56,7 +71,8 @@ export const SPECIES_IDS = [
 	'bugio-ruivo',
 	'onca-pintada',
 	'preguica-de-coleira',
-	'tucano-de-bico-verde'
+	'tucano-de-bico-verde',
+	...P23_SPECIES
 ] as const;
 
 export type SpeciesId = (typeof SPECIES_IDS)[number];
@@ -81,6 +97,10 @@ export interface GaitParams {
 	readonly arc: number;
 	readonly arcStart: number;
 	readonly arcEnd: number;
+	/** Speed (u/s) at which the arc reaches its full height; slower bounds barely leave the ground. */
+	readonly arcSpeed: number;
+	/** Legs swing across the body (a crab's sideways walk) instead of fore and aft. */
+	readonly sideways: boolean;
 }
 
 /** Stride length (world units) at two speeds (u/s), linear between and clamped outside. */
@@ -95,6 +115,10 @@ export interface SpeciesParams {
 	readonly id: SpeciesId;
 	/** Common name in Brazilian Portuguese, for the HUD and debug overlays. */
 	readonly name: string;
+	/** Scientific name. */
+	readonly scientific: string;
+	/** When it is active (measures.ts); the behaviours rest more outside it. */
+	readonly activity: Activity;
 	readonly model: ModelId;
 	/** ART.md §3 height in world units, feet to the top of the head (×1.5 life size against the 3.0 u avatar). */
 	readonly size: number;
@@ -182,7 +206,9 @@ const DS_WALK: GaitParams = {
 	roll: 2 * DEG,
 	arc: 0,
 	arcStart: 0,
-	arcEnd: 0
+	arcEnd: 0,
+	arcSpeed: 10,
+	sideways: false
 };
 
 /**
@@ -201,7 +227,9 @@ const BOUND: GaitParams = {
 	roll: 0,
 	arc: 0.22,
 	arcStart: 0,
-	arcEnd: 0.3
+	arcEnd: 0.3,
+	arcSpeed: 10,
+	sideways: false
 };
 
 /** Felid walk, lateral sequence near 25% phase [US17]: LH 0, LF 0.25, RH 0.5, RF 0.75. */
@@ -216,15 +244,19 @@ const LS_WALK: GaitParams = {
 	roll: 2.5 * DEG,
 	arc: 0,
 	arcStart: 0,
-	arcEnd: 0
+	arcEnd: 0,
+	arcSpeed: 10,
+	sideways: false
 };
 
 const NO_STRIDE: StrideParams = { slowSpeed: 0, slowStride: 1, fastSpeed: 1, fastStride: 1 };
 
-export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
+const TUNED: Readonly<Record<Exclude<SpeciesId, P23Species>, SpeciesParams>> = {
 	'mico-leao-dourado': {
 		id: 'mico-leao-dourado',
 		name: 'Mico-leão-dourado',
+		scientific: 'Leontopithecus rosalia',
+		activity: 'diurnal',
 		...sized('monkey', MICO_SIZE),
 		limbScale: { front: 1, hind: 1 },
 		tempo: tempoFor('monkey', MICO_SIZE),
@@ -253,6 +285,8 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	muriqui: {
 		id: 'muriqui',
 		name: 'Muriqui',
+		scientific: 'Brachyteles arachnoides',
+		activity: 'diurnal',
 		...sized('monkey', MURIQUI_SIZE),
 		// Long forelimbs for arm-swinging [E63]; the Cube Pets leg is a short block.
 		limbScale: { front: 2.4, hind: 1.4 },
@@ -281,6 +315,8 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'bugio-ruivo': {
 		id: 'bugio-ruivo',
 		name: 'Bugio-ruivo',
+		scientific: 'Alouatta guariba',
+		activity: 'diurnal',
 		...sized('monkey', BUGIO_SIZE),
 		limbScale: { front: 1, hind: 1 },
 		tempo: tempoFor('monkey', BUGIO_SIZE),
@@ -310,6 +346,8 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'onca-pintada': {
 		id: 'onca-pintada',
 		name: 'Onça-pintada',
+		scientific: 'Panthera onca',
+		activity: 'cathemeral',
 		...sized('tiger', ONCA_SIZE),
 		limbScale: { front: 1, hind: 1 },
 		tempo: tempoFor('tiger', ONCA_SIZE),
@@ -338,6 +376,10 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'preguica-de-coleira': {
 		id: 'preguica-de-coleira',
 		name: 'Preguiça-de-coleira',
+		// The RJ/ES maned sloths are Bradypus crinitus (Miranda et al. 2023, J. Mammal. 104:86); the 2026
+		// national list still files them under B. torquatus (VU), as the Guia's status note says.
+		scientific: 'Bradypus crinitus',
+		activity: 'cathemeral',
 		...sized('koala', PREGUICA_SIZE),
 		// Forelimbs much longer than hindlimbs [M25]; both longer than the Cube Pets block.
 		limbScale: { front: 1.8, hind: 1.4 },
@@ -369,6 +411,8 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 	'tucano-de-bico-verde': {
 		id: 'tucano-de-bico-verde',
 		name: 'Tucano-de-bico-verde',
+		scientific: 'Ramphastos dicolorus',
+		activity: 'diurnal',
 		// Feet to the top of the head, like the other species.
 		...sized('parrot', TUCANO_SIZE),
 		limbScale: { front: 1, hind: 1 },
@@ -396,6 +440,262 @@ export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
 		]
 	}
 };
+
+// --- P23 species: derived from measures.ts ---------------------------------------
+
+/**
+ * Footfall patterns for the P23 gait kinds (Hildebrand-style touchdown phases: front
+ * left, front right, back left, back right). Duty factors are typical values for each
+ * gait [AJ83: walks above 0.5, trots near 0.4–0.5, gallops near 0.3]; a measured duty in
+ * measures.ts replaces them.
+ */
+const GAITS: Readonly<Record<GaitKind, GaitParams>> = {
+	'lateral-walk': LS_WALK,
+	// Diagonal pairs land together: LF with RH, RF with LH.
+	trot: {
+		...LS_WALK,
+		touchdown: [0, 0.5, 0.5, 0],
+		duty: [0.45, 0.45, 0.45, 0.45],
+		maxSwing: 45 * DEG,
+		lift: 0.07,
+		bob: 0.03,
+		roll: 1.5 * DEG
+	},
+	// Rotary gallop: hind pair, then fore pair, then a gathered flight phase.
+	gallop: {
+		...LS_WALK,
+		touchdown: [0.42, 0.52, 0, 0.1],
+		duty: [0.3, 0.3, 0.3, 0.3],
+		maxSwing: 50 * DEG,
+		lift: 0.08,
+		bob: 0.04,
+		bobsPerStride: 1,
+		pitch: 6 * DEG,
+		roll: 0,
+		arc: 0.08,
+		arcStart: 0.62,
+		arcEnd: 0.98
+	},
+	// The rabbit's half-bound: the mico's BOUND pattern.
+	'half-bound': BOUND,
+	// A toad's hop: both hind feet push together, the forefeet catch the landing.
+	hop: {
+		...BOUND,
+		touchdown: [0.55, 0.57, 0, 0.02],
+		duty: [0.35, 0.35, 0.4, 0.4],
+		maxSwing: 55 * DEG,
+		pitch: 10 * DEG,
+		arc: 0.35,
+		arcStart: 0.05,
+		arcEnd: 0.55,
+		arcSpeed: 1.5
+	},
+	// Tortoises: a lateral walk at a high duty factor, the shell rolling side to side.
+	crawl: {
+		...LS_WALK,
+		duty: [0.85, 0.85, 0.85, 0.85],
+		maxSwing: 28 * DEG,
+		lift: 0.04,
+		bob: 0.01,
+		roll: 3 * DEG
+	},
+	// Crabs: the legs swing across the body, the two sides alternating.
+	sideways: {
+		...LS_WALK,
+		touchdown: [0, 0.5, 0.5, 0],
+		duty: [0.6, 0.6, 0.6, 0.6],
+		maxSwing: 35 * DEG,
+		roll: 0,
+		sideways: true
+	},
+	// Birds on the ground: only the legs (slots 6–7) step; a high, careful wading step.
+	'biped-walk': {
+		...LS_WALK,
+		touchdown: [0, 0, 0, 0.5],
+		duty: [1, 1, 0.6, 0.6],
+		maxSwing: 35 * DEG,
+		lift: 0.12,
+		bob: 0.03,
+		pitch: 2 * DEG,
+		roll: 2 * DEG
+	},
+	'biped-run': {
+		...LS_WALK,
+		touchdown: [0, 0, 0, 0.5],
+		duty: [1, 1, 0.4, 0.4],
+		maxSwing: 45 * DEG,
+		lift: 0.1,
+		bob: 0.04,
+		pitch: 4 * DEG,
+		roll: 1 * DEG
+	}
+};
+
+const withDuty = (gait: GaitParams, measure: GaitMeasure) =>
+	measure.duty === undefined
+		? gait
+		: { ...gait, duty: gait.duty.map((d) => (d >= 1 ? d : measure.duty)) as unknown as GaitParams['duty'] };
+
+/** Look, tail and turn tuning by body plan (not measured: animation defaults). */
+const PLAN = {
+	mammal: {
+		lookYaw: 60 * DEG,
+		lookPitch: 25 * DEG,
+		bodyLook: 0.3,
+		headTilt: 0,
+		tailSway: 6 * DEG,
+		tailSwayPeriod: 3,
+		tailTurn: 0.12,
+		tailAccel: 0.02,
+		turnRate: 3
+	},
+	// A wading bird sweeps its head and neck while the body stays steady (the colhereiro).
+	wader: {
+		lookYaw: 60 * DEG,
+		lookPitch: 30 * DEG,
+		bodyLook: 0.25,
+		headTilt: 0.2,
+		tailSway: 0,
+		tailSwayPeriod: 1,
+		tailTurn: 0.05,
+		tailAccel: 0.01,
+		turnRate: 3
+	},
+	bird: {
+		lookYaw: 70 * DEG,
+		lookPitch: 30 * DEG,
+		bodyLook: 0.45,
+		headTilt: 0.3,
+		tailSway: 0,
+		tailSwayPeriod: 1,
+		tailTurn: 0.08,
+		tailAccel: 0.01,
+		turnRate: 6
+	},
+	reptile: {
+		lookYaw: 50 * DEG,
+		lookPitch: 20 * DEG,
+		bodyLook: 0.2,
+		headTilt: 0,
+		tailSway: 0,
+		tailSwayPeriod: 1,
+		tailTurn: 0.05,
+		tailAccel: 0.01,
+		turnRate: 0.8
+	},
+	crab: {
+		lookYaw: 0,
+		lookPitch: 0,
+		bodyLook: 0,
+		headTilt: 0,
+		tailSway: 0,
+		tailSwayPeriod: 1,
+		tailTurn: 0,
+		tailAccel: 0,
+		turnRate: 4
+	}
+} as const;
+
+const PLAN_OF: Readonly<Record<P23Species, keyof typeof PLAN>> = {
+	capivara: 'mammal',
+	anta: 'mammal',
+	'anta-filhote': 'mammal',
+	cateto: 'mammal',
+	'veado-mateiro': 'mammal',
+	'cachorro-do-mato': 'mammal',
+	'onca-parda': 'mammal',
+	tapiti: 'mammal',
+	jaguatirica: 'mammal',
+	'caranguejo-uca': 'crab',
+	'tatu-galinha': 'mammal',
+	'jabuti-tinga': 'reptile',
+	'sapo-cururu': 'reptile',
+	'saira-sete-cores': 'bird',
+	'sabia-laranjeira': 'bird',
+	jacutinga: 'bird',
+	colhereiro: 'wader'
+};
+
+/** The drawn hip height in world units: AJ83's h for the cube legs. */
+export const hipHeight = (species: SpeciesParams) => MODELS[species.model].hipY * species.scale;
+
+/** Walk and run speeds (u/s) and strides (u) of a P23 species from its Froude numbers, or the measured overrides. */
+export function derivedGait(id: P23Species) {
+	const m = MEASURES[id];
+	const size = gameHeight(m.height);
+	const hip = MODELS[m.model].hipY * scaleFor(m.model, size);
+	const at = (g: GaitMeasure | null) =>
+		g === null
+			? null
+			: { speed: g.speed ?? froudeSpeed(g.froude, hip), stride: g.stride ?? froudeStride(g.froude, hip) };
+	return { hip, walk: at(m.walk), run: at(m.run) };
+}
+
+function fromMeasures(id: P23Species): SpeciesParams {
+	const m = MEASURES[id];
+	const size = gameHeight(m.height);
+	const plan = PLAN[PLAN_OF[id]];
+	const { walk, run } = derivedGait(id);
+	const walkGait = m.walk ? withDuty(GAITS[m.walk.kind], m.walk) : null;
+	const runGait = m.run ? withDuty(GAITS[m.run.kind], m.run) : null;
+	const slow = walk ?? { speed: 0, stride: 1 };
+	const fast =
+		run ?? (walk ? { speed: walk.speed * 1.6, stride: walk.stride * 1.3 } : { speed: 1, stride: 1 });
+	return {
+		id,
+		name: m.name,
+		scientific: m.scientific,
+		activity: m.activity,
+		...sized(m.model, size),
+		limbScale: { front: 1, hind: 1 },
+		tempo: tempoFor(m.model, size),
+		lookPreset: plan === PLAN.bird ? SPRING.pop : SPRING.body,
+		walk: walkGait,
+		run: runGait,
+		// The walk crossfades into the run between these speeds: past the walk's own speed,
+		// fully the run gait at 85% of the run speed [AJ83: transitions at fixed F].
+		runFrom: run ? Math.max(slow.speed * 1.15, slow.speed + 0.05) : 0,
+		runTo: run ? Math.max(slow.speed * 1.2, fast.speed * 0.85) : 1,
+		stride: walk
+			? {
+					slowSpeed: slow.speed,
+					slowStride: slow.stride,
+					fastSpeed: Math.max(fast.speed, slow.speed + 0.01),
+					fastStride: fast.stride
+				}
+			: NO_STRIDE,
+		lookYaw: plan.lookYaw,
+		lookPitch: plan.lookPitch,
+		bodyLook: plan.bodyLook,
+		headTilt: isBird(m.model) ? plan.headTilt : 0,
+		tailSway: plan.tailSway,
+		tailSwayPeriod: plan.tailSwayPeriod,
+		tailTurn: plan.tailTurn,
+		tailAccel: plan.tailAccel,
+		turnRate: plan.turnRate,
+		sources: m.sources
+	};
+}
+
+export const SPECIES: Readonly<Record<SpeciesId, SpeciesParams>> = {
+	...TUNED,
+	...(Object.fromEntries(P23_SPECIES.map((id) => [id, fromMeasures(id)])) as Record<
+		P23Species,
+		SpeciesParams
+	>)
+};
+
+/**
+ * Former species ids still understood (old saves, debug URLs, notes): the guará became the
+ * colhereiro on 26/10/2026 (its current range, SP to SC, is south of the park).
+ */
+export const SPECIES_ALIASES: Readonly<Record<string, SpeciesId>> = { guara: 'colhereiro' };
+
+/** A species id or one of its aliases to the current id; null when unknown. */
+export function resolveSpeciesId(id: string): SpeciesId | null {
+	if ((SPECIES_IDS as readonly string[]).includes(id)) return id as SpeciesId;
+	return SPECIES_ALIASES[id] ?? null;
+}
 
 /** Stride length (u) of a species at a speed (u/s): linear between the two stride points, clamped. */
 export function strideAt(species: SpeciesParams, speed: number): number {

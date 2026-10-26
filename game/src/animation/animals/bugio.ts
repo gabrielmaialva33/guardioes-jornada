@@ -1,5 +1,5 @@
 /**
- * Bugio-ruivo (Alouatta guariba clamitans).
+ * Bugio-ruivo (Alouatta guariba).
  *
  * Biology it follows:
  * - Slow quadrupedal walking along branches with a diagonal-sequence gait; it

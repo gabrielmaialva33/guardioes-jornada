@@ -60,6 +60,8 @@ const HANG_UNDER = POSTURE_INDEX['hang-under'];
 const HANG_CURL = POSTURE_INDEX['hang-curl'];
 const HOWL = POSTURE_INDEX.howl;
 const FLY = POSTURE_INDEX.fly;
+const GRAZE = POSTURE_INDEX.graze;
+const SWIM = POSTURE_INDEX.swim;
 
 const R = ROOT * JOINT_STRIDE;
 const B = BODY * JOINT_STRIDE;
@@ -85,6 +87,9 @@ export const ANIMAL_LAYERS = {
 	/** Howl pulses per second (breath groups of the roar) and head pump, radians. */
 	howlRate: 1.4,
 	howlPump: 6 * DEG,
+	/** Grazing: chews or pecks per second and the head's bob, radians. */
+	grazeRate: 1.6,
+	grazeBob: 7 * DEG,
 	/** Crouch depth (model units) and pitch at full anticipation. */
 	crouchDepth: 0.08,
 	crouchPitch: 6 * DEG,
@@ -169,6 +174,7 @@ export class AnimalAnimator {
 	readonly #reducedFade: number = REDUCED_MOTION_DURATION;
 	#howlPhase = 0;
 	#eatPhase = 0;
+	#grazePhase = 0;
 	#gripSide = 1;
 	#gripAngle = -Math.PI / 2;
 	#releaseFrom = 0;
@@ -203,7 +209,7 @@ export class AnimalAnimator {
 		this.#target = this.#fallback;
 		this.#fadeElapsed = this.#fade = 0;
 		this.phase = this.cadence = this.stride = this.gaitWeight = this.runWeight = 0;
-		this.time = this.wingPhase = this.#howlPhase = this.#eatPhase = this.#arc = 0;
+		this.time = this.wingPhase = this.#howlPhase = this.#eatPhase = this.#grazePhase = this.#arc = 0;
 		this.footfall = -1;
 		this.#gripSide = 1;
 		this.#gripAngle = -Math.PI / 2;
@@ -289,7 +295,10 @@ export class AnimalAnimator {
 			this.#target = target;
 			const fade = Number.isFinite(motion.fade) && motion.fade > 0 ? motion.fade : 0;
 			this.#fade = this.reducedMotion ? Math.min(fade, REDUCED_MOTION_DURATION) : fade;
-			this.#fadeElapsed = 0;
+			// The posture changed somewhere inside this update: fade from that moment, not from
+			// the update's start (at most the whole update, as before).
+			const age = motion.postureAge;
+			this.#fadeElapsed = age >= 0 && age < this.#dt ? age - this.#dt : 0;
 		}
 		this.#fadeElapsed += this.#dt;
 		const s = this.#fade > 0 ? Math.min(1, this.#fadeElapsed / this.#fade) : 1;
@@ -307,7 +316,9 @@ export class AnimalAnimator {
 		const speed = Number.isFinite(motion.speed) ? Math.max(0, motion.speed) : 0;
 		const distance = motion.distance > 0 && Number.isFinite(motion.distance) ? motion.distance : 0;
 		// Turning on the spot covers foot travel at no speed: it steps too.
-		const moving = (speed > ANIMAL_LAYERS.moveThreshold || distance > 0) && this.#target === STAND;
+		const moving =
+			(speed > ANIMAL_LAYERS.moveThreshold || distance > 0) &&
+			(this.#target === STAND || this.#target === SWIM);
 		// Copies in fields: a ternary between an imported binding and an imported
 		// object's property made TurboFan box the result every update (measured).
 		const fade = this.reducedMotion ? this.#reducedFade : this.#stateFade;
@@ -339,7 +350,7 @@ export class AnimalAnimator {
 			this.footfall = LIMB_FL;
 			return;
 		}
-		for (let leg = 0; leg < 4; leg++) {
+		for (let leg = this.#bird ? 2 : 0; leg < 4; leg++) {
 			const a = before - gait.touchdown[leg];
 			const b = a + advance;
 			if (a - Math.floor(a) > b - Math.floor(b)) this.footfall = LIMB_FL + leg;
@@ -348,7 +359,8 @@ export class AnimalAnimator {
 
 	#gaitLayer(out: Float64Array) {
 		const species = this.species;
-		const base = this.gaitWeight * this.weights[STAND];
+		// Swimming legs paddle with the same distance-driven gait.
+		const base = this.gaitWeight * (this.weights[STAND] + this.weights[SWIM]);
 		this.#arc = 0;
 		if (!(base > 0) || species.walk === null) return;
 		const run = this.runWeight;
@@ -372,7 +384,11 @@ export class AnimalAnimator {
 		const strideModel = this.stride / scale;
 		const phase = this.phase;
 		const decorative = this.reducedMotion ? 0 : 1;
-		for (let leg = 0; leg < 4; leg++) {
+		// A bird walks on its two legs (slots 6–7); slots 4–5 are its wings.
+		const first = this.#bird ? 2 : 0;
+		// A crab's legs swing across its body (roll), everyone else's fore and aft (pitch).
+		const axis = gait.sideways ? 2 : 0;
+		for (let leg = first; leg < 4; leg++) {
 			const slot = LIMB_FL + leg;
 			const front = leg < 2;
 			const length = model.legLength * (front ? this.species.limbScale.front : this.species.limbScale.hind);
@@ -393,7 +409,7 @@ export class AnimalAnimator {
 				lift = Math.sin(Math.PI * v);
 			}
 			const at = slot * JOINT_STRIDE;
-			out[at] -= forward * amplitude * weight;
+			out[at + axis] -= forward * amplitude * weight;
 			out[at + 4] += ((lift * gait.lift) / height) * weight;
 		}
 		out[B + 4] += ((gait.bob * Math.cos(TAU * gait.bobsPerStride * phase)) / height) * weight * decorative;
@@ -402,7 +418,7 @@ export class AnimalAnimator {
 		if (gait.arc > 0 && phase >= gait.arcStart && phase < gait.arcEnd) {
 			const t = (phase - gait.arcStart) / (gait.arcEnd - gait.arcStart);
 			// The arc grows with speed: a slow bound barely leaves the branch.
-			const speedShare = Math.min(1, Math.max(0, this.cadence * this.stride * 0.1));
+			const speedShare = Math.min(1, Math.max(0, (this.cadence * this.stride) / gait.arcSpeed));
 			this.#arc += ((gait.arc * Math.sin(Math.PI * t)) / height) * weight * speedShare * decorative;
 		}
 	}
@@ -478,6 +494,13 @@ export class AnimalAnimator {
 			const swing = layers.eatSwing * eat;
 			out[LIMB_FL * JOINT_STRIDE] -= swing * (0.5 + 0.5 * Math.sin(TAU * this.#eatPhase));
 			out[LIMB_FR * JOINT_STRIDE] -= swing * (0.5 - 0.5 * Math.sin(TAU * this.#eatPhase));
+		}
+		// Grazing, rooting or pecking: the head dips and rises as it bites (essential: it is what the animal is doing).
+		const graze = Math.min(1, Math.max(0, motion.eat || 0)) * this.weights[GRAZE];
+		if (graze > 0) {
+			const grazePhase = this.#grazePhase + layers.grazeRate * this.#dt;
+			this.#grazePhase = grazePhase - Math.floor(grazePhase);
+			out[this.hasHead ? H : B] += layers.grazeBob * graze * (0.5 - 0.5 * Math.cos(TAU * this.#grazePhase));
 		}
 		const howl = Math.min(1, Math.max(0, motion.howl || 0)) * this.weights[HOWL];
 		// Each breath group of the roar pumps the head (the whole body block on a
@@ -559,7 +582,7 @@ export class AnimalAnimator {
 
 	#leanLayer(motion: AnimalMotion, out: Float64Array) {
 		const layers = ANIMAL_LAYERS;
-		const ground = this.weights[STAND];
+		const ground = this.weights[STAND] + this.weights[SWIM];
 		let lean = 0;
 		let bank = 0;
 		if (!this.reducedMotion) {
