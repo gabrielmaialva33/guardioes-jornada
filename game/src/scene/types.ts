@@ -1,5 +1,9 @@
 import type { LifeDebug } from '../life/index.ts';
+import type { createStreamScene } from '../world-runtime/streaming/stream-visual.ts';
 export interface GameDebug {
+	textureBreakdown?: { name: string; width: number; height: number; bytes: number }[];
+	streaming?: ReturnType<ReturnType<typeof createStreamScene>['stream']['debug']>;
+	park?: { mode: string; house: boolean; ziplineUnlocked: boolean; photoCount: number };
 	avatarContext?: {
 		surface: string;
 		slope: number;

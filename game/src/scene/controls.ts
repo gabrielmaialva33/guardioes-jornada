@@ -34,7 +34,12 @@ export function actionControl(action: StoryAction | null | undefined) {
 		pet: 'take',
 		look: 'explore'
 	} as const;
-	return { kind, label: labels[kind], icon: icons[kind], accessibleName: action.label };
+	return {
+		kind,
+		label: id === 'park-photo' ? 'Fotografar' : id === 'park-zipline' ? 'Tirolesa' : labels[kind],
+		icon: icons[kind],
+		accessibleName: action.label
+	};
 }
 export interface ControlPreferences {
 	version: 1;

@@ -61,7 +61,7 @@ import {
 	ZOOM_STIFFNESS
 } from './constants.ts';
 import { clamp, wrapAngle } from './math.ts';
-import type { CollisionWorld } from './world.ts';
+import type { CollisionQuery } from './world.ts';
 
 export type LookSource = 'mouse' | 'touch';
 
@@ -190,7 +190,7 @@ export class OrbitCamera {
 	 * Places the camera for this frame around the (interpolated) feet position.
 	 * Collision only runs with a world and outside first person.
 	 */
-	update(dt: number, feet: Vec3, world: CollisionWorld | null, lens: CameraLens = DEFAULT_LENS): CameraPose {
+	update(dt: number, feet: Vec3, world: CollisionQuery | null, lens: CameraLens = DEFAULT_LENS): CameraPose {
 		const pose = this.pose;
 		const firstPerson = this.firstPerson;
 		const shiftLock = this.shiftLock && !firstPerson;
@@ -256,7 +256,7 @@ export class OrbitCamera {
 	}
 
 	/** Free distance behind the focus: the nearest hit of rays from the near-plane centre and corners. */
-	#clearance(world: CollisionWorld, lens: CameraLens, reach: number): number {
+	#clearance(world: CollisionQuery, lens: CameraLens, reach: number): number {
 		const halfHeight = lens.near * Math.tan((lens.fov * Math.PI) / 360);
 		const halfWidth = halfHeight * lens.aspect;
 		let nearest = reach;

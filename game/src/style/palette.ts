@@ -10,7 +10,7 @@ export const RAMPS = {
 	wood: ['#5e4330', '#8a6448', '#a8805c', '#c9a27a'],
 	soil: ['#5a4232', '#6b4f3a', '#8f6e52', '#b08f70'],
 	rock: ['#4f5c55', '#6f7d74', '#8e9b92', '#b3bdb5'],
-	water: ['#2f7fb0', '#3e9ccf', '#73cbf0', '#b6e6f7']
+	water: ['#1f6f8b', '#2aafad', '#5fd3c8', '#cdece5']
 } as const;
 
 /** Reserved for things to touch or reach: collectibles, checkpoints, quest marks. */
@@ -22,12 +22,12 @@ export const ACCENT = {
 
 export const LIGHT = {
 	daylight: {
-		hemisphereSky: '#cfe8f2',
-		hemisphereGround: '#3f6b48',
-		sun: '#fff1d0',
-		sunElevationDeg: 45,
-		skyTop: '#8fd0f0',
-		horizon: '#e9f4e4'
+		hemisphereSky: '#cfe8ff',
+		hemisphereGround: '#6f8f45',
+		sun: '#ffe2b5',
+		sunElevationDeg: 35,
+		skyTop: '#4f9dc7',
+		horizon: '#afc9d7'
 	},
 	night: {
 		hemisphereSky: '#2a4a5c',

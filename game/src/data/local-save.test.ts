@@ -156,3 +156,19 @@ it('persists handedness, large controls and one-time hints while preserving futu
 	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, controls: { version: 99, valuable: true } }));
 	expect(save.setControls({ version: 1, leftHanded: false, largeButtons: false, hintsSeen: [] })).toBe(false);
 });
+it('merges guide discoveries into the latest device save and preserves unknown/future sections', () => {
+	const disk = storage(),
+		save = createLocalSave(profile, disk);
+	disk.setItem(
+		GAME_SAVE_KEY,
+		JSON.stringify({ format: 1, story: { version: 1, keep: true }, other: { keep: true } })
+	);
+	expect(save.setGuia({ version: 1, discoveries: { anta: { firstSeen: 1, origins: ['photo'] } } })).toBe(
+		true
+	);
+	expect((save.guia() as { version: number }).version).toBe(1);
+	expect(JSON.parse(disk.getItem(GAME_SAVE_KEY) ?? '{}').story.keep).toBe(true);
+	disk.setItem(GAME_SAVE_KEY, JSON.stringify({ format: 1, guia: { version: 2, keep: true } }));
+	expect(save.setGuia({ version: 1, discoveries: {} })).toBe(false);
+	expect((save.guia() as { version: number }).version).toBe(2);
+});

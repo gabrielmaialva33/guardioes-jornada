@@ -236,6 +236,8 @@ export async function buildStudyCatalog(directory: string): Promise<StudyCatalog
 		}
 		const [width, height] = imageSize(head);
 		const stem = file.slice(0, -4).replace(/^\d+-/, '');
+		// Two splatmaps share a name: the second keeps its file's id prefix.
+		const id = terrain.some((t) => t.id === stem) ? file.slice(0, -4) : stem;
 		const role = /splatmap/i.test(stem)
 			? 'splatmap'
 			: /heightmap/i.test(stem)
@@ -245,7 +247,7 @@ export async function buildStudyCatalog(directory: string): Promise<StudyCatalog
 					: 'albedo';
 		terrain.push({
 			kind: 'terrain',
-			id: stem,
+			id,
 			path,
 			bytes: (await stat(join(directory, path))).size,
 			width,

@@ -1,3 +1,4 @@
+import { decodeGuide } from '../guia/model.ts';
 import { type ControlPreferences, DEFAULT_CONTROLS, decodeControls } from '../scene/controls.ts';
 export const GAME_SAVE_KEY = 'guardioes-secret-trail-save';
 export const AVATAR_PARTS = ['skin', 'hair', 'shirt', 'pants', 'shoes'] as const;
@@ -107,6 +108,23 @@ export function createLocalSave(
 					GAME_SAVE_KEY,
 					JSON.stringify({ ...doc, controls: { ...(record(doc.controls) ? doc.controls : {}), ...clean } })
 				);
+				return true;
+			} catch {
+				return false;
+			}
+		},
+		guia(): unknown {
+			const { doc, writable } = read();
+			return writable ? doc.guia : { version: 0 };
+		},
+		setGuia(value: unknown): boolean {
+			const clean = decodeGuide(value),
+				{ doc, writable } = read(),
+				old = decodeGuide(doc.guia);
+			if (!writable || clean.status !== 'ok' || (old.status !== 'ok' && old.status !== 'missing'))
+				return false;
+			try {
+				storage?.setItem(GAME_SAVE_KEY, JSON.stringify({ ...doc, guia: clean.document }));
 				return true;
 			} catch {
 				return false;

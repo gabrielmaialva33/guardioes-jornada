@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { T, useStage, useTask, useThrelte } from '@threlte/core';
+	import { readTraversal } from '../mechanics/avatar.ts';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { Group, PerspectiveCamera, Ray, Vector3 } from 'three';
 	import { testing } from './testing.ts';
@@ -202,11 +203,14 @@
 		const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
 		return {
 			...debugSnapshot(),
+			...(debug && new URLSearchParams(location.search).has('textureDebug') ? { textureBreakdown: [...collectTextures(scene), ...(proxies.textures??[]), ...(lighting.uShadeMap.value?[lighting.uShadeMap.value]:[])].map(texture=>({name:texture.name,width:texture.image?.width??0,height:texture.image?.height??0,bytes:textureBytes([texture])})) } : {}),
+			streaming: environment.streaming?.debug(),
 			goldenReady,
 			visualTime,
 			textureBytes: (() => {
 				const textures = collectTextures(scene);
 				if (lighting.uShadeMap.value) textures.add(lighting.uShadeMap.value);
+				for (const texture of proxies.textures ?? []) textures.add(texture);
 				return textureBytes(textures);
 			})(),
 			worldKind: environment.kind,
@@ -214,9 +218,20 @@
 			simulationTime,
 			life: life?.debug(),
 			cameraYaw: controller.camera.yaw,
-			storyProgress: environment.story?.level.missions.map((m) => environment.story?.progress(m.id)) ?? [],
+			storyProgress:
+				environment.story?.level.missions
+					.filter((m) => m.id >= 1 && m.id <= 6)
+					.map((m) => environment.story?.progress(m.id)) ?? [],
+			park: environment.park
+				? {
+						mode: environment.park.traversal.mode,
+						house: environment.story?.completed(0) ?? false,
+						ziplineUnlocked: environment.story?.completed(6) ?? false,
+						photoCount: environment.park.photo.validCount
+					}
+				: undefined,
 			storyFinished: environment.story?.finished ?? false,
-			ready,
+			ready: ready && (!environment.streaming || environment.streaming.ready),
 			verticalFov: camera.fov,
 			horizontalFov: horizontalFov(camera.fov, camera.aspect),
 			...(memory ? { heapMB: memory.usedJSHeapSize / 1048576 } : {}),
@@ -261,6 +276,7 @@
 		if (environment.story) environment.story.onGesture = avatarWiring.enqueue;
 		const abort = new AbortController();
 		setQuality(quality);
+		environment.streaming?.relocate(controller.character.position);
 		const detach = attachInput(wrapper, input, {
 			wantsPointerLock: () => input.shiftLock || controller.camera.firstPerson
 		});
@@ -344,6 +360,7 @@
 						return;
 					}
 					life = value;
+					environment.park?.setLife(value);
 					avatarWiring.setLife(value);
 					visual.add(value.object3d);
 					if (golden.enabled && golden.lifeScenario)
@@ -353,17 +370,20 @@
 						});
 					else if (environment.story) value.onStory(environment.story);
 				}),
-			environment.loadPlacements(quality, abort.signal).then((value) => {
-				if (abort.signal.aborted) {
-					value.dispose();
-					return;
-				}
-				forest = value;
-				if (!golden.enabled) controller.camera.extraOcclusion = value.canopies?.occlusion;
-				visual.add(value.pools.object);
-				shadows.addCaster(value.pools.object, 'static');
-				shadows.addReceiver(value.pools.object);
-			})
+			Promise.all([
+				proxies.load?.(abort.signal),
+				environment.loadPlacements(quality, abort.signal).then((value) => {
+					if (abort.signal.aborted) {
+						value.dispose();
+						return;
+					}
+					forest = value;
+					if (!golden.enabled) controller.camera.extraOcclusion = value.canopies?.occlusion;
+					visual.add(value.pools.object);
+					shadows.addCaster(value.pools.object, 'static');
+					shadows.addReceiver(value.pools.object);
+				})
+			])
 		];
 		// Loading screen stages, in the order of `loads`, with their share of the bar.
 		const stages = [
@@ -448,6 +468,7 @@
 		animationInput.talking = environment.story?.dialogue?.speaker.includes('Iara') ?? false;
 		if (paused) animationInput.speed = 0;
 		environment.avatarGround?.update(animationInput, controller.character);
+		if (environment.park) readTraversal(animationInput, environment.park.traversal);
 		avatarWiring.update(animationInput, delta);
 		applyAvatarPose(delta);
 	}
@@ -470,6 +491,8 @@
 			lifeFrame.reducedMotion = motion.matches;
 			lifeFrame.playerGrounded = grounded;
 			lifeFrame.playerJumped = jumped;
+			lifeFrame.light =
+				environment.streaming?.light(visualTime) ?? (golden.enabled && golden.night ? 'night' : 'day');
 			life.update(lifeFrame);
 		}
 	}
@@ -512,6 +535,13 @@
 	);
 	useTask(
 		(delta) => {
+			if (
+				environment.streaming &&
+				!environment.streaming.update(controller.character.position, controller.character.yaw)
+			) {
+				controller.resume();
+				return;
+			}
 			if (golden.enabled) {
 				placeGolden();
 				present(controller.character.position);
@@ -525,6 +555,11 @@
 				return;
 			}
 			const frameInput = input.sample(delta);
+			const park = environment.park;
+			const photographing = park?.photo.phase === 'framing';
+			const shutter = photographing && frameInput.actionPressed;
+			if (photographing) frameInput.actionPressed = false;
+			const parkAction = park?.context(controller.character.position);
 			lens.aspect = camera.aspect;
 			const fov = verticalFov(camera.aspect);
 			if (camera.fov !== fov) {
@@ -536,9 +571,17 @@
 			simulationTime += frame.ticks / 60;
 			placeObject(actor, frame.position, frame.yaw);
 			applyCameraPose(camera, frame.pose);
+			if (photographing) camera.position.copy(frame.pose.focus);
+			if (park?.traversal.mode === 'zipline') {
+				// P26 pulley at uniform 0.7 scale puts its handle at the P28 hand height.
+				actor.position.x -= Math.sin(frame.yaw) * 0.389;
+				actor.position.z -= Math.cos(frame.yaw) * 0.389;
+			}
+			if (photographing) park?.evaluate(camera);
+			if (shutter) park?.shutter();
 			canopyHead.set(frame.position.x, frame.position.y + controller.camera.focusHeight, frame.position.z);
 			forest?.canopies?.update(camera.position, canopyHead, delta, motion.matches);
-			actor.visible = frame.pose.avatarOpacity > 0.05;
+			actor.visible = !photographing && frame.pose.avatarOpacity > 0.05;
 			updateLife(delta, frame.grounded, frame.jumped);
 			if (frameInput.emotePressed)
 				notice = animator.playEmote('wave') ? 'Um aceno para a floresta.' : 'Pare um instante para acenar.';
@@ -575,7 +618,7 @@
 			}
 			sound?.update(delta, camera, frame, animator.footstep, animator.states.runWeight);
 			environment.story?.visit(controller.character.position, frame.grounded);
-			if (frameInput.actionPressed) {
+			if (frameInput.actionPressed && !parkAction && (!park || park.traversal.mode === 'walk')) {
 				if (environment.story) environment.story.act(controller.character.position);
 				else environment.nextTarget();
 				notice = environment.target.name;
@@ -595,11 +638,17 @@
 				camera,
 				motion.matches ? 0 : visualTime,
 				quality,
-				golden.enabled && golden.night
+				(golden.enabled && golden.night) || environment.streaming?.light(visualTime) === 'night'
 			);
 			grid.update(camera);
 			shadows.blobs.sync();
 			const p = controller.frame.position;
+			if (environment.park) {
+				environment.park.eye.x = camera.position.x;
+				environment.park.eye.y = camera.position.y;
+				environment.park.eye.z = camera.position.z;
+				storyAssets?.update(0);
+			}
 			shadows.update(p.x, p.y, p.z);
 		},
 		{ stage: cullStage, autoInvalidate: false, running: () => ready && !hidden && !contextLost }
@@ -607,6 +656,13 @@
 	const hudStage = useStage(Symbol('game-hud'), { after: renderStage });
 	useTask(
 		() => {
+			if (environment.park?.pendingCapture)
+				environment.park.capture({
+					source: renderer.domElement,
+					width: renderer.domElement.width,
+					height: renderer.domElement.height,
+					background: [LIGHT.daylight.skyTop, LIGHT.daylight.horizon]
+				});
 			if (golden.enabled && ready && ++goldenFrames >= 2) goldenReady = true;
 			if (performance.now() - lastHud < 250) return;
 			lastHud = performance.now();

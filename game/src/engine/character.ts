@@ -55,7 +55,7 @@ import {
 	WALK_SPEED
 } from './constants.ts';
 import { damp, lerpAngle, wrapAngle } from './math.ts';
-import type { CollisionWorld } from './world.ts';
+import type { CollisionQuery } from './world.ts';
 
 export interface Vec3 {
 	x: number;
@@ -171,7 +171,7 @@ export class Character {
 	grounded = false;
 	/** Horizontal distance actually covered in the last tick, per second (animation speed). */
 	planarSpeed = 0;
-	readonly #world: CollisionWorld;
+	readonly #world: CollisionQuery;
 	readonly #cosMaxSlope: number;
 	#coyote = 0;
 	#jumpBuffer = 0;
@@ -187,7 +187,7 @@ export class Character {
 	readonly #stepped = new Vector3();
 	readonly #probe = new Vector3();
 
-	constructor(world: CollisionWorld, feet: Vec3, yaw = 0, options: Partial<CharacterOptions> = {}) {
+	constructor(world: CollisionQuery, feet: Vec3, yaw = 0, options: Partial<CharacterOptions> = {}) {
 		this.#world = world;
 		this.options = { ...CHARACTER_DEFAULTS, ...options };
 		this.#cosMaxSlope = Math.cos(this.options.maxSlope);

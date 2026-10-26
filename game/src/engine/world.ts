@@ -50,6 +50,13 @@ export interface ColliderSource {
 
 const point = new Vector3();
 
+/** Physics consumes queries, independently of a static or streamed BVH's ownership. */
+export interface CollisionQuery {
+	shapecast(bounds: Box3, visit: (triangle: ExtendedTriangle) => void): void;
+	raycast(ray: Ray, far: number): number | null;
+	dispose?(): void;
+}
+
 export class CollisionWorld {
 	/** Merged world-space positions, handy for a ?debug wireframe. */
 	readonly geometry: BufferGeometry;

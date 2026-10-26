@@ -19,7 +19,7 @@ import type { InputFrame } from './input.ts';
 import { wrapAngle } from './math.ts';
 import { FixedTimestep } from './timestep.ts';
 import type { TraversalDriver } from './traversal.ts';
-import type { CollisionWorld } from './world.ts';
+import type { CollisionQuery } from './world.ts';
 
 export interface PlayerFrame {
 	/** Fixed ticks run this frame (0 to MAX_STEPS_PER_FRAME). */
@@ -52,7 +52,7 @@ export interface PlayerControllerOptions {
 export class PlayerController {
 	readonly traversal: TraversalDriver | undefined;
 	readonly #cameraFeet = new Vector3();
-	readonly world: CollisionWorld;
+	readonly world: CollisionQuery;
 	readonly character: Character;
 	readonly camera: OrbitCamera;
 	readonly clock: FixedTimestep;
@@ -61,7 +61,7 @@ export class PlayerController {
 	readonly #move = { x: 0, z: 0 };
 	readonly #input: CharacterInput = { moveX: 0, moveZ: 0, jumpHeld: false, faceYaw: null };
 
-	constructor(world: CollisionWorld, spawn: Vec3, options: PlayerControllerOptions = {}) {
+	constructor(world: CollisionQuery, spawn: Vec3, options: PlayerControllerOptions = {}) {
 		const yaw = options.yaw ?? 0;
 		this.world = world;
 		this.traversal = options.traversal;

@@ -1,4 +1,8 @@
 <script lang="ts">
+	import GuidePanel from './ui/guia/GuidePanel.svelte';
+	import { GuideService, SpeciesRegistry, SPECIES, IndexedDbThumbnails } from './guia/index.ts';
+	import { GuideMechanicsBridge } from './mechanics/guide-bridge.ts';
+	import type { StoryAction } from './missions/story.ts';
 	import { createLineupEnvironment } from './scene/lineup.ts';
 	import { golden } from './scene/golden.ts';
 	import { Canvas } from '@threlte/core';
@@ -27,6 +31,8 @@
 	import { generateWorld } from './survival/generate.ts';
 	import { buildStoryWorld } from './level/build.ts';
 	import { createMapEnvironment } from './world-runtime/environment.ts';
+	import { streamSelection } from './world-runtime/streaming/navigation.ts';
+	import { loadZoneMap } from './world-runtime/streaming/zone-loader.ts';
 	import { BlockGrid } from './render/index.ts';
 	import { createGrayboxVisual } from './scene/graybox-visual.ts';
 	import { loadForest } from './scene/forest.ts';
@@ -66,6 +72,23 @@
 	let choosing = $state(false);
 	let settingsOpen = $state(false);
 	let missionMenu = $state(false);
+	let guideOpen = $state(false);
+	let guide = $state.raw<GuideService>();
+	let parkAction = $state.raw<StoryAction | null>(null);
+	let photoMode = $state(false);
+	let photoCount = $state(0);
+	const thumbnails = new IndexedDbThumbnails(globalThis.indexedDB);
+	function closeGuide() {
+		guideOpen = false;
+		input.releaseAll();
+		controller.resume();
+		wrapper?.focus({ preventScroll: true });
+	}
+	function openGuide() {
+		guideOpen = true;
+		input.releaseAll();
+		controller.resume();
+	}
 	let saveMessage = $state('');
 	let sceneRef: { setAvatarProfile: (profile: AvatarProfile) => Promise<void> } | undefined = $state();
 	let chooserGeneration = 0;
@@ -76,12 +99,17 @@
 	input.configure(gameSave.controls());
 	const query = new URLSearchParams(location.search);
 	const debugGraybox = query.has('graybox');
+	const streamChoice = streamSelection(location.search);
+	const zoneMap =
+		streamChoice.zone && streamChoice.zone !== 'reserva' ? loadZoneMap(streamChoice.zone) : null;
 	const mapData =
 		debugGraybox || (golden.enabled && golden.lineup)
 			? null
-			: query.get('world') === 'survival'
-				? { world: generateWorld(golden.enabled ? golden.seed : 20261025), level: undefined }
-				: buildStoryWorld();
+			: zoneMap
+				? { world: zoneMap.world, level: undefined }
+				: query.get('world') === 'survival'
+					? { world: generateWorld(golden.enabled ? golden.seed : 20261025), level: undefined }
+					: buildStoryWorld();
 	const story = mapData?.level
 		? new StoryGame(mapData.level, {
 				value: gameSave.story(),
@@ -91,7 +119,13 @@
 		: undefined;
 	let storyUi = $state.raw<StoryView | undefined>(undefined);
 	let lastStoryKey = '';
-	const map = mapData ? createMapEnvironment(mapData.world, mapData.level, gameSave, story) : null;
+	const map = mapData
+		? createMapEnvironment(mapData.world, mapData.level, gameSave, story, {
+				streaming: streamChoice.enabled && (query.has('stream') || !!zoneMap),
+				zone: streamChoice.zone,
+				zoneMap
+			})
+		: null;
 	const level = debugGraybox ? createGraybox() : null;
 	const forest = debugGraybox ? forestLayout() : null;
 	function oldEnvironment(): SceneEnvironment {
@@ -126,14 +160,16 @@
 			? {
 					x: golden.avatar[0],
 					z: golden.avatar[1],
-					y: mapData.world.heights[
-						Math.round(golden.avatar[1]) * mapData.world.grid + Math.round(golden.avatar[0])
-					]
+					y:
+						mapData.world.heights[
+							Math.round(golden.avatar[1]) * mapData.world.grid + Math.round(golden.avatar[0])
+						] ?? initial.spawn.y
 				}
 			: initial.spawn;
 	const controller = new PlayerController(world, goldenSpawn, {
 		yaw: golden.enabled && golden.avatar ? golden.avatar[2] : initial.yaw,
-		checkpoints
+		checkpoints,
+		traversal: environment.park?.traversal
 	});
 	controller.camera.mode = matchMedia('(pointer: coarse)').matches ? 'follow' : 'classic';
 	story?.repairBadge();
@@ -165,6 +201,7 @@
 		clearTimeout(tooltipTimer);
 		chooserGeneration++;
 		world.dispose();
+		thumbnails.close();
 		if (audioSaveTimer !== undefined) {
 			clearTimeout(audioSaveTimer);
 			saveAudio();
@@ -208,6 +245,15 @@
 		closeChooser();
 	}
 	onMount(() => {
+		void GuideService.open(
+			new SpeciesRegistry(SPECIES),
+			{ read: async () => gameSave.guia(), write: async (doc) => gameSave.setGuia(doc) },
+			thumbnails
+		).then((value) => {
+			if (disposed) return;
+			guide = value;
+			if (environment.park) environment.park.guide = new GuideMechanicsBridge(value);
+		});
 		const listeners = new AbortController();
 		const resize = () => {
 			portrait = innerWidth < innerHeight;
@@ -268,6 +314,14 @@
 		input.releaseAll();
 	}
 	function drawControls() {
+		const park = environment.park;
+		if (park) {
+			const a = park.context(controller.character.position);
+			if (a?.id !== parkAction?.id || a?.disabled !== parkAction?.disabled || a?.label !== parkAction?.label)
+				parkAction = a ? { ...a } : null;
+			photoMode = park.photo.phase === 'framing';
+			photoCount = park.photo.validCount;
+		}
 		if (story) {
 			const action = story.context(controller.character.position);
 			const key = `${story.revision}:${action?.id ?? ''}:${action?.disabled ?? false}`;
@@ -301,7 +355,7 @@
 		}, 2200);
 	}
 	function nextTarget() {
-		if (story && storyUi) {
+		if (story && storyUi && !story.completed(6)) {
 			const available = storyUi.missions.filter((m) => m.available && !m.completed);
 			const current = available.findIndex((m) => m.id === storyUi?.selected);
 			const next = available[(current + 1) % available.length];
@@ -314,6 +368,7 @@
 		input.releaseAll();
 		checkpoints.reset();
 		controller.respawnAt(environment.start);
+		environment.streaming?.relocate(environment.start.spawn);
 		controller.resume();
 		wrapper?.focus({ preventScroll: true });
 	}
@@ -331,12 +386,19 @@
 	aria-label="Trilha secreta. Use W A S D para andar, espaço para pular e arraste para olhar."
 >
 	<div bind:this={safeArea} class="safe-area" aria-hidden="true"></div>
+	{#if guideOpen && guide}<GuidePanel service={guide} onclose={closeGuide} />{/if}
+	{#if photoMode && !guideOpen}<div class="photo-frame" aria-hidden="true"></div>
+		<p class="photo-caption" role="status">
+			{photoCount
+				? `${photoCount} espécie(s) no enquadramento · use Fotografar`
+				: 'Enquadre um animal perto do centro'}
+		</p>{/if}
 	<div class="world">
 		<Canvas dpr={1} shadows={false} toneMapping={NoToneMapping} colorSpace={SRGBColorSpace} {createRenderer}
 			>{#if wrapper}<Graybox
 					{wrapper}
 					bind:this={sceneRef}
-					paused={rotate || choosing || settingsOpen || missionMenu || !!storyUi?.dialogue}
+					paused={rotate || choosing || settingsOpen || missionMenu || guideOpen || !!storyUi?.dialogue}
 					{avatarProfile}
 					{controller}
 					{input}
@@ -349,8 +411,44 @@
 				/>{/if}</Canvas
 		>
 	</div>
-	<div class="hud" inert={rotate || choosing || settingsOpen || missionMenu || !!storyUi?.dialogue}>
+	<div
+		class="hud"
+		inert={rotate || choosing || settingsOpen || missionMenu || guideOpen || !!storyUi?.dialogue}
+	>
 		<div class="top-bar">
+			{#if environment.park}
+				<button
+					type="button"
+					aria-label="Câmera fotográfica"
+					title="Câmera fotográfica"
+					aria-pressed={photoMode}
+					disabled={!guide || !hud.ready}
+					onpointerdown={(e) => e.stopPropagation()}
+					onkeydown={keyboardButton}
+					onkeyup={keyboardButton}
+					onclick={() => {
+						environment.park?.togglePhoto();
+						drawControls();
+						wrapper?.focus({ preventScroll: true });
+					}}
+					><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+						><path d="M3 7h5l2-3h4l2 3h5v13H3z" /><circle cx="12" cy="13" r="4" /></svg
+					></button
+				>
+				<button
+					type="button"
+					aria-label="Guia da Mata"
+					title="Guia da Mata"
+					disabled={!guide}
+					onpointerdown={(e) => e.stopPropagation()}
+					onkeydown={keyboardButton}
+					onkeyup={keyboardButton}
+					onclick={openGuide}
+					><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+						><path d="M12 5v15M3 4l9 1 9-1v15l-9 1-9-1z" /></svg
+					></button
+				>
+			{/if}
 			<button
 				type="button"
 				aria-label="Voltar à jornada"
@@ -442,7 +540,7 @@
 		<TouchControls
 			bind:this={touchControls}
 			{input}
-			action={storyUi?.action}
+			action={parkAction ?? storyUi?.action}
 			preferences={controls}
 			moved={hasMoved}
 			ready={hud.ready}
@@ -457,7 +555,7 @@
 		{#if hud.splash}<div class="splash" role="status">Água funda. Voltando ao ponto seguro…</div>{/if}
 		{#if hud.shiftLock}<div class="crosshair" aria-hidden="true"><HudIcon name="lock" /></div>{/if}
 	</div>
-	{#if storyUi && !rotate && !choosing && !settingsOpen}<StoryPanel
+	{#if storyUi && !guideOpen && !rotate && !choosing && !settingsOpen}<StoryPanel
 			view={storyUi}
 			onmenu={(open) => {
 				missionMenu = open;
@@ -530,6 +628,31 @@
 </div>
 
 <style>
+	.photo-frame {
+		position: absolute;
+		z-index: 3;
+		left: 30%;
+		top: 30%;
+		width: 40%;
+		height: 40%;
+		border: 2px solid #fff3bd;
+		border-radius: 12px;
+		pointer-events: none;
+	}
+	.photo-caption {
+		position: absolute;
+		z-index: 4;
+		top: 14%;
+		left: 20%;
+		right: 20%;
+		text-align: center;
+		color: #fff8df;
+		background: #213b2ce8;
+		border-radius: 12px;
+		padding: 8px;
+		pointer-events: none;
+	}
+
 	.secret-game.golden {
 		width: 960px;
 		height: 432px;
