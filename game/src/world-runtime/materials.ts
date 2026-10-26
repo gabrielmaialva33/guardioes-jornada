@@ -7,7 +7,7 @@ export function createMapMaterials() {
 	const make = (color: string) =>
 		stylize(new MeshLambertMaterial({ color, vertexColors: true, flatShading: true }));
 	const materials = {
-		ground: stylize(new MeshLambertMaterial({ color: '#ffffff', vertexColors: true }), {
+		ground: stylize(new MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true }), {
 			vegetation: true,
 			terrain: visualStep() >= 2
 		}),
