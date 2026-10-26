@@ -526,7 +526,13 @@ try {
 	if (await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).isVisible())
 		await page.getByRole('button', { name: 'Jogar assim mesmo', exact: true }).click();
 	assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
-	assert.equal(requests.length, networkBefore);
+	// The browser's own worker-update job is outside page/worker CDP offline emulation.
+	// Keep rejecting every page/pack request, as in the full story offline check below.
+	result.offlineAtCBackgroundRequests = requests.slice(networkBefore);
+	assert.deepEqual(
+		requests.slice(networkBefore).filter((path) => path !== '/service-worker.js'),
+		[]
+	);
 	assert.ok(sessions.size > 0);
 	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarStyle), 'kenney');
 	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarSkin), 'r');
