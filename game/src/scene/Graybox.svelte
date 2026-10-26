@@ -330,6 +330,13 @@
 			}
 		};
 	});
+	function present(p: { x: number; y: number; z: number }) {
+		proxies.update?.(p.x, p.y, p.z, environment.target);
+		shadowRay.origin.set(p.x, p.y + 0.1, p.z);
+		const hit = controller.world.raycast(shadowRay, 12);
+		if (hit === null) shadows.blobs.hide(avatarBlob);
+		else shadows.blobs.set(avatarBlob, p.x, shadowRay.origin.y - hit, p.z, 0.68, Math.max(0, hit - 0.1));
+	}
 	const initialYaw = () => controller.frame.yaw;
 	const budgetStage = useStage(Symbol('game-budget'), { before: mainStage });
 	useTask(
@@ -362,6 +369,7 @@
 					applyCameraPose(camera, frame.pose);
 					goldenPlaced = true;
 				}
+				present(controller.character.position);
 				return;
 			}
 			visualTime += delta;
@@ -423,20 +431,7 @@
 				notice = environment.target.name;
 			}
 			storyAssets?.update(delta);
-			proxies.update?.(frame.position.x, frame.position.y, frame.position.z, environment.target);
-			shadowRay.origin.copy(frame.position);
-			shadowRay.origin.y += 0.1;
-			const hit = controller.world.raycast(shadowRay, 12);
-			if (hit === null) shadows.blobs.hide(avatarBlob);
-			else
-				shadows.blobs.set(
-					avatarBlob,
-					frame.position.x,
-					shadowRay.origin.y - hit,
-					frame.position.z,
-					0.68,
-					Math.max(0, hit - 0.1)
-				);
+			present(controller.frame.position);
 			onFrame();
 		},
 		{ running: () => ready && !hidden && !paused && !contextLost }
