@@ -49,11 +49,13 @@ export const STUDY_PICKS: Readonly<Record<string, StudyPick>> = {
 		'tapir_idle tapir_walk_forward tapir_run_forward tapir_eat tapir_alerted'
 	),
 	Peccary: pick('cateto', 1.6, 'idle_look_around walk_forward trot_forward idle_smells alerted', /^eat$/),
-	Armadillo: pick(
-		'tatu-galinha',
-		0.7,
-		'armadillo_idle armadillo_walk_forward armadillo_run_forward armadillo_digging armadillo_alerted',
-		/^armadillo_idle_b$/
+	// Stands in for the tatu-galinha, whose clips the conversion broke: it rolls up instead of running.
+	ArmadilloThreeBanded: pick(
+		'tatu-bola',
+		0.55,
+		'arm3_idle_A arm3_walk_A arm3_walk_B arm3_idle_B arm3_roll',
+		/^arm3_idle_B$/,
+		'arm3_unroll'
 	),
 	CaneToad: pick('sapo-cururu', 0.35, 'toad_idle_1 toad_jump toad_jump toad_idle_2 toad_idle_2'),
 	Crab: pick('caranguejo', 0.3, 'crab_idle crab_run_right crab_run_right crab_idle crab_idle'),
@@ -70,5 +72,6 @@ export const STUDY_PICKS: Readonly<Record<string, StudyPick>> = {
 		2.1,
 		'anteater_idle anteater_walk_forward anteater_run_forward anteater_eat anteater_idle'
 	),
-	Toucan: pick('tucano (A/B)', 0.9, 'ToucanIdle ToucanIdle ToucanFlap ToucanIdle ToucanFlap')
+	Toucan: pick('tucano (A/B)', 0.9, 'ToucanIdle ToucanIdle ToucanFlap ToucanIdle ToucanFlap'),
+	ParrotMacaw: pick('arara-vermelha (verificar)', 1.3, 'MacawIdle MacawIdle MacawFlap MacawIdle MacawFlap')
 };

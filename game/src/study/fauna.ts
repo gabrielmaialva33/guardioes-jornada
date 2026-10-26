@@ -31,6 +31,7 @@ import {
 	LoopOnce,
 	LoopRepeat,
 	type Material,
+	Matrix4,
 	type Object3D,
 	type SkinnedMesh,
 	Sphere,
@@ -50,11 +51,11 @@ import { type StudyLook, studyLook, studyUrl } from './gate.ts';
 import {
 	habitatAt,
 	PUMA_AVOID,
+	perchMember,
 	planStudyHerds,
 	type StudyMember,
 	type StudyPlan,
-	studyRandom,
-	toucanMember
+	studyRandom
 } from './herds.ts';
 import { type StylizedModel, stylizeModel } from './stylize.ts';
 
@@ -149,7 +150,17 @@ const TUNING: Record<string, Tuning> = {
 	Tapir: { walk: 1.2, run: 3.4, turn: 1.6, alert: 13, flee: 7.5, far: 140, idle: [3, 6], graze: [5, 10] },
 	Tapir_baby: { walk: 1.2, run: 3.4, turn: 2.6, alert: 13, flee: 7.5, far: 120, idle: [2, 4], graze: [3, 6] },
 	Peccary: { walk: 1.1, run: 3.8, turn: 2.8, alert: 12, flee: 7, far: 120, idle: [2, 5], graze: [3, 7] },
-	Armadillo: { walk: 0.8, run: 3.0, turn: 3.0, alert: 8, flee: 5, far: 70, idle: [2, 4], graze: [3, 6] },
+	ArmadilloThreeBanded: {
+		walk: 0.7,
+		run: 1.6,
+		turn: 3.0,
+		alert: 7,
+		flee: 4,
+		far: 70,
+		idle: [2, 4],
+		graze: [3, 6],
+		hides: true
+	},
 	CaneToad: { walk: 0.6, run: 1.2, turn: 3.0, alert: 5, flee: 3, far: 55, idle: [4, 9], graze: [3, 6] },
 	Crab: {
 		walk: 0.9,
@@ -193,7 +204,8 @@ const TUNING: Record<string, Tuning> = {
 		idle: [3, 6],
 		graze: [5, 9]
 	},
-	Toucan: { walk: 0, run: 0, turn: 0, alert: 7, flee: 0, far: 110, idle: [6, 12], graze: [1, 2] }
+	Toucan: { walk: 0, run: 0, turn: 0, alert: 7, flee: 0, far: 110, idle: [6, 12], graze: [1, 2] },
+	ParrotMacaw: { walk: 0, run: 0, turn: 0, alert: 7, flee: 0, far: 110, idle: [7, 14], graze: [1, 2] }
 };
 
 /** Mixers beyond this camera distance step at half rate. */
@@ -318,6 +330,45 @@ export function makeInPlace(clip: AnimationClip) {
 	}
 }
 
+/**
+ * Some conversions (the cururu, the crab, the tatu-galinha) bake the armature
+ * root's offset into the inverse bind matrices once more, so at the rest pose
+ * the skin sits a root offset away from its bones. Measured at the rest pose
+ * (as loaded, before any clip): shift every inverse bind matrix so the skin's
+ * centre lands on the skeleton's. Returns whether it had to.
+ */
+export function fixSkinOffset(scene: Object3D): boolean {
+	scene.updateMatrixWorld(true);
+	const bones = new Box3();
+	scene.traverse((o) => {
+		if ((o as Bone).isBone) bones.expandByPoint(o.getWorldPosition(_a));
+	});
+	if (bones.isEmpty()) return false;
+	const skin = new Box3().setFromObject(scene, true);
+	const offset = bones.getCenter(new Vector3()).sub(skin.getCenter(_b));
+	if (offset.length() <= bones.getSize(_a).length()) return false;
+	const shift = new Matrix4().makeTranslation(offset.x, offset.y, offset.z);
+	const done = new Set<Matrix4>();
+	scene.traverse((o) => {
+		const mesh = o as SkinnedMesh;
+		if (!mesh.isSkinnedMesh) return;
+		mesh.skeleton.bones.forEach((bone, i) => {
+			const inverse = mesh.skeleton.boneInverses[i];
+			if (done.has(inverse)) return;
+			done.add(inverse);
+			// B⁻¹ · T · B · IBM: the same skin, moved by T at the rest pose.
+			const fixed = bone.matrixWorld
+				.clone()
+				.invert()
+				.multiply(shift)
+				.multiply(bone.matrixWorld)
+				.multiply(inverse);
+			inverse.copy(fixed);
+		});
+	});
+	return true;
+}
+
 function findBone(scene: Object3D, test: RegExp, reject?: RegExp): Object3D | null {
 	let found: Object3D | null = null;
 	scene.traverse((o) => {
@@ -363,6 +414,7 @@ async function loadTemplate(
 		if (!clips.has(key)) clips.set(key, clip);
 	}
 	const roles = resolveRoles(pick, [...clips.keys()]);
+	fixSkinOffset(scene);
 	const wrapper = new Group();
 	wrapper.add(scene);
 	wrapper.updateMatrixWorld(true);
@@ -605,6 +657,31 @@ class StudyActor {
 	}
 }
 
+/**
+ * "Modo estudo (local)" as the last line of the debug overlay (`output.debug`,
+ * Root.svelte) while the mode is on; re-attached if the overlay is rebuilt.
+ */
+function studyBadge(): () => void {
+	if (typeof document === 'undefined') return () => {};
+	const attach = () => {
+		const overlay = document.querySelector('output.debug');
+		if (!overlay || overlay.querySelector('[data-study-badge]')) return;
+		const line = document.createElement('span');
+		line.dataset.studyBadge = '';
+		line.textContent = 'Modo estudo (local)';
+		overlay.append(document.createElement('br'), line);
+	};
+	attach();
+	const timer = setInterval(attach, 1000);
+	return () => {
+		clearInterval(timer);
+		for (const line of document.querySelectorAll('[data-study-badge]')) {
+			line.previousElementSibling?.remove();
+			line.remove();
+		}
+	};
+}
+
 export class StudyFaunaRuntime implements StudyFauna {
 	readonly root = new Group();
 	readonly plan: StudyPlan;
@@ -624,6 +701,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 	#clock = 0;
 	#pending = 0;
 	#disposed = false;
+	readonly #unbadge: () => void;
 	readonly #still = typeof location !== 'undefined' && new URLSearchParams(location.search).has('golden');
 
 	constructor(host: StudyFaunaHost) {
@@ -632,13 +710,17 @@ export class StudyFaunaRuntime implements StudyFauna {
 		this.root.name = 'study-fauna';
 		this.plan = planStudyHerds(host.world, host.level);
 		this.#members = [...this.plan.members];
-		if (host.tucanoPerch) this.#members.push(toucanMember(host.tucanoPerch));
+		if (host.tucanoPerch) {
+			this.#members.push(perchMember('tucano-estudo', 'Toucan', host.tucanoPerch, 1));
+			this.#members.push(perchMember('arara-estudo', 'ParrotMacaw', host.tucanoPerch, -1));
+		}
 		this.#ground = new GroundSampler(host.world.heights, host.world.size);
 		host.parent.add(this.root);
 		const species = [...new Set(this.#members.map((m) => m.species))];
 		this.#pending = species.length;
 		for (const id of species) void this.#load(id);
 		(globalThis as { __estudo?: StudyFaunaRuntime }).__estudo = this;
+		this.#unbadge = studyBadge();
 	}
 
 	get loaded() {
@@ -657,25 +739,23 @@ export class StudyFaunaRuntime implements StudyFauna {
 				return;
 			}
 			this.templates.set(id, template);
-			const fresh: StudyActor[] = [];
 			this.#members.forEach((member, i) => {
 				if (member.species !== id) return;
 				const actor = new StudyActor(member, template);
 				this.#placeStart(actor);
 				this.actors.push(actor);
-				fresh.push(actor);
 				this.root.add(actor.holder);
 				if (this.#host.blobs && member.behaviour !== 'perch') actor.blob = this.#host.blobs.add('actor');
 				actor.halfStep = i & 1;
 			});
-			this.#warm(fresh);
 		} catch (error) {
 			if (!this.#disposed) {
 				this.failed.push(id);
 				console.warn(`[estudo] ${id} failed to load`, error);
 			}
 		} finally {
-			this.#pending--;
+			// Once everything is in, the whole population warms up together (followers find leaders).
+			if (--this.#pending === 0 && !this.#disposed) this.#warm(this.actors);
 		}
 	}
 
@@ -1111,5 +1191,6 @@ export class StudyFaunaRuntime implements StudyFauna {
 		this.root.removeFromParent();
 		const global = globalThis as { __estudo?: StudyFaunaRuntime };
 		if (global.__estudo === this) delete global.__estudo;
+		this.#unbadge();
 	}
 }

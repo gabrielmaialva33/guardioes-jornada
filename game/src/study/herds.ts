@@ -322,7 +322,8 @@ export const STUDY_WISHES: readonly Wish[] = [
 	},
 	{
 		key: 'tatu',
-		species: 'Armadillo',
+		// The tatu-galinha's clips are broken in the conversion (report); the tatu-bola stands in.
+		species: 'ArmadilloThreeBanded',
 		group: 'tatu',
 		behaviour: 'cross',
 		habitat: 'any',
@@ -470,14 +471,22 @@ export function planStudyHerds(world: SurvivalWorld, _level?: StoryLevel, seed =
 	return { members, riverDistance };
 }
 
-/** The toucan A/B: perched 1.4 u beside our tucano's first perch, facing the same way. */
-export function toucanMember(perch: { x: number; y: number; z: number; yaw: number }): StudyMember {
-	const x = perch.x + Math.cos(perch.yaw) * 1.4;
-	const z = perch.z - Math.sin(perch.yaw) * 1.4;
+/**
+ * A perched bird beside one of our tucano's perches, facing the same way: the
+ * toucan A/B on one side (`side` 1), the arara-vermelha ("verify fit") on the other (−1).
+ */
+export function perchMember(
+	key: string,
+	species: string,
+	perch: { x: number; y: number; z: number; yaw: number },
+	side: number
+): StudyMember {
+	const x = perch.x + Math.cos(perch.yaw) * 1.4 * side;
+	const z = perch.z - Math.sin(perch.yaw) * 1.4 * side;
 	return {
-		key: 'tucano-estudo',
-		species: 'Toucan',
-		group: 'tucano-estudo',
+		key,
+		species,
+		group: key,
 		behaviour: 'perch',
 		habitat: 'any',
 		x,
@@ -492,6 +501,25 @@ export function toucanMember(perch: { x: number; y: number; z: number; yaw: numb
 		offsetZ: 0,
 		ends: null,
 		size: 1,
-		seed: 0x70ca
+		seed: key.length * 0x9e37 + species.length
 	};
 }
+
+/**
+ * Each group's home in the park (PARK.md §2 and §10) once those zones exist as
+ * maps. Until then every group lives in the Reserva, at the spots above.
+ */
+export const PARK_HOMES: Readonly<Record<string, string>> = {
+	capivaras: 'Manguezal, river banks',
+	antas: 'Vale das Cachoeiras, by the pool',
+	catetos: 'Copa das Árvores and the Vale',
+	tatu: 'Reserva, on the trails',
+	sapos: 'Vale das Cachoeiras, by the pool',
+	'sapos-leste': 'Vale das Cachoeiras, by the pool',
+	caranguejos: 'Manguezal, on the mud by the boardwalk',
+	'onca-parda': 'Copa das Árvores (rare)',
+	jabuti: 'Copa das Árvores, forest floor',
+	tamandua: 'Reserva, the pasture',
+	'tucano-estudo': 'Reserva, beside our tucano (A/B)',
+	'arara-estudo': 'Reserva, beside our tucano (verify fit)'
+};
