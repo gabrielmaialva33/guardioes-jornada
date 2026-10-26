@@ -4,7 +4,7 @@
  * the GLB headers, the audio and terrain folders, and the P14 curation in
  * `study-cache/curation.json`) and serves it at `/__estudo/greenhell/catalog.json`.
  * Per-asset data (paths, sizes, tris, clips) lives only there, never in the repo.
- * DEV + `?estudo=greenhell` only (gate.ts).
+ * DEV only, behind the study gate (gate.ts).
  */
 import { studyUrl } from './gate.ts';
 

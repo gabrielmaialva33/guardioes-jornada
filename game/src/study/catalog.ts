@@ -4,7 +4,7 @@
  * of the silhouette, ×1.5 life size against the 3.0 u avatar) and which clip
  * plays each role. Keys and clip names only: paths, sizes, tris and clip lists
  * are asset data, served at runtime from tmp/ (data.ts), never kept in the repo.
- * DEV + `?estudo=greenhell` only (gate.ts).
+ * DEV only, behind the study gate (gate.ts).
  */
 
 export interface StudyPick {

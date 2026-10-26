@@ -18,7 +18,7 @@
  * - Budget: an animal is hidden beyond its `far` distance from the camera and
  *   its mixer runs at half rate beyond 45 u. update() allocates nothing.
  *
- * DEV + `?estudo=greenhell` only (index.ts startStudy is the entry).
+ * DEV only, behind the study gate (gate.ts; index.ts startStudy is the entry).
  */
 import {
 	type AnimationAction,
@@ -211,6 +211,8 @@ const TUNING: Record<string, Tuning> = {
 
 /** Mixers beyond this camera distance step at half rate. */
 const HALF_RATE = 45;
+/** Outline shells beyond this camera distance are hidden (a 1.5 px rim no longer reads there). */
+const OUTLINE_FAR = 60;
 /** The fastest flight, u/s (the avatar runs 9.6 u/s). */
 const MAX_RUN = 12;
 /** The puma leaves at a brisk walk, this much over its natural walk (our onça: 2.3 vs 1.8). */
@@ -218,6 +220,8 @@ const LEAVE_PACE = 1.3;
 /** Warm-up: 5 s at 30 Hz, with the player out of the map. */
 const WARM_STEPS = 150;
 const FAR_AWAY = -1e4;
+/** The cohesion lineup (`&estudo-lineup`), left to right. */
+const LINEUP = ['capivara-0', 'anta', 'cateto-0', 'onca-parda'];
 const FADE = 0.35;
 const CPU_WINDOW = 120;
 
@@ -480,20 +484,13 @@ async function loadTemplate(
 
 	// Bounding spheres on the idle pose (mesh space), shared by the clones.
 	const spheres: Sphere[] = [];
-	let triangles = 0;
-	let draws = 0;
 	scene.traverse((o) => {
 		const mesh = o as SkinnedMesh;
-		if (!mesh.isMesh) return;
-		if (mesh.isSkinnedMesh) {
-			mesh.computeBoundingSphere();
-			const sphere = (mesh.boundingSphere ?? new Sphere()).clone();
-			sphere.radius *= 1.3;
-			spheres.push(sphere);
-		}
-		const index = mesh.geometry.index;
-		triangles += (index ? index.count : mesh.geometry.attributes.position.count) / 3;
-		draws += Array.isArray(mesh.material) ? mesh.material.length : 1;
+		if (!mesh.isSkinnedMesh) return;
+		mesh.computeBoundingSphere();
+		const sphere = (mesh.boundingSphere ?? new Sphere()).clone();
+		sphere.radius *= 1.3;
+		spheres.push(sphere);
 	});
 	mixer.stopAllAction();
 	mixer.uncacheRoot(scene);
@@ -509,6 +506,16 @@ async function loadTemplate(
 		}
 	});
 	const styled = stylizeModel(scene, look);
+	// Draws and triangles as drawn: the painted look adds an outline shell per skinned mesh.
+	let triangles = 0;
+	let draws = 0;
+	scene.traverse((o) => {
+		const mesh = o as SkinnedMesh;
+		if (!mesh.isMesh) return;
+		const index = mesh.geometry.index;
+		triangles += (index ? index.count : mesh.geometry.attributes.position.count) / 3;
+		draws += Array.isArray(mesh.material) ? mesh.material.length : 1;
+	});
 	// The painted canvases are copies: the source images were never uploaded and can go now.
 	if (look === 'painted') releaseSources(sources);
 	const footprint = Math.max(_box.max.x - _box.min.x, _box.max.z - _box.min.z) * scale;
@@ -586,6 +593,9 @@ class StudyActor {
 	distance = 0;
 	halfStep = 0;
 	blob = -1;
+	/** The painted look's outline shells, hidden beyond OUTLINE_FAR. */
+	readonly shells: Object3D[] = [];
+	shellsShown = true;
 	endIndex = 0;
 
 	constructor(
@@ -602,7 +612,8 @@ class StudyActor {
 		let s = 0;
 		model.traverse((o) => {
 			const mesh = o as SkinnedMesh;
-			if (!mesh.isSkinnedMesh) return;
+			if (mesh.userData.studyOutline) this.shells.push(mesh);
+			if (!mesh.isSkinnedMesh || mesh.userData.studyOutline) return;
 			const sphere = template.spheres[s++];
 			if (sphere) mesh.boundingSphere = sphere.clone();
 		});
@@ -701,6 +712,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 	#cpuAt = 0;
 	#clock = 0;
 	#pending = 0;
+	#started = false;
+	readonly #species: string[];
 	#disposed = false;
 	readonly #unbadge: () => void;
 	readonly #still = typeof location !== 'undefined' && new URLSearchParams(location.search).has('golden');
@@ -717,15 +730,43 @@ export class StudyFaunaRuntime implements StudyFauna {
 		}
 		this.#ground = new GroundSampler(host.world.heights, host.world.size);
 		host.parent.add(this.root);
-		const species = [...new Set(this.#members.map((m) => m.species))];
-		this.#pending = species.length;
-		for (const id of species) void this.#load(id);
+		this.#species = [...new Set(this.#members.map((m) => m.species))];
+		this.#pending = this.#species.length;
+		// Stills load at once; the game streams the study in after its first frame (update()).
+		if (this.#still) this.#start(Number.NaN, Number.NaN);
 		(globalThis as { __estudo?: StudyFaunaRuntime }).__estudo = this;
 		this.#unbadge = studyBadge();
 	}
 
 	get loaded() {
-		return this.#pending === 0;
+		return this.#started && this.#pending === 0;
+	}
+
+	/**
+	 * Stream the species in, one at a time with a frame between them, nearest to
+	 * the player first, so the study never delays the game's first frame.
+	 */
+	#start(px: number, pz: number) {
+		if (this.#started) return;
+		this.#started = true;
+		const near = (id: string) => {
+			let best = Number.POSITIVE_INFINITY;
+			for (const m of this.#members)
+				if (m.species === id) best = Math.min(best, Math.hypot(m.x - px, m.z - pz) || 0);
+			return Number.isFinite(best) ? best : 0;
+		};
+		const order = Number.isFinite(px) ? [...this.#species].sort((a, b) => near(a) - near(b)) : this.#species;
+		void (async () => {
+			for (const id of order) {
+				if (this.#disposed) return;
+				await this.#load(id);
+				await new Promise((resolve) =>
+					typeof requestAnimationFrame === 'function'
+						? requestAnimationFrame(resolve)
+						: setTimeout(resolve, 0)
+				);
+			}
+		})();
 	}
 
 	async #load(id: string) {
@@ -740,23 +781,31 @@ export class StudyFaunaRuntime implements StudyFauna {
 				return;
 			}
 			this.templates.set(id, template);
+			const fresh: StudyActor[] = [];
 			this.#members.forEach((member, i) => {
 				if (member.species !== id) return;
 				const actor = new StudyActor(member, template);
 				this.#placeStart(actor);
 				this.actors.push(actor);
+				fresh.push(actor);
 				this.root.add(actor.holder);
 				if (this.#host.blobs && member.behaviour !== 'perch') actor.blob = this.#host.blobs.add('actor');
 				actor.halfStep = i & 1;
 			});
+			// In the game each species wakes up on its own; stills warm everyone together below.
+			if (!this.#still) this.#warm(fresh);
 		} catch (error) {
 			if (!this.#disposed) {
 				this.failed.push(id);
 				console.warn(`[estudo] ${id} failed to load`, error);
 			}
 		} finally {
-			// Once everything is in, the whole population warms up together (followers find leaders).
-			if (--this.#pending === 0 && !this.#disposed) this.#warm(this.actors);
+			// Stills: once everything is in, the whole population warms up together (followers find
+			// their leaders), the same way every run, then the optional lineup.
+			if (--this.#pending === 0 && !this.#disposed && this.#still) {
+				this.#warm(this.actors);
+				this.#lineup();
+			}
 		}
 	}
 
@@ -787,6 +836,30 @@ export class StudyFaunaRuntime implements StudyFauna {
 			actor.mixer.update(FADE * 2);
 			this.#pose(actor);
 		}
+	}
+
+	/**
+	 * `&estudo-lineup=x,z,yaw` (stills only): the capivara, the anta, a cateto and
+	 * the onça-parda nose to tail from (x, z), all facing `yaw`, 5 u apart, so a
+	 * camera square to the row sees their profiles: the cohesion A/B next to the
+	 * avatar and our mico (golden `&life=companion`).
+	 */
+	#lineup() {
+		const value =
+			typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('estudo-lineup');
+		const [x, z, yaw] = (value ?? '').split(',').map(Number);
+		if (![x, z, yaw].every(Number.isFinite)) return;
+		const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
+		LINEUP.forEach((key, i) => {
+			const actor = this.actors.find((a) => a.member.key === key);
+			if (!actor) return;
+			actor.x = x + forward.x * 5 * i;
+			actor.z = z + forward.z * 5 * i;
+			actor.yaw = yaw;
+			actor.play('idle', 0);
+			actor.mixer.update(FADE * 2);
+			this.#pose(actor);
+		});
 	}
 
 	#placeStart(actor: StudyActor) {
@@ -1081,6 +1154,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 	update(frame: StudyFrame) {
 		// Golden captures are stills: the warm-up alone places the animals, the same way every run.
 		if (this.#disposed || this.#still) return;
+		if (!this.#started) this.#start(frame.playerPosition.x, frame.playerPosition.z);
 		const start = performance.now();
 		const dt = frame.dt > 0 ? Math.min(frame.dt, 0.1) : 0;
 		this.#clock += dt;
@@ -1094,6 +1168,11 @@ export class StudyFaunaRuntime implements StudyFauna {
 			const distance = Math.hypot(eye.x - actor.x, eye.y - actor.y, eye.z - actor.z);
 			actor.distance = distance;
 			actor.visible = distance < actor.template.tuning.far;
+			const shells = distance < OUTLINE_FAR;
+			if (shells !== actor.shellsShown) {
+				actor.shellsShown = shells;
+				for (const shell of actor.shells) shell.visible = shells;
+			}
 			h.visible = actor.visible;
 			actor.animated = false;
 			if (actor.visible && dt > 0 && !frame.reducedMotion) {
