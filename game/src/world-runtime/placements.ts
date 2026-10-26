@@ -118,6 +118,7 @@ export async function loadWorldPlacements(
 							copy.userData = {
 								...m.userData,
 								vegetation: family === 'tree' || family === 'cover',
+								shadeReceiver: family !== 'tree',
 								cover: false,
 								canopyBase
 							};
@@ -149,7 +150,12 @@ export async function loadWorldPlacements(
 									sample: 'origin'
 								}
 							: family === 'cover' && !kind.startsWith('bromelia')
-								? { amplitude: WIND.grassSway, from: bounds.min.y, to: bounds.max.y, sample: 'vertex' }
+								? {
+										amplitude: Math.min(WIND.grassSway, height * 0.1),
+										from: kind.startsWith('ground-sand') ? 0.25 : bounds.min.y,
+										to: bounds.max.y,
+										sample: 'vertex'
+									}
 								: undefined;
 					models.push({ family, kind, near: name, far: far?.name, bounds, scale, count, wind, canopyBase });
 					if (family === 'tree') prototypes.push({ kind, model: near, bounds });
@@ -229,8 +235,16 @@ export async function loadWorldPlacements(
 						bottom = m.canopyBase ?? b.min.y,
 						r = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.5 * k;
 					crowns.push({
-						x: placements.x[i],
-						z: placements.z[i],
+						x:
+							placements.x[i] +
+							((b.min.x + b.max.x) * 0.5 * placements.yawC[i] +
+								(b.min.z + b.max.z) * 0.5 * placements.yawS[i]) *
+								k,
+						z:
+							placements.z[i] +
+							(-(b.min.x + b.max.x) * 0.5 * placements.yawS[i] +
+								(b.min.z + b.max.z) * 0.5 * placements.yawC[i]) *
+								k,
 						y: placements.y[i] + (bottom + b.max.y) * 0.5 * k,
 						rx: r,
 						rz: r,

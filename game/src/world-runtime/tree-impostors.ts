@@ -33,6 +33,18 @@ function canvas(w: number, h: number) {
 	c.height = h;
 	return c;
 }
+/** Symmetric horizontal frame keeps the GLB trunk origin at the billboard's centre. */
+export function impostorFrame(bounds: Box3) {
+	return {
+		radius: Math.max(
+			Math.abs(bounds.min.x),
+			Math.abs(bounds.max.x),
+			Math.abs(bounds.min.z),
+			Math.abs(bounds.max.z)
+		),
+		height: bounds.max.y - bounds.min.y
+	};
+}
 /** Canvas affine UV projection, preserving every alpha-MASK hole instead of painting a solid card. */
 export function triangleTransform(
 	uv: readonly number[],
@@ -63,10 +75,11 @@ export function bakeTreeAtlas(prototypes: readonly TreePrototype[]) {
 	prototypes.forEach((p, tile) => {
 		const x0 = (tile % COLS) * TILE_W,
 			y0 = Math.floor(tile / COLS) * TILE_H,
-			w = p.bounds.max.x - p.bounds.min.x,
-			h = p.bounds.max.y - p.bounds.min.y;
+			frame = impostorFrame(p.bounds),
+			w = frame.radius * 2,
+			h = frame.height;
 		const project = (v: Vector3) => [
-			x0 + 2 + ((v.x - p.bounds.min.x) / w) * (TILE_W - 4),
+			x0 + 2 + ((v.x + frame.radius) / w) * (TILE_W - 4),
 			y0 + TILE_H - 2 - ((v.y - p.bounds.min.y) / h) * (TILE_H - 4)
 		];
 		const triangles: {
@@ -212,7 +225,7 @@ export function createTreeImpostors(
  vec2 uv=vec2((tileXY.x+vUv.x)/uGrid.x,1.-(tileXY.y+1.-vUv.y)/uGrid.y);
  vec4 texel=texture2D(uAtlas,uv);if(texel.a<.5)discard;
  vec2 pixel=mod(floor(gl_FragCoord.xy),4.);float threshold=(mod(pixel.x*2.+pixel.y*3.,4.)*4.+mod(pixel.x+pixel.y*2.,4.)+.5)/16.;
- if(smoothstep(uTreeRange-6.,uTreeRange+6.,vDistance)<threshold)discard;
+ if(smoothstep(uTreeRange-6.,uTreeRange+6.,vDistance)<=1.-threshold)discard;
  vec3 color=texel.rgb;float haze=smoothstep(uTreeRange,uFarEnd*1.3,vDistance)*.48;
  gl_FragColor=vec4(mix(color,uFarMist,haze),1.);
  #include <colorspace_fragment>
@@ -227,8 +240,8 @@ export function createTreeImpostors(
 		if (tile < 0) continue;
 		const b = prototypes[tile].bounds,
 			k = trees.scale[i],
-			width = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * k,
-			height = (b.max.y - b.min.y) * k;
+			width = (impostorFrame(b).radius * 2 * k * TILE_W) / (TILE_W - 4),
+			height = (impostorFrame(b).height * k * TILE_H) / (TILE_H - 4);
 		matrix.makeScale(width, height, 1);
 		matrix.setPosition(trees.x[i], trees.y[i] + (b.min.y + b.max.y) * 0.5 * k, trees.z[i]);
 		object.setMatrixAt(count, matrix);

@@ -256,6 +256,26 @@
 			},
 			"references": [],
 			"notes": "Gated golden fixture: missions 1 and 4 complete, 15 butterflies, no save writes."
+		},
+		{
+			"id": "P14",
+			"name": "Cachoeira no paredão norte",
+			"covers": "waterfall UV cell and native shore decor",
+			"status": "exists",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": {
+				"position": [125, 8, 22],
+				"target": [132, 7.5, 30],
+				"fov": 55
+			},
+			"avatar": {
+				"x": 122,
+				"z": 32,
+				"yaw": 0.8
+			},
+			"references": [],
+			"notes": "Native waterfall at the authored (132,30) landmark, facing the cliff descent."
 		}
 	]
 }

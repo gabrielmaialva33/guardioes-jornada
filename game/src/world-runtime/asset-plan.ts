@@ -66,7 +66,7 @@ export function renderAssetPlan(world: SurvivalWorld, level?: StoryLevel) {
 			];
 		return i % 3 ? 'understorey-flowers-ground-b' : 'understorey-flowers-tall-b';
 	});
-	const rocks = remapPlacements(world.rocks, (kind, i) => {
+	const mappedRocks = remapPlacements(world.rocks, (kind, i) => {
 		if (kind === 'log') return 'log';
 		const wet = shoreAt(world, world.rocks.x[i], world.rocks.z[i], level?.pool)[1] < 3;
 		if (wet) return ['ground-shore-rocks-a', 'ground-shore-rocks-b', 'ground-shore-rocks-c'][i % 3];
@@ -74,6 +74,11 @@ export function renderAssetPlan(world: SurvivalWorld, level?: StoryLevel) {
 			? ['rock-polyone-01', 'rock-polyone-02', 'rock-polyone-06'][i % 3]
 			: ['rock-polyone-03', 'rock-polyone-04', 'rock-polyone-11'][i % 3];
 	});
+	const scales = mappedRocks.scale.slice();
+	for (let i = 0; i < world.rocks.count; i++)
+		if (world.rocks.kinds[world.rocks.kind[i]] === 'stone')
+			scales[i] *= 0.25 / (mappedRocks.kinds[mappedRocks.kind[i]].startsWith('ground-shore') ? 1.1 : 0.3);
+	const rocks = { ...mappedRocks, scale: scales };
 	const scenery: SceneryPlacement[] = [];
 	const safe = (x: number, z: number, radius: number) =>
 		!level?.obbies.some((o) => o.pieces.some((p) => Math.hypot(p.x - x, p.z - z) < radius + p.radius + 1.5));
