@@ -529,8 +529,16 @@ try {
 		await page.reload();
 		await page.getByRole('button', { name: 'Entrar na trilha', exact: true }).waitFor();
 		assert.equal(await page.locator('main[data-pack-id]').getAttribute('data-pack-id'), manifests[0].packId);
+		// The launcher reads latest.json and tells the player a newer version exists; it downloads nothing.
+		await page.getByText('Tem uma versão nova da trilha').waitFor();
 	}
-	assert.equal(requests.slice(installRequests).filter((path) => path.startsWith('/game-packs/')).length, 0);
+	// Only latest.json may be read after the install: no pack file is fetched until the player asks.
+	assert.equal(
+		requests
+			.slice(installRequests)
+			.filter((path) => path.startsWith('/game-packs/') && path !== '/game-packs/latest.json').length,
+		0
+	);
 	await setOffline(true);
 	const networkBefore = requests.length;
 	await page.reload();
