@@ -208,6 +208,32 @@ function budgetForModel(fileName, nodeName) {
 	if (['monkey.glb', 'parrot.glb', 'koala.glb'].includes(fileName)) {
 		return { kind: 'Animal', limit: 1000 };
 	}
+	// P23 species models (scripts/blender/models/bichos_mata.py).
+	if (
+		[
+			'capivara',
+			'anta',
+			'cateto',
+			'veado',
+			'cachorro-do-mato',
+			'tapiti',
+			'jaguatirica',
+			'caranguejo',
+			'tatu',
+			'jabuti',
+			'sapo',
+			'passaro',
+			'jacutinga',
+			'colhereiro',
+			// P35 coast species (scripts/blender/models/bichos_costa.py).
+			'caranguejo-de-pedra',
+			'sargentinho',
+			'atoba',
+			'gaivotao'
+		].some((t) => fileName === `${t}.glb`)
+	) {
+		return { kind: 'Animal', limit: 1000 };
+	}
 	if (fileName.includes('silhueta') || nodeName.includes('silhueta')) {
 		return { kind: 'Landmark Silhouette', limit: 80 };
 	}
@@ -225,7 +251,8 @@ function budgetForModel(fileName, nodeName) {
 			'pau-brasil',
 			'jeriva',
 			'mangue-vermelho',
-			'xaxim'
+			'xaxim',
+			'pitangueira'
 		].some((t) => fileName.includes(t) || nodeName.includes(t))
 	) {
 		return { kind: 'Tree (v2)', limit: 450 };
@@ -247,6 +274,12 @@ function budgetForModel(fileName, nodeName) {
 	if (nodeName.startsWith('cabin') || fileName.includes('ponte-madeira')) {
 		return { kind: 'Landmark (cabin / bridge)', limit: 1500 };
 	}
+	// P26 park props (scripts/blender/models/build_props.py): the coast animals and the assemblies.
+	if (fileName.includes('tartaruga')) return { kind: 'Animal (coast, P26)', limit: 400 };
+	if (fileName.includes('casa-iara')) return { kind: 'Landmark (treehouse)', limit: 800 };
+	if (['torre-observacao', 'observatorio-aves', 'cachoeira-grande-paredao'].some((t) => fileName.includes(t)))
+		return { kind: 'Landmark (assembly)', limit: 1500 };
+	if (fileName.includes('passarela-mirante')) return { kind: 'Walkway lookout', limit: 300 };
 	return { kind: 'Prop / Obby / Flora', limit: 200 };
 }
 
