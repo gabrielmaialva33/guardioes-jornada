@@ -1,0 +1,142 @@
+{
+	"$comment": "Golden-frame poses (pesquisa-qualidade/a-visual.md §6, game/ART.md §9). status: 'exists' = captured through ?debug&pose=<runtimePose>; 'approx' = the nearest existing runtime pose stands in until the runtime can place the camera (see camera); 'needs-runtime' = not captured until the ?golden=1 hook (README) can place the camera, the avatar or the time of day. Coordinates are world units of the story map (Reserva da Iara, STORY_VERSION 1); camera.position/target are the eye and look-at point, fov the vertical field of view in degrees (CAMERA_FOV is 70). References are file names in ~/.cache/agents/2026-10-25-trilha-secreta/pesquisa-qualidade/referencias/ (copyrighted, never copied into the repo).",
+	"canvas": { "width": 960, "height": 432 },
+	"settleMs": 2500,
+	"clockSeconds": 10,
+	"seed": 20261025,
+	"tiers": ["low", "high"],
+	"poses": [
+		{
+			"id": "P1",
+			"name": "Início da trilha",
+			"covers": "copas, forração, sombra",
+			"status": "exists",
+			"runtimePose": "spawn",
+			"timeOfDay": "day",
+			"camera": null,
+			"avatar": { "x": 34, "z": 92, "yaw": 2.3562 },
+			"references": ["23-alba-trilha-floresta.jpg", "20-a-short-hike-floresta-paleta.jpg"],
+			"notes": "Spawn at the base, facing north-east along the trail; runtime chase camera."
+		},
+		{
+			"id": "P2",
+			"name": "Clareira com forração",
+			"covers": "grama, terreno, pilares",
+			"status": "needs-runtime",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": { "position": [100, 7.5, 108], "target": [112, 3.3, 118], "fov": 70 },
+			"avatar": { "x": 104, "z": 111, "yaw": 0.876 },
+			"references": ["01-bruno-simon-folio2025-grama-luz.jpg", "11-simondev-quick-grass.jpg"],
+			"notes": "Mission 4 clearing (target 112, 118; six planting spots around it), seen from its south-west edge."
+		},
+		{
+			"id": "P3",
+			"name": "Travessia do rio, do alto",
+			"covers": "margem, água, ponte",
+			"status": "approx",
+			"runtimePose": "bridge",
+			"timeOfDay": "day",
+			"camera": { "position": [44, 14, 116], "target": [56, 1.5, 129], "fov": 70 },
+			"avatar": { "x": 50, "z": 124, "yaw": 0.876 },
+			"references": ["22-a-short-hike-rio-cachoeira.jpg", "05-coastal-world-terreno-praia-agua.jpg"],
+			"notes": "Bridge from (50, 124) to (62, 134), deck about 2.1–2.3 u. Until the hook exists, the 'bridge' pose (chase camera at the west end) stands in; the target framing is from above, 12 u up."
+		},
+		{
+			"id": "P4",
+			"name": "Borda do mapa olhando para fora",
+			"covers": "horizonte, serra, mar",
+			"status": "exists",
+			"runtimePose": "edge",
+			"timeOfDay": "day",
+			"camera": null,
+			"avatar": { "x": 2, "z": 80, "yaw": -1.5708 },
+			"references": ["24-alba-horizonte-silhuetas.jpg", "29-altos-odyssey-camadas-neblina.jpg"],
+			"notes": "West limit, looking out (yaw −π/2). The void metric (lower half not covered by geometry) is the gate for this pose."
+		},
+		{
+			"id": "P5",
+			"name": "Sob o dossel olhando para cima",
+			"covers": "translucidez, manchas de sol",
+			"status": "needs-runtime",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": { "position": [44, 2.2, 40], "target": [45, 14, 34], "fov": 70 },
+			"avatar": null,
+			"references": ["09-douges-arvore-fofa-cards.jpg", "10-ez-tree-arvores-cards-alpha.jpg"],
+			"notes": "North forest floor (44, 40), ground 1.39 u; camera pitched about 60° up into the canopy. Needs a free camera (pitch beyond the chase camera's limit)."
+		},
+		{
+			"id": "P6",
+			"name": "Avatar de perto, fundo verde",
+			"covers": "legibilidade, contorno",
+			"status": "needs-runtime",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": { "position": [44, 2.7, 45.6], "target": [44, 2.4, 42], "fov": 50 },
+			"avatar": { "x": 44, "z": 42, "yaw": 0 },
+			"references": ["03-messenger-contorno-rua-arvores.jpg", "17-threejs-toon-gradientmap.jpg"],
+			"notes": "Avatar at the edge of the north forest (ground 1.4 u) facing the camera (+z), forest behind. Metric to add then: ΔE between the avatar's outline ring and the background."
+		},
+		{
+			"id": "P7",
+			"name": "Margem de perto",
+			"covers": "espuma, faixa molhada",
+			"status": "approx",
+			"runtimePose": "stones",
+			"timeOfDay": "day",
+			"camera": { "position": [77.5, 4.2, 63.5], "target": [84, 1.8, 70], "fov": 70 },
+			"avatar": null,
+			"references": ["21-a-short-hike-margem-espuma.jpg", "02-messenger-praia-margem.jpg"],
+			"notes": "West bank of the stones pool (take-off 80.0, 66.1, water 2.02). The 'stones' pose (avatar at the take-off, facing the crossing) stands in until the hook can lower the camera onto the waterline."
+		},
+		{
+			"id": "P8",
+			"name": "Obby na floresta",
+			"covers": "blocos e plataformas contra a mata",
+			"status": "needs-runtime",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": { "position": [117, 8.6, 106.5], "target": [123.5, 11, 85], "fov": 70 },
+			"avatar": { "x": 120.3, "z": 100.3, "yaw": 3.0 },
+			"references": ["04-summer-afternoon-floresta-praia.jpg", "10-ez-tree-arvores-cards-alpha.jpg"],
+			"notes": "The six mirante ledges (121, 97) → (126.3, 72.4), tops 7.5–15, seen from behind the take-off pad (120.3, 6, 100.3)."
+		},
+		{
+			"id": "P9",
+			"name": "Início da trilha à noite",
+			"covers": "variante noturna, vagalumes",
+			"status": "needs-runtime",
+			"runtimePose": "spawn",
+			"timeOfDay": "night",
+			"camera": null,
+			"avatar": { "x": 34, "z": 92, "yaw": 2.3562 },
+			"references": ["25-sky-campo-flores-brilho.jpg", "26-sky-ilha-mar-de-nuvens.jpg"],
+			"notes": "P1 with the night light rig; the runtime has no night variant yet (?golden=1&time=night)."
+		},
+		{
+			"id": "P10",
+			"name": "Lineup",
+			"covers": "assets isolados",
+			"status": "needs-runtime",
+			"runtimePose": null,
+			"timeOfDay": "day",
+			"camera": null,
+			"avatar": null,
+			"references": ["27-monument-valley-3-plantas-2d.jpg", "09-douges-arvore-fofa-cards.jpg"],
+			"notes": "WebGL lineup page (assets in a row next to the avatar and a scale bar, standard light), the counterpart of scripts/blender/lineup.py. Not part of the game runtime yet."
+		},
+		{
+			"id": "X1",
+			"name": "Topo do mirante (extra)",
+			"covers": "vista do plateau, copas próximas",
+			"status": "exists",
+			"runtimePose": "mirante",
+			"timeOfDay": "day",
+			"camera": null,
+			"avatar": { "x": 134, "z": 72, "yaw": -1.5708 },
+			"references": ["29-altos-odyssey-camadas-neblina.jpg", "26-sky-ilha-mar-de-nuvens.jpg"],
+			"notes": "Not one of the ten; captured because the runtime has it and the canopy framing there is a known issue (p5-map-runtime-codex.md)."
+		}
+	]
+}

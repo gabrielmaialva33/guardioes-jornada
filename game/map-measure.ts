@@ -5,7 +5,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 
-const output = join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/map-runtime');
+const output =
+	process.env.GAME_MEASURE_DIR ?? join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/map-runtime');
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
 	channel: 'chrome',
