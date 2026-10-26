@@ -3,7 +3,8 @@
  * builds it on the dev server from `tmp/greenhell-port/` (conversion-manifest.json,
  * the GLB headers, the audio and terrain folders, and the P14 curation in
  * `study-cache/curation.json`) and serves it at `/__estudo/greenhell/catalog.json`.
- * Per-asset data (paths, sizes, tris, clips) lives only there, never in the repo.
+ * This loader reads per-asset data (paths, sizes, tris, clips) from that catalog.
+ * PARK.md §10 permits integration metadata in the project asset pipeline.
  * DEV only, behind the study gate (gate.ts).
  */
 import { studyUrl } from './gate.ts';

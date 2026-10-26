@@ -3,7 +3,8 @@
  * extracted animals the study world shows, how tall (ART.md §3: feet to the top
  * of the silhouette, ×1.5 life size against the 3.0 u avatar) and which clip
  * plays each role. Keys and clip names only: paths, sizes, tris and clip lists
- * are asset data, served at runtime from tmp/ (data.ts), never kept in the repo.
+ * are asset data, currently served at runtime from tmp/ (data.ts).
+ * PARK.md §10 permits direct asset reuse and integration metadata in the project.
  * DEV only, behind the study gate (gate.ts).
  */
 

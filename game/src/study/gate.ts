@@ -2,9 +2,10 @@
  * The gate of the LOCAL-ONLY Green Hell study mode.
  *
  * The owner extracted assets from Green Hell (Creepy Jar) into the git-ignored
- * `tmp/greenhell-port/`. They have no licence for redistribution, so they never
- * enter the repo, the game pack, a production build or the deployed site: the
- * dev server alone serves them (game/study-dev.ts, at STUDY_PREFIX).
+ * `tmp/greenhell-port/`. PARK.md §10 authorizes direct reuse in the project.
+ * This gate describes the current DEV-only delivery path, not a reuse policy:
+ * the dev server serves the files (game/study-dev.ts, at STUDY_PREFIX), and
+ * production pack integration has not been implemented here.
  *
  * On the dev server the mode is ON by default (the owner's local game):
  * - `?estudo=off` turns it off; `?estudo=greenhell` forces it on, even in an

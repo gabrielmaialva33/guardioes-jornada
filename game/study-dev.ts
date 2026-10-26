@@ -2,14 +2,14 @@
  * Dev-server-only middleware of the LOCAL-ONLY Green Hell study mode
  * (game/src/study/). It serves the owner's extraction in the git-ignored
  * `tmp/greenhell-port/` at `/__estudo/greenhell/`, read-only, straight from
- * disk: nothing is copied, transformed or bundled. The assets belong to Creepy
- * Jar and have no licence for redistribution, so this plugin applies to `serve`
- * only and a build never sees them. Modelled on dev-pack.ts.
+ * disk: nothing is copied, transformed or bundled. This plugin applies to
+ * `serve` only; it does not implement production pack integration. PARK.md §10
+ * authorizes direct reuse in the project. Modelled on dev-pack.ts.
  *
  * `/__estudo/greenhell/catalog.json` is built on the fly (src/study/data.ts has
  * its shape) from conversion-manifest.json, the GLB headers, the audio and
  * terrain folders and the curation in `study-cache/curation.json`, so per-asset
- * data never lives in the repo. It is cached in memory and mirrored to
+ * data is generated at runtime. It is cached in memory and mirrored to
  * `study-cache/catalog.json`.
  */
 import { createReadStream } from 'node:fs';
