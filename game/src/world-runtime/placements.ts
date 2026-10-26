@@ -73,7 +73,7 @@ export async function loadWorldPlacements(
 		for (const [family, placements, category] of [
 			['tree', world.trees, 'tree'],
 			['rock', world.rocks, 'rock'],
-			['cover', world.decorations, 'cover']
+			['cover', decorations, 'cover']
 		] as const) {
 			const counts = new Map<string, number>();
 			for (let i = 0; i < placements.count; i++) {
