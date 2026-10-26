@@ -2,7 +2,7 @@
  * The curated inventory of the LOCAL-ONLY Green Hell study mode: every animal,
  * plant and sound group the owner extracted into `tmp/greenhell-port/`, rated
  * for the Mata Atlântica. Measured from the files (glTF JSON chunk and
- * conversion-manifest.json, 26/10/2026); report: p14-estudo-greenhell.md.
+ * conversion-manifest.json at 121 jobs, 26/10/2026); report: p14-estudo-greenhell.md.
  *
  * This file holds metadata only (names, sizes, clip names): no asset bytes. Paths
  * are relative to `tmp/greenhell-port/`; fetch them with `studyUrl(path)`.
@@ -39,7 +39,7 @@ export interface StudyAnimal {
 	readonly textures: readonly string[];
 	/** Every clip, by clipKey(). */
 	readonly clips: readonly string[];
-	readonly role: 'fauna' | 'fish' | 'reptile' | 'invertebrate';
+	readonly role: 'fauna' | 'bird' | 'fish' | 'reptile' | 'invertebrate';
 	readonly fit: StudyFit;
 	readonly why: string;
 	/** Picks only: ART.md §3 height, feet to the top of the silhouette, world units (×1.5 life size). */
@@ -95,7 +95,22 @@ export interface StudySoundGroup {
 	readonly files: readonly string[];
 }
 
-export type StudyItem = StudyAnimal | StudyPlant | StudySoundGroup;
+export type StudyTerrainRole = 'albedo' | 'normal' | 'splatmap' | 'heightmap';
+
+export interface StudyTerrainTexture {
+	readonly kind: 'terrain';
+	readonly id: string;
+	readonly path: string;
+	readonly bytes: number;
+	readonly size: number;
+	readonly role: StudyTerrainRole;
+	/** The ground layer it belongs to (moss, mud, …), '' for the splatmaps and the heightmap. */
+	readonly layer: string;
+	readonly fit: StudyFit;
+	readonly why: string;
+}
+
+export type StudyItem = StudyAnimal | StudyPlant | StudySoundGroup | StudyTerrainTexture;
 
 /**
  * The clip's own name from a glTF animation name: the converter wrote
@@ -993,6 +1008,58 @@ export const STUDY_ANIMALS: readonly StudyAnimal[] = [
 		role: 'invertebrate',
 		fit: 'out',
 		why: 'Scary for kids (and Amazonian).'
+	},
+	{
+		kind: 'animal',
+		id: 'Toucan',
+		name: 'tucano',
+		path: animalPath('Toucan'),
+		bytes: 217940,
+		tris: 1361,
+		joints: 42,
+		textures: ['Toucan 512×512'],
+		clips: ['ToucanFlap', 'ToucanIdle', 'ToucanSoar'],
+		role: 'bird',
+		fit: 'maybe',
+		why: 'Optional A/B against our own tucano-de-bico-verde (Ramphastos dicolorus), placed next to it. Check which toucan their model depicts before any text names it.',
+		height: 0.9,
+		roles: {
+			idle: 'ToucanIdle',
+			walk: 'ToucanIdle',
+			run: 'ToucanFlap',
+			eat: 'ToucanIdle',
+			alerted: 'ToucanFlap'
+		}
+	},
+	{
+		kind: 'animal',
+		id: 'ParrotMacaw',
+		name: 'arara-vermelha',
+		path: animalPath('ParrotMacaw'),
+		bytes: 322676,
+		tris: 1826,
+		joints: 41,
+		textures: ['Parrot Macaw Red 512×512'],
+		clips: ['MacawFlap', 'MacawIdle', 'MacawSoar'],
+		role: 'bird',
+		fit: 'maybe',
+		why: 'Verify fit before any text claims it: the red macaw has historical records and reintroduction projects in the Mata Atlântica, but it is not a common bird there today.',
+		height: 1.2,
+		roles: { idle: 'MacawIdle', walk: 'MacawIdle', run: 'MacawFlap', eat: 'MacawIdle', alerted: 'MacawFlap' }
+	},
+	{
+		kind: 'animal',
+		id: 'ParrotMacaw_yellow',
+		name: 'arara-canindé',
+		path: animalPath('ParrotMacaw_yellow'),
+		bytes: 331020,
+		tris: 1826,
+		joints: 41,
+		textures: ['Parrot Macaw Yellow 512×512'],
+		clips: ['MacawFlap', 'MacawIdle', 'MacawSoar'],
+		role: 'bird',
+		fit: 'out',
+		why: 'The blue-and-yellow macaw (canindé) is not a Mata Atlântica bird.'
 	}
 ];
 
@@ -2115,8 +2182,204 @@ export const STUDY_SOUNDS: readonly StudySoundGroup[] = [
 	}
 ];
 
-/** Everything, for P15 (sound) and P16 (vegetation): filter by `kind`, `role` and `fit`. */
-export const studyCatalog: readonly StudyItem[] = [...STUDY_ANIMALS, ...STUDY_PLANTS, ...STUDY_SOUNDS];
+/** Their ground: 2048² layer textures with normal maps, two splatmaps and the 4097² heightmap (P16's terrain A/B). */
+export const STUDY_TERRAIN: readonly StudyTerrainTexture[] = [
+	{
+		kind: 'terrain',
+		id: 'moss_ground_01',
+		path: 'terrain/10-moss_ground_01.png',
+		bytes: 10138296,
+		size: 2048,
+		role: 'albedo',
+		layer: 'moss',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'moss_ground_01_N',
+		path: 'terrain/4-moss_ground_01_N.png',
+		bytes: 10764345,
+		size: 2048,
+		role: 'normal',
+		layer: 'moss',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'river_stones',
+		path: 'terrain/1760-river_stones.png',
+		bytes: 10498500,
+		size: 2048,
+		role: 'albedo',
+		layer: 'river-stones',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'river_stones_N',
+		path: 'terrain/2754-river_stones_N.png',
+		bytes: 8157066,
+		size: 2048,
+		role: 'normal',
+		layer: 'river-stones',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'mud_ground_03',
+		path: 'terrain/1773-mud_ground_03.png',
+		bytes: 9958829,
+		size: 2048,
+		role: 'albedo',
+		layer: 'mud-03',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'mud_ground_03_N',
+		path: 'terrain/2977-mud_ground_03_N.png',
+		bytes: 10507884,
+		size: 2048,
+		role: 'normal',
+		layer: 'mud-03',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'mud_ground_04',
+		path: 'terrain/3138-mud_ground_04.png',
+		bytes: 11324151,
+		size: 2048,
+		role: 'albedo',
+		layer: 'mud-04',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'mud_ground_04_N',
+		path: 'terrain/3794-mud_ground_04_N.png',
+		bytes: 10910718,
+		size: 2048,
+		role: 'normal',
+		layer: 'mud-04',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'grass_ground_03',
+		path: 'terrain/2380-grass_ground_03.png',
+		bytes: 11159802,
+		size: 2048,
+		role: 'albedo',
+		layer: 'grass-03',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'grass_ground_03_N',
+		path: 'terrain/3559-grass_ground_03_N.png',
+		bytes: 9877683,
+		size: 2048,
+		role: 'normal',
+		layer: 'grass-03',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'dried_leaves_ground_01',
+		path: 'terrain/3123-dried_leaves_ground_01.png',
+		bytes: 9513501,
+		size: 2048,
+		role: 'albedo',
+		layer: 'dried-leaves',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'dried_leaves_ground_01_N',
+		path: 'terrain/2442-dried_leaves_ground_01_N.png',
+		bytes: 8273820,
+		size: 2048,
+		role: 'normal',
+		layer: 'dried-leaves',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'roots_leaves_01',
+		path: 'terrain/8-roots_leaves_01.png',
+		bytes: 11423200,
+		size: 2048,
+		role: 'albedo',
+		layer: 'roots-leaves',
+		fit: 'maybe',
+		why: 'ground layer colour (photographic: P16 repaints or posterizes it)'
+	},
+	{
+		kind: 'terrain',
+		id: 'roots_leaves_01_N',
+		path: 'terrain/5-roots_leaves_01_N.png',
+		bytes: 8991300,
+		size: 2048,
+		role: 'normal',
+		layer: 'roots-leaves',
+		fit: 'maybe',
+		why: 'ground layer normal map'
+	},
+	{
+		kind: 'terrain',
+		id: 'splatmap',
+		path: 'terrain/2-splatmap.png',
+		bytes: 2619021,
+		size: 2048,
+		role: 'splatmap',
+		layer: '',
+		fit: 'maybe',
+		why: 'layer weights of their island (RGBA)'
+	},
+	{
+		kind: 'terrain',
+		id: 'splatmap',
+		path: 'terrain/3-splatmap.png',
+		bytes: 1266776,
+		size: 2048,
+		role: 'splatmap',
+		layer: '',
+		fit: 'maybe',
+		why: 'layer weights of their island (RGBA)'
+	},
+	{
+		kind: 'terrain',
+		id: '4097',
+		path: 'terrain/heightmap-4097.png',
+		bytes: 5028235,
+		size: 4097,
+		role: 'heightmap',
+		layer: '',
+		fit: 'out',
+		why: 'their island heights (not our map)'
+	}
+];
+
+/** Everything, for P15 (sound) and P16 (vegetation, terrain): filter by `kind`, `role` and `fit`. */
+export const studyCatalog: readonly StudyItem[] = [
+	...STUDY_ANIMALS,
+	...STUDY_PLANTS,
+	...STUDY_SOUNDS,
+	...STUDY_TERRAIN
+];
 
 /** A catalogued animal by its Green Hell id. */
 export function studyAnimal(id: string): StudyAnimal | undefined {

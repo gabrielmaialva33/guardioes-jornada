@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
+import { greenHellStudyDev } from './study-dev.ts';
 
 export default defineConfig({
 	root: fileURLToPath(new URL('.', import.meta.url)),
@@ -11,6 +12,8 @@ export default defineConfig({
 	resolve: { dedupe: ['svelte', 'three'] },
 	plugins: [
 		svelte({ configFile: false }),
+		// Local-only study of the owner's Green Hell extraction (tmp/, git-ignored): `serve` only, never in a build.
+		greenHellStudyDev(),
 		{
 			name: 'independent-game-runtime',
 			generateBundle(_options, bundle) {
