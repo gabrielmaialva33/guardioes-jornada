@@ -153,21 +153,26 @@ export class Soundscape {
 				if (this.#disposed || signal?.aborted || this.#natureReady) return;
 				this.#natureReady = true;
 				this.#bed = this.audio.loop('forest-day', { fadeIn: 3 });
-				// DEV + ?estudo=greenhell only: local study sounds (tmp/, git-ignored). A build drops this branch.
-				if (import.meta.env.DEV)
-					void import('../study/audio.ts').then(({ startStudyAudio }) => {
-						if (!this.#disposed)
-							this.#study = startStudyAudio({
-								audio: this.audio,
-								world: this.#map?.world,
-								ownBed: this.#bed
-							});
-					});
 				const river = this.#map?.world.river.points[0];
 				if (river)
 					this.#river = this.audio.loop('river', { x: river.x, y: river.water, z: river.z, fadeIn: 2 });
 				if (this.#waterfall) this.#fall = this.audio.loop('waterfall', { ...this.#waterfall, fadeIn: 2 });
 				for (const caller of this.#callers) caller.wait = this.#random() * FIRST_CALL;
+				// DEV only, behind the study gate (game/src/study/gate.ts): the local Green Hell study sounds
+				// (tmp/, git-ignored). A build drops this branch.
+				if (import.meta.env.DEV)
+					void import('../study/audio.ts').then(({ startStudyAudio }) => {
+						if (this.#disposed) return;
+						this.#study = startStudyAudio({
+							audio: this.audio,
+							world: this.#map?.world,
+							level: this.#map?.level,
+							waterfall: this.#waterfall,
+							ownBed: this.#bed,
+							ownRiver: this.#river,
+							ownFall: this.#fall
+						});
+					});
 				this.syncStory();
 			});
 	}
