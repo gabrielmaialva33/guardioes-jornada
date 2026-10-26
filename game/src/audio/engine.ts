@@ -341,8 +341,9 @@ class GameAudioEngine implements GameAudio {
 		const listen = { signal: this.#lifetime.signal, passive: true };
 		if (this.#page) {
 			const page = this.#page;
+			// A context the browser lets start on its own (autoplay allowed) still needs the first gesture to unlock.
 			const onGesture = () => {
-				if (!page.hidden && this.#context?.state !== 'running') void this.unlock();
+				if (!page.hidden && (!this.#unlocked || this.#context?.state !== 'running')) void this.unlock();
 			};
 			for (const type of GESTURES) page.addEventListener(type, onGesture, listen);
 			page.addEventListener('visibilitychange', () => (page.hidden ? this.#hide() : this.#show()), listen);

@@ -66,6 +66,17 @@ describe('lifecycle', () => {
 		expect(context.calls.filter((c) => c === 'resume')).toHaveLength(resumes);
 	});
 
+	it('unlocks on the first gesture when the browser started the context on its own (autoplay allowed)', async () => {
+		const { audio, context, page } = setup();
+		context.state = 'running';
+		expect(audio.state).toBe('locked');
+		expect(audio.play('jump')).toBeNull();
+		page.fire('pointerdown');
+		await flush();
+		expect(audio.state).toBe('running');
+		expect(audio.play('jump')?.playing).toBe(true);
+	});
+
 	it('drops one-shots while an unlocked context is not running, so a resume plays no backlog', async () => {
 		const { audio, context } = await unlocked();
 		context.state = 'interrupted';
