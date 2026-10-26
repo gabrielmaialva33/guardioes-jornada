@@ -1,7 +1,7 @@
 import type { Box3, Ray } from 'three';
 import type { ExtendedTriangle } from 'three-mesh-bvh';
 import { type ColliderSource, CollisionWorld } from './world.ts';
-/** Static BVH plus independently refitted small decks. Children are caller-owned. */
+/** Static BVH plus independently updated small decks. Children are caller-owned. */
 export class CompoundWorld extends CollisionWorld {
 	constructor(
 		sources: Iterable<ColliderSource>,

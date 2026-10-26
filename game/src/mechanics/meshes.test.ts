@@ -2,8 +2,10 @@ import { BoxGeometry, Ray, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Character } from '../engine/character.ts';
 import { CompoundWorld } from '../engine/compound-world.ts';
+import { CollisionWorld } from '../engine/world.ts';
 import { SuspensionBridge } from './bridge.ts';
-import { createBridgeMesh } from './meshes.ts';
+import { Ladder } from './ladder.ts';
+import { createBridgeMesh, createLadderMesh } from './meshes.ts';
 
 it('moving plank collision follows the rendered deck and side rails block walking falls', () => {
 	const b = new SuspensionBridge({
@@ -36,4 +38,42 @@ it('moving plank collision follows the rendered deck and side rails block walkin
 	expect(world.raycast(ray, 20)).toBeCloseTo(initial ?? 0, 4);
 	mesh.dispose();
 	world.dispose();
+});
+it('orients a ladder platform toward its dismount without blocking the ladder mouth', () => {
+	const l = new Ladder({
+		id: 'east',
+		base: { x: 0, y: 0, z: 0 },
+		top: { x: 0, y: 6, z: 0 },
+		exit: { x: 2, y: 6, z: 0 },
+		radius: 0.8
+	});
+	const mesh = createLadderMesh(l),
+		w = new CollisionWorld(mesh.colliders);
+	const r = new Ray(new Vector3(2, 10, 0), new Vector3(0, -1, 0));
+	expect(w.raycast(r, 20)).toBeCloseTo(4);
+	const c = new Character(w, l.spec.exit);
+	for (let i = 0; i < 10; i++) c.step(1 / 60, { moveX: -1, moveZ: 0, jumpHeld: false, faceYaw: null });
+	expect(c.position.x).toBeLessThan(0.8);
+	mesh.dispose();
+	w.dispose();
+});
+it('keeps both extremes of the full plank sweep inside collision broadphase bounds', () => {
+	const b = new SuspensionBridge({
+			id: 'b',
+			start: { x: 0, y: 3, z: 0 },
+			end: { x: 0, y: 3, z: 16 },
+			width: 2,
+			planks: 20
+		}),
+		mesh = createBridgeMesh(b);
+	const ray = new Ray(new Vector3(0, 2.4, 8.4), new Vector3(0, 1, 0));
+	b.offsets.fill(0.25);
+	mesh.update();
+	expect(mesh.world.raycast(ray, 1)).toBeCloseTo((b.heightAt(0, 8.4) ?? 0) - 0.2 - 2.4, 4);
+	b.offsets.fill(-0.25);
+	mesh.update();
+	ray.origin.y = 5;
+	ray.direction.y = -1;
+	expect(mesh.world.raycast(ray, 10)).toBeCloseTo(5 - (b.heightAt(0, 8.4) ?? 0), 4);
+	mesh.dispose();
 });

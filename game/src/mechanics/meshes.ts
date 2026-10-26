@@ -4,7 +4,6 @@ import {
 	type BufferGeometry,
 	CylinderGeometry,
 	Group,
-	type Material,
 	Mesh,
 	MeshStandardMaterial,
 	Quaternion,
@@ -98,13 +97,15 @@ export function createLadderMesh(ladder: Ladder) {
 	const v = new MechanicMesh(),
 		s = ladder.spec,
 		h = s.top.y - s.base.y;
-	for (const side of [-0.65, 0.65]) v.box(s.base.x + side, s.base.y + h / 2, s.base.z, 0.14, h + 0.8, 0.16);
-	for (let y = s.base.y + 0.3; y < s.top.y; y += 0.45) v.box(s.base.x, y, s.base.z, 1.35, 0.11, 0.16, ROPE);
-	// The exit platform has an open ladder side; the level owns any larger treehouse.
-	v.box(s.exit.x, s.exit.y - 0.15, s.exit.z, 3.2, 0.3, 3, WOOD, true);
-	for (const side of [-1, 1])
-		v.box(s.exit.x + side * 1.6, s.exit.y + 0.6, s.exit.z, 0.15, 1.2, 3, ROPE, true);
-	v.box(s.exit.x, s.exit.y + 0.6, s.exit.z + 1.5, 3.2, 1.2, 0.15, ROPE, true);
+	const exitDistance = Math.hypot(s.exit.x - s.base.x, s.exit.z - s.base.z);
+	v.root.position.set(s.base.x, s.base.y, s.base.z);
+	v.root.rotation.y = Math.atan2(s.exit.x - s.base.x, s.exit.z - s.base.z);
+	for (const side of [-0.65, 0.65]) v.box(side, h / 2, 0, 0.14, h + 0.8, 0.16);
+	for (let y = 0.3; y < h; y += 0.45) v.box(0, y, 0, 1.35, 0.11, 0.16, ROPE);
+	const exitY = s.exit.y - s.base.y;
+	v.box(0, exitY - 0.15, exitDistance, 3.2, 0.3, 3, WOOD, true);
+	for (const side of [-1, 1]) v.box(side * 1.6, exitY + 0.6, exitDistance, 0.15, 1.2, 3, ROPE, true);
+	v.box(0, exitY + 0.6, exitDistance + 1.5, 3.2, 1.2, 0.15, ROPE, true);
 	return v.bake();
 }
 export function createZiplineMesh(zip: Zipline) {
@@ -214,9 +215,23 @@ export function createBridgeMesh(bridge: SuspensionBridge) {
 			rail.visible = false;
 		}
 	v.bake();
-	const world = new CollisionWorld(v.colliders),
-		positions = world.geometry.getAttribute('position'),
-		previous = new Float64Array(n);
+	// Bake the full +/-0.25 u sweep into immutable BVH node bounds, then restore
+	// the live triangles. Their vertices always stay inside that envelope: no
+	// per-tick BVH rebuild/refit (three-mesh-bvh.refit allocates typed-array views).
+	const swept = v.colliders.map((source, i) =>
+		i < n ? { geometry: source.geometry.clone().scale(1, 3.5, 1), matrix: source.matrix } : source
+	);
+	const world = new CollisionWorld(swept),
+		positions = world.geometry.getAttribute('position');
+	for (let i = 0; i < n; i++) swept[i].geometry.dispose();
+	const previous = new Float64Array(n),
+		baseY = new Float64Array(n * 24);
+	for (let i = 0; i < n; i++)
+		for (let vertex = i * 24; vertex < (i + 1) * 24; vertex++) {
+			const center = planks[i].position.y;
+			baseY[vertex] = center + (positions.getY(vertex) - center) / 3.5;
+			positions.setY(vertex, baseY[vertex]);
+		}
 	const baseDispose = v.dispose.bind(v);
 	return Object.assign(v, {
 		world,
@@ -226,14 +241,13 @@ export function createBridgeMesh(bridge: SuspensionBridge) {
 				const delta = bridge.offsets[i] - previous[i];
 				if (Math.abs(delta) < 1e-9) continue;
 				changed = true;
-				planks[i].position.y += delta;
+				planks[i].position.y = bridge.baseHeight((i + 0.5) / n) - 0.1 + bridge.offsets[i];
 				for (let vertex = i * 24; vertex < (i + 1) * 24; vertex++)
-					positions.setY(vertex, positions.getY(vertex) + delta);
+					positions.setY(vertex, baseY[vertex] + bridge.offsets[i]);
 				previous[i] = bridge.offsets[i];
 			}
 			if (changed) {
 				positions.needsUpdate = true;
-				world.bvh.refit();
 			}
 		},
 		dispose() {
@@ -313,11 +327,9 @@ export function createCameraTrapMesh(trap: CameraTrap, position: Vec3) {
 		position.y + 0.3,
 		position.z - 0.24
 	);
-	const material = lamp.material as Material;
 	return Object.assign(v, {
 		update() {
 			lamp.visible = trap.phase === 'ready';
-			material.needsUpdate = false;
 		}
 	});
 }

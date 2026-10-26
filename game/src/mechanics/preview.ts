@@ -91,6 +91,7 @@ const rings = fixture.photo.subjects.map(() => {
 	app.append(ring);
 	return ring;
 });
+const speciesLabels: Record<string, string> = { tucano: 'tucano', saira: 'saíra', muriqui: 'muriqui' };
 const discoveries = new Set<string>();
 let shot: Shot = 'ladder',
 	last = performance.now(),
@@ -168,7 +169,7 @@ function contextualAction() {
 			notice = `${fixture.photo.savedCount} espécies registradas no Guia da Mata.`;
 		} else notice = 'Enquadre os anéis e use a ação para fotografar.';
 	}
-	guide.textContent = `Guia da Mata · ${discoveries.size ? Array.from(discoveries).join(' · ') : 'nenhuma descoberta ainda'}`;
+	guide.textContent = `Guia da Mata · ${discoveries.size ? Array.from(discoveries, (id) => speciesLabels[id] ?? id).join(' · ') : 'nenhuma descoberta ainda'}`;
 }
 function renderFrame(dt: number) {
 	const frameInput = input.sample(dt);
