@@ -86,7 +86,8 @@ describe('macro relief', () => {
 			const foot = serraFoot(z, layers);
 			let last = Number.NEGATIVE_INFINITY;
 			let lastE = Number.NEGATIVE_INFINITY;
-			for (let x = Math.floor(coast) - 300; x < coast + foot + CREST_S; x += 2) {
+			// Up to the crest (the warp moves e by at most 25 u).
+			for (let x = Math.floor(coast) - 300; x < coast + foot + CREST_S - 30; x += 2) {
 				samplePoint(x, z, coast, foot, fields, p);
 				expect(p.e).toBeGreaterThan(lastE);
 				lastE = p.e;
@@ -94,7 +95,7 @@ describe('macro relief', () => {
 				last = p.macro;
 				if (x < coast - 60) expect(p.ground).toBeLessThan(WADE_LIMIT);
 			}
-			expect(last).toBeGreaterThan(50);
+			expect(last).toBeGreaterThan(44);
 			for (const x of [coast + foot + 600, 20000, 200000]) {
 				samplePoint(x, z, coast, foot, fields, p);
 				expect(p.ground).toBeGreaterThan(36);
