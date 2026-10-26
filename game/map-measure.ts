@@ -94,7 +94,8 @@ try {
 
 	await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
 	const textureVersion = await page.evaluate(() => globalThis.__gameDebug?.().avatarTextureVersion);
-	await page.getByRole('button', { name: 'Cabelo longo', exact: true }).click();
+	await page.getByRole('tab', { name: 'Cabelo', exact: true }).click();
+	await page.getByRole('radio', { name: 'Cabelo longo', exact: true }).click();
 	await page.getByRole('button', { name: 'Usar este personagem', exact: true }).click();
 	await page.waitForFunction(() => globalThis.__gameDebug?.().avatarHair === 'longo');
 	assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().avatarTextureVersion), textureVersion);

@@ -66,10 +66,10 @@ try {
 		);
 		assert.equal(top.length, 7);
 		assert.ok(top.every((r) => r.w >= 44 && r.h >= 44 && r.y < 60));
-		await page.getByRole('button', { name: 'Personalizar personagem', exact: true }).click();
+		await page.getByRole('button', { name: 'Som e controles', exact: true }).click();
 		await page.getByRole('checkbox', { name: 'Modo canhoto' }).check();
 		await page.getByRole('checkbox', { name: 'Botões maiores' }).check();
-		await page.getByRole('button', { name: 'Fechar personalização' }).click();
+		await page.getByRole('button', { name: 'Fechar som e controles' }).click();
 		await page.reload();
 		if (viewport.height > viewport.width)
 			await page.getByRole('button', { name: 'Jogar assim mesmo' }).click();
