@@ -33,6 +33,9 @@ try {
 		if (viewport.height > viewport.width)
 			await page.getByRole('button', { name: 'Jogar assim mesmo' }).click();
 		await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+		await page
+			.getByRole('progressbar', { name: 'Carregando a trilha', exact: true })
+			.waitFor({ state: 'hidden' });
 		await page.waitForTimeout(600);
 		assert.equal(await page.evaluate(() => globalThis.__gameDebug?.().cameraMode), 'follow');
 		const jump = page.getByRole('button', { name: 'Pular', exact: true });
@@ -78,6 +81,9 @@ try {
 		if (viewport.height > viewport.width)
 			await page.getByRole('button', { name: 'Jogar assim mesmo' }).click();
 		await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+		await page
+			.getByRole('progressbar', { name: 'Carregando a trilha', exact: true })
+			.waitFor({ state: 'hidden' });
 		await page.waitForTimeout(400);
 		const larger = await jump.boundingBox();
 		assert.ok(larger && larger.x === 50 && larger.width === 120);
@@ -102,6 +108,9 @@ try {
 	const page = await context.newPage();
 	await page.goto(`${origin}?debug&pose=mirante`);
 	await page.waitForFunction(() => globalThis.__gameDebug?.().ready === true);
+	await page
+		.getByRole('progressbar', { name: 'Carregando a trilha', exact: true })
+		.waitFor({ state: 'hidden' });
 	await page.waitForTimeout(400);
 	const canopy = await page.evaluate(() => globalThis.__gameDebug?.());
 	assert.ok(canopy && (canopy.canopiesFading ?? 0) > 0);
