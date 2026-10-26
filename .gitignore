@@ -11,3 +11,4 @@ vite.config.*.timestamp-*
 /playwright-report
 /game/.build
 tmp
+.vitest
