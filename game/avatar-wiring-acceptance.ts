@@ -5,7 +5,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 
-const output = join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/p13-browser');
+const output =
+	process.env.GAME_AVATAR_DIR ?? join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/p13-browser');
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=gl', '--no-sandbox'] });
 const result: Record<string, unknown> = {
