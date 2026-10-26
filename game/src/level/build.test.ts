@@ -25,13 +25,18 @@ import {
 } from './layout.ts';
 
 /**
- * Pinned for STORY_VERSION 2 (the east portal). A change here means the map
- * changed: if it was meant (a control point moved), bump STORY_VERSION and re-pin.
+ * Pinned for STORY_VERSION 3 (Act 1, the north and south portals, the gorge, then
+ * the gorge widened to 7 u). A change here means the map changed: if it was meant
+ * (a control point moved), re-pin, and bump STORY_VERSION if saves need it (the
+ * runtime's checkpoint key already carries the checksum).
  */
-const GOLDEN_WORLD = 0x222da2a5;
-const GOLDEN_LEVEL = 0x23064a06;
-/** STORY_VERSION 1's level: what is left once the portal and its trail spur are taken out. */
-const GOLDEN_LEVEL_BEFORE_PORTAL = 0xa6c086b1;
+const GOLDEN_WORLD = 0xdc12d197;
+const GOLDEN_LEVEL = 0x15eafb12;
+/**
+ * The story's own gameplay, the same since STORY_VERSION 1: missions, checkpoints,
+ * obbies, collectibles, triggers, planting, spawn, start, pool, mirante and handholds.
+ */
+const GOLDEN_CORE = 0x6664a6f2;
 
 const { world, level } = buildStoryWorld();
 
@@ -45,10 +50,34 @@ describe('story map build', () => {
 		expect(checksumOf(level)).toBe(level.checksum);
 	});
 
-	it('adds the east portal and its trail spur, and changes no mission, checkpoint, obby or landmark', () => {
-		const { portal: _portal, ...rest } = level;
-		const before = { ...rest, version: 1, trails: level.trails.filter((t) => t.id !== level.portal.trail) };
-		expect(checksumOf(before)).toBe(GOLDEN_LEVEL_BEFORE_PORTAL);
+	it('adds the portals, their trail spurs and Act 1, and changes no mission, checkpoint, obby or collectible', () => {
+		const {
+			missions,
+			checkpoints,
+			obbies,
+			collectibles,
+			triggers,
+			planting,
+			spawn,
+			start,
+			pool,
+			mirante,
+			handholds
+		} = level;
+		const core = {
+			missions,
+			checkpoints,
+			obbies,
+			collectibles,
+			triggers,
+			planting,
+			spawn,
+			start,
+			pool,
+			mirante,
+			handholds
+		};
+		expect(`0x${checksumOf(core).toString(16)}`).toBe(`0x${GOLDEN_CORE.toString(16)}`);
 	});
 
 	it('rebuilds the same map', () => {

@@ -53,10 +53,13 @@ import {
 	polylineNearest
 } from './geometry.ts';
 import {
+	ACT1_TEXT,
 	ANIMALS,
 	BASE,
+	BIRD_PERCHES,
 	BRIDGE_HALF_WIDTH,
 	BUTTERFLIES,
+	CANOPY,
 	CHECKPOINT_FACING,
 	CHECKPOINT_SIZE,
 	CHECKPOINTS,
@@ -67,19 +70,24 @@ import {
 	CUTTING_TREE,
 	DECORATION_SPACING,
 	EDGE_BAND,
+	EDGE_PORTALS,
 	FACING,
 	type Facing,
 	FENCE_MARGIN,
 	FOREST,
 	FRUITS,
+	GORGE,
+	GROTTO,
 	KILL_Y,
 	LANE_CLEARANCE,
 	LEDGES,
 	LOGGER_RADIUS,
+	MIRANTE_DECK,
 	MIRANTE_RADIUS,
 	MIRANTE_TOP,
 	MURIQUI_HANDHOLDS,
 	MURIQUI_ROW,
+	NPCS,
 	OBSERVATION_ROCK,
 	ONCA_RADIUS,
 	PASTURE,
@@ -96,6 +104,7 @@ import {
 	RIVER_SURFACE,
 	RIVER_TOP_INDEX,
 	ROCK_SPACING,
+	SEED_SPOTS,
 	SERRA,
 	SPAWN,
 	STONES,
@@ -103,6 +112,7 @@ import {
 	STORY_VERSION,
 	TRAIL_CLEARANCE,
 	TRAIL_HALF_WIDTH,
+	TRAIL_MARKS,
 	TRAILS,
 	TRAP_RADIUS,
 	TRAPS,
@@ -111,12 +121,17 @@ import {
 	TREE_SPACING_EDGE,
 	TREE_SPACING_FOREST,
 	TREE_SPACING_OPEN,
+	TREEHOUSE,
 	WATERFALL,
-	type XZ
+	type XZ,
+	ZIPLINE,
+	ZIPLINE_BASE
 } from './layout.ts';
 import { cellOf, type JumpLink, stepsWithLinks } from './reach.ts';
 import type {
+	Act1,
 	Collectible,
+	Deck,
 	Landmark,
 	Mission,
 	Obby,
@@ -125,11 +140,13 @@ import type {
 	PlantingSpot,
 	Pool,
 	Portal,
+	Rail,
 	StoryBuild,
 	StoryCheckpoint,
 	StoryLevel,
 	StoryWorld,
 	Trail,
+	TrailMark,
 	TriggerZone
 } from './types.ts';
 
@@ -194,6 +211,27 @@ interface Stones {
 	pool: Pool;
 }
 
+/** The grotto's three stones across the plunge pool, from its west bank to the niche. */
+interface GrottoRun {
+	takeoff: Point;
+	pad: Point;
+	landing: Point;
+	tops: ObbyTop[];
+	gaps: ObbyGap[];
+	length: number;
+	pool: Pool;
+}
+
+/** The canopy branches, from the take-off on the ground to the leaf's platform. */
+interface Branches {
+	takeoff: Point;
+	dirX: number;
+	dirZ: number;
+	tops: ObbyTop[];
+	gaps: ObbyGap[];
+	tree: Point;
+}
+
 interface Ledges {
 	takeoff: Point;
 	pad: Point;
@@ -211,15 +249,18 @@ export function buildStoryWorld(): StoryBuild {
 	const river = riverModel();
 	const stones = planStones(river);
 	const ledges = planLedges();
+	const grotto = planGrotto(river);
 
-	// Relief, water, plateau, then the flat pads.
+	// Relief, water, plateau, the gorge and the grotto's niche, then the flat pads.
 	const heights = new Float32Array(CELLS);
 	const edge = new Float32Array(CELLS);
 	const waterY = new Float32Array(CELLS);
 	shapeRelief(heights);
-	carveWater(heights, edge, waterY, river, stones.pool);
+	carveWater(heights, edge, waterY, river, [stones.pool, grotto.pool]);
 	raiseMassifs(heights);
 	openPortal(heights);
+	carveGorge(heights, edge, waterY);
+	cutNiche(heights, edge);
 	for (const top of ledges.tops.slice(0, -1)) notch(heights, top);
 	const dry = (q: number) => edge[q] >= 0;
 	flattenDisk(
@@ -241,12 +282,14 @@ export function buildStoryWorld(): StoryBuild {
 		dry
 	);
 	flattenDisk(heights, ledges.pad.x, ledges.pad.z, LEDGES.takeoffY, LEDGES.padRadius, LEDGES.padRadius + 2.5);
+	flattenDisk(heights, grotto.pad.x, grotto.pad.z, grotto.pad.y, GROTTO.padRadius, GROTTO.padRadius + 2, dry);
 	const [bcx, bcz] = BASE.centre;
 	const baseY = heightAt(heights, bcx, bcz);
 	flattenDisk(heights, bcx, bcz, baseY, BASE.radius, BASE.blend);
 	for (const top of ledges.tops) top.bottom = groundUnder(heights, top) - 0.3;
 	for (const top of stones.tops) top.bottom = stones.pool.water - RIVER_DEPTH;
 	ledges.landing.y = heightAt(heights, ledges.landing.x, ledges.landing.z);
+	const branches = planBranches(heights);
 
 	// Zones and flags.
 	const slope = slopeOf(heights);
@@ -274,7 +317,7 @@ export function buildStoryWorld(): StoryBuild {
 		else if (
 			edge[q] >= 0 &&
 			((i >= FENCE_MARGIN && j >= FENCE_MARGIN && i < N - FENCE_MARGIN && j < N - FENCE_MARGIN) ||
-				inCauseway(i, j))
+				inPortalGap(i, j))
 		)
 			f |= FLAG.walkable;
 		if (distance(i, j, bcx, bcz) < BASE.radius) f |= FLAG.base;
@@ -310,6 +353,9 @@ export function buildStoryWorld(): StoryBuild {
 	const padA = cellOf(stones.padA.x, stones.padA.z);
 	const padB = cellOf(stones.padB.x, stones.padB.z);
 	const stoneRun = stones.length + 2 * STONES.padBack;
+	const grottoPad = cellOf(grotto.pad.x, grotto.pad.z);
+	const grottoLanding = cellOf(grotto.landing.x, grotto.landing.z);
+	const grottoRun = grotto.length + GROTTO.padBack;
 	const links: JumpLink[] = [
 		{ from: padA, to: padB, length: stoneRun },
 		{ from: padB, to: padA, length: stoneRun },
@@ -317,27 +363,35 @@ export function buildStoryWorld(): StoryBuild {
 			from: cellOf(ledges.pad.x, ledges.pad.z),
 			to: cellOf(ledges.landing.x, ledges.landing.z),
 			length: ledges.length
-		}
+		},
+		{ from: grottoPad, to: grottoLanding, length: grottoRun },
+		{ from: grottoLanding, to: grottoPad, length: grottoRun }
 	];
 	const steps = stepsWithLinks(flags, walkH, spawnCell, links);
 	const walkOnly = walkSteps(flags, walkH, spawnCell);
-	for (const obby of [stones, ledges])
+	for (const obby of [stones, ledges, grotto, branches])
 		for (const g of obby.gaps)
 			if (g.gap > jumpReach(g.rise)) problems.push(`obby gap ${g.gap.toFixed(2)} beyond reach`);
 
 	// Story places, then the ground they keep free of trees and rocks.
-	const level = storyLevel(heights, stones, ledges, bridge);
-	reserveGameplay(clear, level, stones, ledges);
+	const level = storyLevel(heights, river, stones, ledges, bridge, grotto, branches);
+	reserveGameplay(clear, level, stones, ledges, grotto, branches);
 
-	// Vegetation.
-	const lanes = laneSegments(stones, ledges);
+	// Vegetation, kept off the trails, the obby lanes and the zipline's cable.
+	const lanes = laneSegments(stones, ledges, grotto, branches);
 	const trails = level.trails.map((t) => t.points as XZ[]);
+	const cable: [XZ, XZ, number] = [ZIPLINE.start, ZIPLINE.end, ZIPLINE.clearance];
 	const awayFromPaths = (x: number, z: number, r: number) =>
 		trails.every((t) => polylineDistance(t, x, z) >= TRAIL_CLEARANCE + r) &&
-		lanes.every(([a, b, w]) => polylineDistance([a, b], x, z) >= w + r);
-	const trees = plantTrees(zones, flags, clear, slope, awayFromPaths);
+		lanes.every(([a, b, w]) => polylineDistance([a, b], x, z) >= w + r) &&
+		polylineDistance([cable[0], cable[1]], x, z) >= cable[2] + r;
+	const trees = plantTrees(zones, flags, clear, slope, awayFromPaths, [
+		[TREEHOUSE.species, TREEHOUSE.tree, TREEHOUSE.scale],
+		[CANOPY.species, [branches.tree.x, branches.tree.z], CANOPY.scale]
+	]);
 	const rocks = placeRocks(zones, flags, clear, slope, edge, awayFromPaths);
-	const decorations = coverGround(zones, flags, clear, slope, trails, lanes);
+	const decorations = coverGround(zones, flags, clear, slope, trails, lanes, cable);
+	if (level.act1) level.act1.marks = trailMarks(heights, level.trails, trees);
 	const treeSet = pack(TREE_SPECIES, trees, heights);
 	const rockSet = pack(ROCK_KINDS, rocks, heights);
 	const decoSet = pack(DECORATION_KINDS, decorations, heights);
@@ -533,6 +587,105 @@ function planLedges(): Ledges {
 	};
 }
 
+/**
+ * The grotto's stones from their gaps: they run due east across the plunge
+ * pool to the niche floor's landing, so the take-off sits the gaps' length west
+ * of it, at the pool's west end. The pool takes the river head's water (the
+ * small waterfall's foot) and reaches from the take-off past the serra's face,
+ * so the only dry way into the niche is over the stones.
+ */
+function planGrotto(river: River): GrottoRun {
+	const water = river.waterAt(0);
+	const reach = jumpReach(0);
+	const r = GROTTO.stoneRadius;
+	const top = water + GROTTO.topAboveWater;
+	const [lx, lz] = GROTTO.landing;
+	const count = GROTTO.gapFractions.length - 1;
+	let length = 2 * r * count;
+	for (const f of GROTTO.gapFractions) length += f * reach;
+	const x0 = lx - length;
+	const tops: ObbyTop[] = [];
+	const gaps: ObbyGap[] = [];
+	let along = 0;
+	GROTTO.gapFractions.forEach((f, k) => {
+		const rise = k === count ? GROTTO.floorY - top : 0;
+		gaps.push({ gap: f * reach, rise, fraction: f, reachRise: 0 });
+		if (k === count) return;
+		along += f * reach + (k === 0 ? r : 2 * r);
+		tops.push({
+			piece: 'stone',
+			x: x0 + along,
+			y: top,
+			z: lz,
+			yawC: 0,
+			yawS: 1,
+			radius: r,
+			variant: `${k % 3}`,
+			bottom: water - RIVER_DEPTH
+		});
+	});
+	const end = GROTTO.niche.x0 - 0.5 + GROTTO.poolBeyond;
+	return {
+		takeoff: { x: x0, y: top, z: lz },
+		pad: { x: x0 - GROTTO.padBack, y: top, z: lz },
+		landing: { x: lx, y: GROTTO.floorY, z: lz },
+		tops,
+		gaps,
+		length,
+		pool: {
+			x: (x0 + end) / 2,
+			z: lz,
+			water,
+			axisX: 1,
+			axisZ: 0,
+			halfLength: (end - x0) / 2,
+			halfWidth: GROTTO.poolHalfWidth
+		}
+	};
+}
+
+/**
+ * The canopy branches from their gaps: a straight line aimed from CANOPY.from
+ * at the leaf's platform, each branch CANOPY.rise over the last and the first
+ * over the take-off's ground, so the leaf sits five rises up in the crown of
+ * the tree just past it.
+ */
+function planBranches(heights: Float32Array): Branches {
+	const [lx, lz] = CANOPY.leaf;
+	const [dx, dz] = direction(CANOPY.from[0], CANOPY.from[1], lx, lz);
+	const reach = jumpReach(0);
+	const r = CANOPY.radius;
+	let back = r;
+	CANOPY.gapFractions.forEach((f, k) => {
+		back += f * reach + (k === 0 ? 0 : 2 * r);
+	});
+	const takeoff = { x: lx - dx * back, y: 0, z: lz - dz * back };
+	takeoff.y = heightAt(heights, takeoff.x, takeoff.z);
+	const tops: ObbyTop[] = [];
+	const gaps: ObbyGap[] = [];
+	let along = 0;
+	CANOPY.gapFractions.forEach((f, k) => {
+		along += f * reach + (k === 0 ? r : 2 * r);
+		const x = takeoff.x + dx * along;
+		const z = takeoff.z + dz * along;
+		tops.push({
+			piece: 'branch',
+			x,
+			y: takeoff.y + CANOPY.rise * (k + 1),
+			z,
+			yawC: dz,
+			yawS: dx,
+			radius: r,
+			variant: k === CANOPY.gapFractions.length - 1 ? 'crown' : 'branch',
+			bottom: heightAt(heights, x, z)
+		});
+		gaps.push({ gap: f * reach, rise: CANOPY.rise, fraction: f, reachRise: 0 });
+	});
+	const tx = lx + dx * CANOPY.treeBeyond;
+	const tz = lz + dz * CANOPY.treeBeyond;
+	return { takeoff, dirX: dx, dirZ: dz, tops, gaps, tree: { x: tx, y: heightAt(heights, tx, tz), z: tz } };
+}
+
 // --- Relief ---------------------------------------------------------------------
 
 /** Restinga, baixada, encosta and the east, the serra edge and the rising map edges (LEVEL.md §3). */
@@ -568,14 +721,14 @@ function shapeRelief(heights: Float32Array) {
  * River and pool: `edge` is the signed distance to the water's edge (negative
  * in the water), `waterY` the surface there. The ground never rises above a
  * bank climbing at RIVER_BANK_SLOPE from the water's edge, down to the bed at
- * RIVER_DEPTH. The pool's distance is the ellipse's, scaled by its half width.
+ * RIVER_DEPTH. A pool's distance is its ellipse's, scaled by its half width.
  */
 function carveWater(
 	heights: Float32Array,
 	edge: Float32Array,
 	waterY: Float32Array,
 	river: River,
-	pool: Pool
+	pools: Pool[]
 ) {
 	for (let q = 0; q < CELLS; q++) {
 		const i = q % N;
@@ -583,15 +736,17 @@ function carveWater(
 		const { d2, arc } = polylineNearest(RIVER, i, j);
 		let e = Math.sqrt(d2) - RIVER_HALF_WIDTH;
 		let water = river.waterAt(arc);
-		const a = (i - pool.x) * pool.axisX + (j - pool.z) * pool.axisZ;
-		const b = (j - pool.z) * pool.axisX - (i - pool.x) * pool.axisZ;
-		const rho = Math.sqrt(
-			(a / pool.halfLength) * (a / pool.halfLength) + (b / pool.halfWidth) * (b / pool.halfWidth)
-		);
-		const ePool = (rho - 1) * pool.halfWidth;
-		if (ePool < e) {
-			e = ePool;
-			water = pool.water;
+		for (const pool of pools) {
+			const a = (i - pool.x) * pool.axisX + (j - pool.z) * pool.axisZ;
+			const b = (j - pool.z) * pool.axisX - (i - pool.x) * pool.axisZ;
+			const rho = Math.sqrt(
+				(a / pool.halfLength) * (a / pool.halfLength) + (b / pool.halfWidth) * (b / pool.halfWidth)
+			);
+			const ePool = (rho - 1) * pool.halfWidth;
+			if (ePool < e) {
+				e = ePool;
+				water = pool.water;
+			}
 		}
 		edge[q] = e;
 		waterY[q] = water;
@@ -644,6 +799,79 @@ function openPortal(heights: Float32Array) {
 		for (let i = PORTAL.fromX; i < N; i++) if (inCauseway(i, j)) heights[j * N + i] = RELIEF.plateauY;
 }
 
+/** Cells the fence leaves open: the east causeway and the north and south openings (their outer FENCE_MARGIN rows). */
+export const inPortalGap = (i: number, j: number) =>
+	inCauseway(i, j) ||
+	EDGE_PORTALS.some(
+		(p) =>
+			Math.abs(i - p.x) <= p.halfWidth && (p.side === 'north' ? j < FENCE_MARGIN : j > N - 1 - FENCE_MARGIN)
+	);
+
+/** The gorge's centre line: the edge station, the lip station, and the small waterfall at the river's head. */
+const GORGE_LINE: readonly XZ[] = [GORGE.from, GORGE.lip, WATERFALL];
+const GORGE_RUN = distance(GORGE.from[0], GORGE.from[1], GORGE.lip[0], GORGE.lip[1]);
+/** The gorge's surface at an arc length from the edge: falling to the lip, then level to the waterfall. */
+const gorgeWaterAt = (arc: number) =>
+	GORGE.waterFrom + (GORGE.waterLip - GORGE.waterFrom) * Math.min(1, arc / GORGE_RUN);
+
+/**
+ * Where (x, z) lies against the gorge: its distance `d` from the line, the arc length
+ * at its nearest point, its side, and how far that side's bank is there (GORGE.north
+ * or GORGE.south). Past the waterfall's end only the
+ * narrow north width applies, so the cut stops at the lip.
+ */
+export function gorgeBank(x: number, z: number): { d: number; arc: number; bank: number; south: boolean } {
+	const { d2, arc } = polylineNearest(GORGE_LINE, x, z);
+	const t = Math.min(1, arc / GORGE_RUN);
+	const [ax, az] = x >= GORGE.lip[0] ? GORGE.from : GORGE.lip;
+	const [bx, bz] = x >= GORGE.lip[0] ? GORGE.lip : WATERFALL;
+	// The line runs west, so the south bank is on its left: a negative cross product.
+	const south = (bx - ax) * (z - az) - (bz - az) * (x - ax) < 0;
+	const [from, to] = south && x >= WATERFALL[0] ? GORGE.south : GORGE.north;
+	return { d: Math.sqrt(d2), arc, bank: from + (to - from) * t, south };
+}
+
+/**
+ * The gorge through the serra (layout.ts GORGE): after the massifs, every cell
+ * within its bank's distance of the line drops to the flat bed under the stream
+ * and becomes water. Cells only ever go down, so the river head below the lip
+ * keeps its own water, and the massif beside the cut stands as its walls.
+ */
+function carveGorge(heights: Float32Array, edge: Float32Array, waterY: Float32Array) {
+	const [fx, fz] = GORGE.from;
+	const [wx, wz] = WATERFALL;
+	const r = Math.max(GORGE.north[0], GORGE.north[1], GORGE.south[0], GORGE.south[1]);
+	for (
+		let j = Math.max(0, floor(Math.min(fz, wz) - r));
+		j <= Math.min(N - 1, floor(Math.max(fz, wz) + r) + 1);
+		j++
+	)
+		for (let i = Math.max(0, floor(wx - r)); i <= Math.min(N - 1, floor(fx + r) + 1); i++) {
+			const { d, arc, bank } = gorgeBank(i, j);
+			if (d > bank) continue;
+			const q = j * N + i;
+			const water = gorgeWaterAt(arc);
+			if (heights[q] <= water - GORGE.depth) continue;
+			heights[q] = water - GORGE.depth;
+			edge[q] = Math.min(edge[q], d - bank - 1e-3);
+			waterY[q] = water;
+		}
+}
+
+/**
+ * The grotto's niche: a flat dry floor cut into the serra's west face behind
+ * the small waterfall (the plunge pool's ellipse runs under the face, so its
+ * cells are marked dry again).
+ */
+function cutNiche(heights: Float32Array, edge: Float32Array) {
+	const { x0, x1, z0, z1 } = GROTTO.niche;
+	for (let j = z0; j <= z1; j++)
+		for (let i = x0; i <= x1; i++) {
+			heights[j * N + i] = Math.min(heights[j * N + i], GROTTO.floorY);
+			edge[j * N + i] = Math.max(edge[j * N + i], 0);
+		}
+}
+
 /** Cuts the cliff back under a ledge, so the ledge juts out of the face. */
 function notch(heights: Float32Array, top: ObbyTop) {
 	forCells(top.x, top.z, top.radius * 2, (q, i, j) => {
@@ -678,7 +906,7 @@ export function insideTop(top: ObbyTop, x: number, z: number, margin: number): b
 	const dx = x - top.x;
 	const dz = z - top.z;
 	const r = top.radius + margin;
-	if (top.piece === 'stone') return dx * dx + dz * dz <= r * r;
+	if (top.piece !== 'ledge') return dx * dx + dz * dz <= r * r;
 	// Local +z is (yawS, yawC), local +x is (yawC, −yawS).
 	const front = dx * top.yawS + dz * top.yawC;
 	const side = dx * top.yawC - dz * top.yawS;
@@ -788,7 +1016,15 @@ function resolveTrail(p: (typeof TRAILS)[string][number], stones: Stones, ledges
 	return [p[0], p[1]];
 }
 
-function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridge: Crossing): StoryLevel {
+function storyLevel(
+	heights: Float32Array,
+	river: River,
+	stones: Stones,
+	ledges: Ledges,
+	bridge: Crossing,
+	grotto: GrottoRun,
+	branches: Branches
+): StoryLevel {
 	const at = (p: XZ, lift = 0) => point(heights, p, lift);
 	const [spawnYawC, spawnYawS] = HEADING[SPAWN.facing];
 	const spawn = { ...at(SPAWN.at), yawC: spawnYawC, yawS: spawnYawS, yaw: FACING[SPAWN.facing] };
@@ -978,7 +1214,8 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		height = 0,
 		silhouette = false
 	): Landmark => ({ id, kind, label, silhouette, height, ...p, yawC: heading[0], yawS: heading[1] });
-	const waterfallTop = heightAt(heights, WATERFALL[0] + 3, WATERFALL[1] - 3);
+	// The small waterfall falls from the gorge's lip to the river's head.
+	const waterfallTop = GORGE.waterLip;
 	const landmarks: Landmark[] = [
 		landmark('iara', 'npc-iara', at(PLACES.iara), toSpawn(PLACES.iara), 'Iara'),
 		landmark('viveiro', 'viveiro', at(PLACES.viveiro), toSpawn(PLACES.viveiro), 'Viveiro'),
@@ -1019,31 +1256,37 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 			{ x: WATERFALL[0], y: waterfallTop, z: WATERFALL[1] },
 			[1, 0],
 			'',
-			Math.max(0, waterfallTop - RIVER_SURFACE.topY)
+			waterfallTop - river.waterAt(0)
 		),
 		landmark('mirante', 'mirante', mirante, HEADING.west, 'Mirante'),
 		landmark('borboletas', 'butterflies', at(BUTTERFLIES, 1), [1, 0])
 	];
 
-	// The east portal: data only, the runtime draws it and keeps the gate shut until its mission is done.
+	// The edge portals: data only, the runtime draws them and keeps each gate shut until its mission is done.
 	const opener = missions.find((m) => m.key === PORTAL.requires);
 	if (!opener) throw new Error(`portal requires unknown mission ${PORTAL.requires}`);
-	const [postA, postB] = PORTAL.posts.map((p) => ({
-		...at(p),
-		radius: PORTAL.postRadius,
-		height: PORTAL.postHeight
-	}));
-	const portal: Portal = {
+	const posts = (points: readonly XZ[]): Portal['posts'] => {
+		const [a, b] = points.map((p) => ({ ...at(p), radius: PORTAL.postRadius, height: PORTAL.postHeight }));
+		return [a, b];
+	};
+	const gateOf = ([a, b]: Portal['posts']): Portal['gate'] => ({
+		from: { x: a.x, y: a.y, z: a.z },
+		to: { x: b.x, y: b.y, z: b.z },
+		height: PORTAL.gateHeight
+	});
+	const eastPosts = posts(PORTAL.posts);
+	const east: Portal = {
 		id: 'leste',
+		side: 'east',
 		requires: PORTAL.requires,
 		mission: opener.id,
 		gap: {
-			x: WORLD_SIZE,
-			z0: PORTAL.z - PORTAL.halfWidth,
-			z1: PORTAL.z + PORTAL.halfWidth,
+			at: WORLD_SIZE,
+			from: PORTAL.z - PORTAL.halfWidth,
+			to: PORTAL.z + PORTAL.halfWidth,
 			y: RELIEF.plateauY
 		},
-		posts: [postA, postB],
+		posts: eastPosts,
 		sign: landmark(
 			'placa-serra',
 			'portal-sign',
@@ -1052,15 +1295,39 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 			PORTAL.label,
 			PORTAL.signHeight
 		),
-		gate: {
-			from: { x: postA.x, y: postA.y, z: postA.z },
-			to: { x: postB.x, y: postB.y, z: postB.z },
-			height: PORTAL.gateHeight
-		},
+		gate: gateOf(eastPosts),
 		inside: { ...at(PORTAL.inside), yaw: FACING.west },
 		outside: { x: PORTAL.outside[0], y: RELIEF.plateauY, z: PORTAL.outside[1] },
 		trail: 'mirante-leste'
 	};
+	const portals: Portal[] = [
+		east,
+		...EDGE_PORTALS.map((p): Portal => {
+			const edgeZ = p.side === 'north' ? 0 : WORLD_SIZE;
+			const y = heightAt(heights, p.x, edgeZ);
+			const pair = posts(p.posts);
+			return {
+				id: p.id,
+				side: p.side,
+				requires: p.requires,
+				mission: opener.id,
+				gap: { at: edgeZ, from: p.x - p.halfWidth, to: p.x + p.halfWidth, y },
+				posts: pair,
+				sign: landmark(
+					`placa-${p.id}`,
+					'portal-sign',
+					at(p.sign),
+					HEADING[p.signFacing],
+					p.label,
+					PORTAL.signHeight
+				),
+				gate: gateOf(pair),
+				inside: { ...at(p.inside), yaw: FACING[p.insideFacing] },
+				outside: { x: p.outside[0], y, z: p.outside[1] },
+				trail: p.trail
+			};
+		})
+	];
 
 	const trails: Trail[] = Object.entries(TRAILS).map(([id, points]) => ({
 		id,
@@ -1091,6 +1358,8 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		}
 	];
 
+	const act1 = act1Level(heights, grotto, branches, missions);
+
 	return {
 		version: STORY_VERSION,
 		spawn,
@@ -1107,9 +1376,323 @@ function storyLevel(heights: Float32Array, stones: Stones, ledges: Ledges, bridg
 		pool: stones.pool,
 		mirante,
 		handholds: handholds(heights),
-		portal,
+		portal: east,
+		portals,
+		act1,
 		checksum: 0
 	};
+}
+
+/** A rectangle's rails on the sides named, each side optionally split by an opening (centre along it, width). */
+function railsOf(
+	d: { x0: number; x1: number; z0: number; z1: number; y: number },
+	height: number,
+	sides: Partial<Record<'north' | 'south' | 'east' | 'west', { at: number; width: number } | null>>
+): Rail[] {
+	const rails: Rail[] = [];
+	const run = (x0: number, z0: number, x1: number, z1: number) => {
+		if (x0 !== x1 || z0 !== z1) rails.push({ x0, z0, x1, z1, y: d.y, height });
+	};
+	for (const [side, gap] of Object.entries(sides)) {
+		const alongX = side === 'north' || side === 'south';
+		const fixed = side === 'north' ? d.z0 : side === 'south' ? d.z1 : side === 'west' ? d.x0 : d.x1;
+		const from = alongX ? d.x0 : d.z0;
+		const to = alongX ? d.x1 : d.z1;
+		const cuts: [number, number][] = gap
+			? [
+					[from, gap.at - gap.width / 2],
+					[gap.at + gap.width / 2, to]
+				]
+			: [[from, to]];
+		for (const [a, b] of cuts) {
+			if (alongX) run(a, fixed, b, fixed);
+			else run(fixed, a, fixed, b);
+		}
+	}
+	return rails;
+}
+
+/**
+ * Act 1's additions (PARK.md §3): the treehouse and its ladder, the zipline and
+ * its two decks, the gorge's water, the grotto, the canopy branches, the two
+ * NPCs, their seeds and birds, and their three missions. Trail marks need the
+ * trees, so the builder fills `marks` after planting.
+ */
+function act1Level(heights: Float32Array, grotto: GrottoRun, branches: Branches, story: Mission[]): Act1 {
+	const at = (p: XZ, lift = 0) => point(heights, p, lift);
+	const plain = ({ x, y, z }: Point): Point => ({ x, y, z });
+
+	// The treehouse: a deck around the trunk, railed but for the ladder's top on the south edge.
+	const tree = at(TREEHOUSE.tree);
+	const h = TREEHOUSE.deckHalf;
+	const deckY = tree.y + TREEHOUSE.height;
+	const box = { x0: tree.x - h, x1: tree.x + h, z0: tree.z - h, z1: tree.z + h, y: deckY };
+	const house: Deck = {
+		id: 'casa-na-arvore',
+		...box,
+		rails: railsOf(box, TREEHOUSE.railHeight, {
+			north: null,
+			east: null,
+			west: null,
+			south: { at: tree.x, width: TREEHOUSE.ladderWidth }
+		})
+	};
+	const ladder = {
+		id: 'escada-casa',
+		bottom: at([tree.x, box.z1 + TREEHOUSE.ladderOut]),
+		top: { x: tree.x, y: deckY, z: box.z1 - 0.5 },
+		yaw: FACING.north,
+		yawC: HEADING.north[0],
+		yawS: HEADING.north[1],
+		width: TREEHOUSE.ladderWidth,
+		deck: house.id
+	};
+
+	// The zipline and its decks.
+	const M = MIRANTE_DECK;
+	const mirante: Deck = {
+		id: 'mirante-deck',
+		x0: M.x0,
+		x1: M.x1,
+		z0: M.z0,
+		z1: M.z1,
+		y: M.y,
+		rails: railsOf(M, M.railHeight, {
+			north: null,
+			south: null,
+			east: null,
+			west: { at: M.gapZ, width: M.gapWidth }
+		})
+	};
+	const B = ZIPLINE_BASE;
+	const base: Deck = {
+		id: 'tirolesa-base',
+		x0: B.x0,
+		x1: B.x1,
+		z0: B.z0,
+		z1: B.z1,
+		y: B.y,
+		rails: railsOf(B, B.railHeight, { north: null, south: null })
+	};
+	const start = { x: ZIPLINE.start[0], y: ZIPLINE.startY, z: ZIPLINE.start[1] };
+	const end = { x: ZIPLINE.end[0], y: ZIPLINE.endY, z: ZIPLINE.end[1] };
+	const run = distance(start.x, start.z, end.x, end.z);
+	const drop = start.y - end.y;
+	const opener = story.find((m) => m.key === ZIPLINE.requires);
+	if (!opener) throw new Error(`zipline requires unknown mission ${ZIPLINE.requires}`);
+
+	// NPCs, seeds, birds and the missions.
+	const npcs = (['ana', 'ze'] as const).map((id) => {
+		const npc = NPCS[id];
+		const p = at(npc.at);
+		const [yawC, yawS] = headingTo(p.x, p.z, npc.facing[0], npc.facing[1]);
+		return { id, name: npc.name, mission: id === 'ana' ? 7 : 8, ...p, yawC, yawS };
+	});
+	const seeds = SEED_SPOTS.map((s, k) => ({
+		id: `semente-${k + 1}`,
+		species: s.species,
+		mission: 7,
+		radius: COLLECT_RADIUS,
+		...at(s.at)
+	}));
+	const birds = BIRD_PERCHES.map((b) => ({
+		id: `ave-${b.species}`,
+		species: b.species,
+		mission: 8,
+		...at(b.at, b.lift)
+	}));
+	const [ana, ze] = npcs;
+	const triggers: TriggerZone[] = [
+		{
+			...zone(house.id, 'mission', plain(tree), TREEHOUSE.missionRadius, 0),
+			y: deckY,
+			minY: deckY - 0.5,
+			maxY: deckY + 4
+		},
+		zone('ana', 'npc', plain(ana), 3, 7),
+		zone('ze', 'npc', plain(ze), 3, 8)
+	];
+	const missions: Mission[] = [
+		{
+			id: 0,
+			key: 'casa-na-arvore',
+			name: 'Suba e veja a Reserva',
+			requires: [],
+			target: plain(ladder.bottom),
+			count: 1,
+			dialogue: ['CASA_INTRO', 'CASA_VISTA'],
+			triggers: [house.id]
+		},
+		{
+			id: 7,
+			key: 'sementes-viveiro',
+			name: 'Sementes para o viveiro',
+			requires: [1],
+			target: plain(ana),
+			count: seeds.length,
+			dialogue: [
+				'ANA_INTRO',
+				'ANA_OBRIGADA',
+				'FACT_SEMENTE_PAU_BRASIL',
+				'FACT_SEMENTE_JEQUITIBA',
+				'FACT_SEMENTE_IPE_ROSA'
+			],
+			triggers: ['ana', ...seeds.map((s) => s.id)]
+		},
+		{
+			id: 8,
+			key: 'fotografe-aves',
+			name: 'Fotografe 3 aves',
+			requires: [1],
+			target: plain(ze),
+			count: birds.length,
+			dialogue: ['ZE_INTRO', 'ZE_OBRIGADO', 'FACT_AVE_TUCANO', 'FACT_AVE_SAIRA', 'FACT_AVE_SABIA'],
+			triggers: ['ze', ...birds.map((b) => b.id)]
+		}
+	];
+
+	const leaf = (id: string, p: Point, on: string) => ({
+		id,
+		kind: 'gold-leaf' as const,
+		variant: '',
+		mission: 0,
+		radius: COLLECT_RADIUS,
+		on,
+		...plain(p)
+	});
+	const last = branches.tops[branches.tops.length - 1];
+	return {
+		missions,
+		firstRequires: [0],
+		triggers,
+		treehouse: { tree, deck: house, ladder },
+		zipline: {
+			id: 'tirolesa',
+			start,
+			end,
+			cableAbove: ZIPLINE.cableAbove,
+			length: Math.sqrt(run * run + drop * drop),
+			drop,
+			clearance: ZIPLINE.clearance,
+			brake: ZIPLINE.brake,
+			maxSpeed: ZIPLINE.maxSpeed,
+			requires: ZIPLINE.requires,
+			mission: opener.id,
+			startDeck: mirante.id,
+			endDeck: base.id
+		},
+		decks: [house, mirante, base],
+		gorge: {
+			id: 'garganta',
+			points: [GORGE.from, GORGE.lip, WATERFALL].map(([x, z], k) => ({
+				x,
+				z,
+				water: k === 0 ? GORGE.waterFrom : GORGE.waterLip,
+				north: k === 0 ? GORGE.north[0] : GORGE.north[1],
+				south: k === 0 ? GORGE.south[0] : k === 1 ? GORGE.south[1] : GORGE.north[1]
+			})),
+			depth: GORGE.depth
+		},
+		grotto: {
+			niche: { ...GROTTO.niche, y: GROTTO.floorY },
+			pool: grotto.pool,
+			obby: {
+				id: 'gruta',
+				mission: 0,
+				takeoff: grotto.takeoff,
+				landing: grotto.landing,
+				dirX: 1,
+				dirZ: 0,
+				pieces: grotto.tops,
+				gaps: grotto.gaps
+			},
+			leaf: leaf('folha-gruta', at(GROTTO.leaf), ''),
+			note: { ...at(GROTTO.note), text: 'GRUTA_BILHETE' }
+		},
+		canopy: {
+			obby: {
+				id: 'copa',
+				mission: 0,
+				takeoff: branches.takeoff,
+				landing: plain(last),
+				dirX: branches.dirX,
+				dirZ: branches.dirZ,
+				pieces: branches.tops,
+				gaps: branches.gaps
+			},
+			leaf: leaf('folha-copa', last, `galho-${branches.tops.length}`),
+			tree: branches.tree
+		},
+		npcs,
+		seeds,
+		birds,
+		marks: [],
+		text: { ...ACT1_TEXT }
+	};
+}
+
+/**
+ * Trail marks about every TRAIL_MARKS.spacing u along each trail: on the
+ * nearest trunk within trunkReach of the spot, facing the trail, else on a post
+ * just off the trail's right edge, facing back at it.
+ */
+function trailMarks(heights: Float32Array, trails: Trail[], trees: Item[]): TrailMark[] {
+	const marks: TrailMark[] = [];
+	for (const trail of trails) {
+		const arcs = arcLengths(trail.points);
+		const length = arcs[arcs.length - 1];
+		const count = Math.max(1, floor(length / TRAIL_MARKS.spacing + 0.5));
+		for (let k = 0; k < count; k++) {
+			const arc = (length * (k + 0.5)) / count;
+			let seg = 0;
+			while (seg + 2 < arcs.length && arcs[seg + 1] < arc) seg++;
+			const [ax, az] = trail.points[seg];
+			const [bx, bz] = trail.points[seg + 1];
+			const t = (arc - arcs[seg]) / (arcs[seg + 1] - arcs[seg]);
+			const px = ax + (bx - ax) * t;
+			const pz = az + (bz - az) * t;
+			let best = -1;
+			let bestD: number = TRAIL_MARKS.trunkReach;
+			for (let n = 0; n < trees.length; n++) {
+				const d = distance(px, pz, trees[n].x, trees[n].z);
+				if (d <= bestD) {
+					bestD = d;
+					best = n;
+				}
+			}
+			const [dx, dz] = direction(ax, az, bx, bz);
+			const [mx, mz] =
+				best >= 0 ? [trees[best].x, trees[best].z] : postBeside(trails, px, pz, dx, dz, trail.halfWidth);
+			const [yawC, yawS] = headingTo(mx, mz, px, pz);
+			marks.push({
+				trail: trail.id,
+				on: best >= 0 ? 'trunk' : 'post',
+				x: mx,
+				y: heightAt(heights, mx, mz),
+				z: mz,
+				yawC,
+				yawS,
+				height: TRAIL_MARKS.height
+			});
+		}
+	}
+	return marks;
+}
+
+/**
+ * A post `postOut` u off the trail's edge, on the first side (left, then right) clear
+ * of every trail by that much; where a trail doubles back, further out on that side.
+ */
+function postBeside(trails: Trail[], px: number, pz: number, dx: number, dz: number, halfWidth: number): XZ {
+	for (let extra = 0; extra <= TRAIL_MARKS.postSearch; extra += 0.5)
+		for (const side of [1, -1]) {
+			const out = side * (halfWidth + TRAIL_MARKS.postOut + extra);
+			const x = px - dz * out;
+			const z = pz + dx * out;
+			if (trails.every((t) => polylineDistance(t.points, x, z) >= t.halfWidth + TRAIL_MARKS.postOut - 1e-9))
+				return [x, z];
+		}
+	throw new Error(`no room for a trail post near ${px},${pz}`);
 }
 
 /** Branch handholds along the muriqui row, evenly spaced within MURIQUI_HANDHOLDS. */
@@ -1146,18 +1729,54 @@ export function reachTargets(level: StoryLevel): { id: string; x: number; z: num
 		...level.collectibles.map((c) => ({ id: c.id, x: c.x, z: c.z, onObby: c.on === '' ? '' : 'stones' })),
 		...level.planting.map((p) => ({ id: p.id, x: p.x, z: p.z, onObby: '' })),
 		{ id: 'mirante', x: level.mirante.x, z: level.mirante.z, onObby: '' },
-		{ id: 'portal', x: level.portal.inside.x, z: level.portal.inside.z, onObby: '' },
-		{
-			id: 'portal-borda',
-			x: level.portal.gap.x,
-			z: (level.portal.gap.z0 + level.portal.gap.z1) / 2,
-			onObby: ''
-		}
+		...(level.portals ?? [level.portal]).flatMap((p) => {
+			const mid = (p.gap.from + p.gap.to) / 2;
+			return [
+				{ id: `portal-${p.id}`, x: p.inside.x, z: p.inside.z, onObby: '' },
+				{
+					id: `portal-${p.id}-borda`,
+					x: p.side === 'east' ? p.gap.at : mid,
+					z: p.side === 'east' ? mid : p.gap.at,
+					onObby: ''
+				}
+			];
+		}),
+		...act1Targets(level)
+	];
+}
+
+/** Act 1's places: on foot, but for the treehouse deck (by its ladder), the base deck (by the zipline) and the canopy leaf. */
+function act1Targets(level: StoryLevel): { id: string; x: number; z: number; onObby: string }[] {
+	const a = level.act1;
+	if (!a) return [];
+	const ground = (id: string, p: { x: number; z: number }, onObby = '') => ({ id, x: p.x, z: p.z, onObby });
+	return [
+		...a.missions.map((m) => ground(`missao-${m.id}`, m.target)),
+		ground('escada-casa', a.treehouse.ladder.bottom),
+		ground('casa-na-arvore', a.treehouse.ladder.top, 'casa'),
+		ground('tirolesa-inicio', a.zipline.start),
+		ground('tirolesa-fim', a.zipline.end, 'tirolesa'),
+		...a.npcs.map((n) => ground(n.id, n)),
+		...a.seeds.map((s) => ground(s.id, s)),
+		ground('gruta-saida', {
+			x: a.grotto.obby.takeoff.x - a.grotto.obby.dirX * GROTTO.padBack,
+			z: a.grotto.obby.takeoff.z - a.grotto.obby.dirZ * GROTTO.padBack
+		}),
+		ground(a.grotto.leaf.id, a.grotto.leaf),
+		ground('copa-saida', a.canopy.obby.takeoff),
+		ground(a.canopy.leaf.id, a.canopy.leaf, 'copa')
 	];
 }
 
 /** Ground kept free of trees and rocks: the base, every target, the obby pads and the bridge ends. */
-function reserveGameplay(clear: Uint8Array, level: StoryLevel, stones: Stones, ledges: Ledges) {
+function reserveGameplay(
+	clear: Uint8Array,
+	level: StoryLevel,
+	stones: Stones,
+	ledges: Ledges,
+	grotto: GrottoRun,
+	branches: Branches
+) {
 	const [bcx, bcz] = BASE.centre;
 	paint(clear, bcx, bcz, BASE.radius + 1, RESERVED);
 	for (const m of level.missions) paint(clear, m.target.x, m.target.z, 3, RESERVED);
@@ -1174,16 +1793,40 @@ function reserveGameplay(clear: Uint8Array, level: StoryLevel, stones: Stones, l
 	// The portal's causeway and its posts and sign: no tree, rock or ground cover in the way.
 	for (let x = PORTAL.fromX; x <= WORLD_SIZE; x += 2)
 		paint(clear, x, PORTAL.z, PORTAL.halfWidth + 1.5, RESERVED);
-	for (const p of [...level.portal.posts, level.portal.sign]) paint(clear, p.x, p.z, 2, RESERVED);
+	for (const portal of level.portals ?? [level.portal])
+		for (const p of [...portal.posts, portal.sign, portal.inside]) paint(clear, p.x, p.z, 2, RESERVED);
 	for (const [x, z] of [PLACES.bridgeFrom, PLACES.bridgeTo]) paint(clear, x, z, 4, RESERVED);
+	// Act 1: the decks' footprints (the treehouse's own tree is planted on purpose), the ladder's foot,
+	// the NPCs, the seeds, the grotto's pad and niche, and the canopy's take-off.
+	const a = level.act1;
+	if (!a) return;
+	for (const d of a.decks)
+		for (let z = d.z0 - 1; z <= d.z1 + 1; z += 1)
+			for (let x = d.x0 - 1; x <= d.x1 + 1; x += 1) paint(clear, x, z, 1, RESERVED);
+	paint(clear, a.treehouse.ladder.bottom.x, a.treehouse.ladder.bottom.z, 2, RESERVED);
+	for (const n of a.npcs) paint(clear, n.x, n.z, 2.5, RESERVED);
+	for (const s of a.seeds) paint(clear, s.x, s.z, 1.5, RESERVED);
+	paint(clear, grotto.pad.x, grotto.pad.z, GROTTO.padRadius + 1.5, RESERVED);
+	const { x0, x1, z0, z1 } = GROTTO.niche;
+	for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) paint(clear, x, z, 1, RESERVED);
+	paint(clear, branches.takeoff.x, branches.takeoff.z, 2, RESERVED);
 }
 
 /** Obby lanes as segments with a half width: no collider inside them. */
-function laneSegments(stones: Stones, ledges: Ledges): [XZ, XZ, number][] {
+function laneSegments(
+	stones: Stones,
+	ledges: Ledges,
+	grotto: GrottoRun,
+	branches: Branches
+): [XZ, XZ, number][] {
 	const lane = LANE_CLEARANCE;
+	const last = branches.tops[branches.tops.length - 1];
 	return [
 		[[stones.padA.x, stones.padA.z], [stones.padB.x, stones.padB.z], STONES.zigzag + STONES.radius + lane],
-		[[ledges.pad.x, ledges.pad.z], [ledges.landing.x, ledges.landing.z], LEDGES.size / 2 + lane]
+		[[ledges.pad.x, ledges.pad.z], [ledges.landing.x, ledges.landing.z], LEDGES.size / 2 + lane],
+		[[grotto.pad.x, grotto.pad.z], [grotto.landing.x, grotto.landing.z], GROTTO.stoneRadius + lane],
+		// The branches climb among the trees: only the jumps' own air is kept clear.
+		[[branches.takeoff.x, branches.takeoff.z], [last.x, last.z], CANOPY.radius + 1.5]
 	];
 }
 
@@ -1194,9 +1837,11 @@ function plantTrees(
 	flags: Uint8Array,
 	clear: Uint8Array,
 	slope: Float32Array,
-	awayFromPaths: (x: number, z: number, r: number) => boolean
+	awayFromPaths: (x: number, z: number, r: number) => boolean,
+	extraTrees: [TreeSpecies, XZ, number][]
 ): Item[] {
-	const rng = new Rng(subSeed(STORY_SEED, 2));
+	const seed = subSeed(STORY_SEED, 2);
+	const rng = new Rng(seed);
 	const trees: Item[] = [];
 	const species = (name: TreeSpecies) => TREE_SPECIES.indexOf(name);
 	const special = (name: TreeSpecies, [x, z]: XZ, scale: number) => {
@@ -1212,13 +1857,21 @@ function plantTrees(
 	MURIQUI_ROW.forEach((p, k) => {
 		special(k % 2 === 0 ? 'jequitiba' : 'pau-brasil', p, 1.2);
 	});
+	// Act 1's trees: the treehouse's and the canopy leaf's crown, facing a fixed way.
+	for (const [name, [x, z], scale] of extraTrees) {
+		trees.push({ kind: species(name), x, z, scale, yawC: 1, yawS: 0 });
+		paint(clear, x, z, 2.5, OCCUPIED);
+	}
 
+	// Each pass draws its points from its own stream and each candidate its numbers from
+	// its own cell's, so a spot kept clear (a new lane, a cable) reshuffles no other tree.
 	const grow = (x: number, z: number, density: number) => {
 		const q = cellOf(x, z);
 		const f = flags[q];
 		if (clear[q] !== 0 || slope[q] > GROW_SLOPE) return;
 		if (f & (FLAG.river | FLAG.crossing | FLAG.base | FLAG.cleared)) return;
 		if (!awayFromPaths(x, z, MAX_TRUNK_RADIUS)) return;
+		const rng = new Rng(subSeed(seed, 3 + q));
 		if (rng.next() >= density) return;
 		const zone = zones[q];
 		const mix =
@@ -1237,13 +1890,13 @@ function plantTrees(
 		trees.push({ kind, x, z, scale, yawC, yawS });
 		paint(clear, x, z, 1.2, OCCUPIED);
 	};
-	const forestPoints = poissonDisk(rng, 1, 1, N - 2, N - 2, TREE_SPACING_FOREST);
+	const forestPoints = poissonDisk(new Rng(subSeed(seed, 0)), 1, 1, N - 2, N - 2, TREE_SPACING_FOREST);
 	for (let k = 0; k < forestPoints.length; k += 2) {
 		const x = forestPoints[k];
 		const z = forestPoints[k + 1];
 		if (flags[cellOf(x, z)] & FLAG.forest) grow(x, z, 1);
 	}
-	const openPoints = poissonDisk(rng, 1, 1, N - 2, N - 2, TREE_SPACING_OPEN);
+	const openPoints = poissonDisk(new Rng(subSeed(seed, 1)), 1, 1, N - 2, N - 2, TREE_SPACING_OPEN);
 	for (let k = 0; k < openPoints.length; k += 2) {
 		const x = openPoints[k];
 		const z = openPoints[k + 1];
@@ -1251,7 +1904,7 @@ function plantTrees(
 		if (flags[q] & FLAG.forest) continue;
 		grow(x, z, zones[q] === ZONE.highland ? HIGHLAND_DENSITY : OPEN_DENSITY);
 	}
-	const edgePoints = poissonDisk(rng, 1, 1, N - 2, N - 2, TREE_SPACING_EDGE);
+	const edgePoints = poissonDisk(new Rng(subSeed(seed, 2)), 1, 1, N - 2, N - 2, TREE_SPACING_EDGE);
 	for (let k = 0; k < edgePoints.length; k += 2) {
 		const x = edgePoints[k];
 		const z = edgePoints[k + 1];
@@ -1303,7 +1956,8 @@ function coverGround(
 	clear: Uint8Array,
 	slope: Float32Array,
 	trails: XZ[][],
-	lanes: [XZ, XZ, number][]
+	lanes: [XZ, XZ, number][],
+	cable: [XZ, XZ, number]
 ): Item[] {
 	const rng = new Rng(subSeed(STORY_SEED, 4));
 	const out: Item[] = [];
@@ -1317,6 +1971,7 @@ function coverGround(
 			continue;
 		if (trails.some((t) => polylineDistance(t, x, z) < TRAIL_HALF_WIDTH + 0.5)) continue;
 		if (lanes.some(([a, b, w]) => polylineDistance([a, b], x, z) < w - LANE_CLEARANCE)) continue;
+		if (polylineDistance([cable[0], cable[1]], x, z) < cable[2] + 0.5) continue;
 		const zone = zones[q];
 		const mix =
 			zone === ZONE.restinga

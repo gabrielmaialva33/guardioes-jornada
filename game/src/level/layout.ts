@@ -13,8 +13,11 @@ export type XZ = readonly [number, number];
 
 /** Fixed seed of the story map's noise and vegetation streams; it never changes per player. */
 export const STORY_SEED = 0x1a8a2026;
-/** Bump on any change that alters the built map; saves and the golden test record it. 2: the east portal (F1). */
-export const STORY_VERSION = 2;
+/**
+ * Bump on any change that alters the built map; saves and the golden test record it.
+ * 2: the east portal (F1). 3: the Act 1 additions (PARK.md §3), the north and south portals and the gorge.
+ */
+export const STORY_VERSION = 3;
 
 /** Facing angles about +y, 0 = +z (south), the engine's convention (atan2(x, z)). */
 // biome-ignore lint/suspicious/noApproximativeNumericConstant: the determinism scan allows no Math member but the exact operations; this literal is Math.PI's exact double.
@@ -290,6 +293,20 @@ export const TRAILS: Record<string, readonly TrailPoint[]> = {
 		[146, 71],
 		[156, 70],
 		[160, 70]
+	],
+	/** From the trilha (on its segment at x 70) north to the north portal (PARK.md §2). */
+	'trilha-praia': [
+		[70, 35],
+		[70, 18],
+		[70, 0]
+	],
+	/** From the ponte trail past the bridge, along the river's east bank, to the south portal. */
+	'trilha-mangue': [
+		[64, 132],
+		[52, 145],
+		[44, 152],
+		[42, 156],
+		[41, 160]
 	]
 };
 export const TRAIL_HALF_WIDTH = 2;
@@ -378,6 +395,78 @@ export const PORTAL = {
 	/** The first step past the edge, into the generated world. */
 	outside: [163, 70] as XZ
 } as const;
+
+/**
+ * The north and south portals (PARK.md §2): openings `halfWidth` u either side
+ * of `x` in the north (z 0) and south (z 160) fences, where the Praia's and the
+ * Manguezal's crossings meet the Reserva (level/zones/spec.ts SEAMS). Unlike
+ * the east one they are on low ground the child walks to from the start, so no
+ * height changes: only the fence opens, and the gate keeps them shut until
+ * `requires` is done. Each is reached by its own trail spur.
+ */
+export const EDGE_PORTALS = [
+	{
+		id: 'norte',
+		side: 'north',
+		x: 70,
+		halfWidth: 4,
+		requires: 'mirante',
+		label: 'Rumo à praia',
+		posts: [
+			[66.4, 0.5],
+			[73.6, 0.5]
+		] as readonly XZ[],
+		/** Beside the spur, facing south: the way the trail comes. */
+		sign: [66.5, 8] as XZ,
+		signFacing: 'south',
+		inside: [70, 4] as XZ,
+		insideFacing: 'south',
+		outside: [70, -3] as XZ,
+		trail: 'trilha-praia'
+	},
+	{
+		id: 'sul',
+		side: 'south',
+		x: 40,
+		halfWidth: 4,
+		requires: 'mirante',
+		label: 'Rumo ao manguezal',
+		posts: [
+			[36.4, 159.5],
+			[43.6, 159.5]
+		] as readonly XZ[],
+		sign: [46, 156] as XZ,
+		signFacing: 'north',
+		inside: [41, 156] as XZ,
+		insideFacing: 'north',
+		outside: [40, 163] as XZ,
+		trail: 'trilha-mangue'
+	}
+] as const;
+
+/**
+ * The gorge (PARK.md §4.1, p20-zonas.md §2): the Vale's stream crossing the
+ * serra massif from the Reserva's east edge to the small waterfall's lip, on
+ * level/zones/spec.ts PARK_RIVER's own line and water (9.4 at the edge, 9 at
+ * the lip station by x 133). A flat bed `depth` under the water, with the
+ * massif left standing as its walls: never walkable, so it opens no way onto the
+ * serra or round the mirante.
+ *
+ * Its banks lie `north` and `south` of the line, from the edge to the lip (linear
+ * between): 3.5 either side at the edge, PARK_RIVER's own half width there, then
+ * 2 north, to keep the grotto niche's wall, and 5.5 south. At least 7 u across
+ * everywhere, so no jump crosses it (`jumpReach(0)` is 5.2): the serra north of
+ * it is cut off, and its south rim is reachable after the ledges.
+ */
+export const GORGE = {
+	from: [160, 32 + 1 / 3] as XZ,
+	lip: [133, 30 + 1 / 12] as XZ,
+	waterFrom: 9.4,
+	waterLip: 9,
+	north: [3.5, 2],
+	south: [3.5, 5.5],
+	depth: 1
+} as const;
 /** Checkpoints besides spawn, the stone banks and the two on the ledges (derived). */
 export const CHECKPOINTS = {
 	pasture: [55, 52],
@@ -453,3 +542,183 @@ export const TREE_SPACING_EDGE = 4;
 export const EDGE_BAND = 5;
 export const ROCK_SPACING = 9;
 export const DECORATION_SPACING = 5.5;
+
+// --- Act 1 additions (PARK.md §3) ---------------------------------------------------
+//
+// Data only, like the portals: the runtime draws and collides with the decks,
+// rails, ladders, branches and the cable from these numbers. The map keeps
+// the ground they need free of trees, rocks and ground cover.
+
+/**
+ * Mission 0, the treehouse: a square deck `height` u up around the trunk of the
+ * ipê-amarelo's neighbour tree, railed all round but for the ladder's top. PARK.md's
+ * (40, 74) is on the trilha itself, so the tree stands 4.5 u east, just past the
+ * trail clearance; the ladder is on the deck's south edge, facing the base.
+ */
+export const TREEHOUSE = {
+	tree: [44.5, 74] as XZ,
+	species: 'jequitiba',
+	scale: 1.3,
+	deckHalf: 2.5,
+	height: 6,
+	railHeight: 1.1,
+	ladderWidth: 1.2,
+	/** The ladder's foot stands this far out from the deck edge, on the ground. */
+	ladderOut: 0.4,
+	/** The mission's trigger: the deck top, this far from the trunk. */
+	missionRadius: 2.5
+} as const;
+
+/**
+ * The tirolesa (PARK.md §3, the coordinator's numbers): from the mirante's
+ * lookout deck west along z 84 to a low deck at the base. `start` and `end` are
+ * the rider's feet; the cable runs `cableAbove` over them. No tree, rock or
+ * ground cover stands within `clearance` of the cable's line on the ground.
+ */
+export const ZIPLINE = {
+	start: [129, 84] as XZ,
+	startY: 15,
+	end: [46, 84] as XZ,
+	endY: 4,
+	cableAbove: 3.6,
+	clearance: 2,
+	/** Braking over the last `brake` u, top speed in u/s (PARK.md §6). */
+	brake: 6,
+	maxSpeed: 11,
+	requires: 'mirante'
+} as const;
+/** The mirante's lookout deck, the zipline's start station: railed north, south and east, open west at z 84. */
+export const MIRANTE_DECK = {
+	x0: 128,
+	x1: 134,
+	z0: 81.5,
+	z1: 86.5,
+	y: 15,
+	railHeight: 1.1,
+	gapZ: 84,
+	gapWidth: 2
+} as const;
+/** The zipline's end station at the base: a low deck under the cable's end, railed north and south. */
+export const ZIPLINE_BASE = {
+	x0: 44,
+	x1: 48,
+	z0: 82.5,
+	z1: 85.5,
+	y: 4,
+	railHeight: 1.1
+} as const;
+
+/**
+ * The grotto behind the small waterfall (PARK.md §3): a niche cut into the
+ * serra's west face (cells x0..x1, z0..z1, a flat floor), facing a plunge pool
+ * at the waterfall's foot. Three stones cross the pool from its west bank to
+ * the niche, like the river stones: the pool stretches along the line to fit
+ * their gaps, and the take-off sits at its west end.
+ */
+export const GROTTO = {
+	niche: { x0: 133, x1: 136, z0: 23, z1: 27 },
+	floorY: 4.4,
+	/** The feet after the last jump, on the niche floor; the stones run east to it. */
+	landing: [133.6, 25] as XZ,
+	stoneRadius: 1,
+	topAboveWater: 0.6,
+	/** Bank → stone 1, …, stone 3 → niche, as fractions of jumpReach(0). */
+	gapFractions: [0.3, 0.35, 0.35, 0.3],
+	poolHalfWidth: 4.5,
+	/** The pool runs this far past the face, into the cliff that stands over it, so it is wide where it meets the niche. */
+	poolBeyond: 3,
+	padRadius: 1.5,
+	padBack: 1.5,
+	leaf: [135.5, 25] as XZ,
+	/** Iara's hidden note, in the niche's north corner. */
+	note: [135.8, 23.6] as XZ
+} as const;
+
+/**
+ * The canopy gold leaf (PARK.md §3): the micos' branch path, five branch
+ * platforms climbing `rise` u per jump in a straight line from the take-off to
+ * the leaf's platform in the crown of a tree just past it. The line is aimed
+ * from `from` (direction only); the gaps fix its length.
+ */
+export const CANOPY = {
+	leaf: [60, 24] as XZ,
+	from: [44, 39] as XZ,
+	radius: 1,
+	rise: 1.8,
+	/** Take-off → branch 1, …, branch 4 → branch 5, as fractions of jumpReach(0). */
+	gapFractions: [0.45, 0.5, 0.55, 0.5, 0.45],
+	treeBeyond: 2.2,
+	species: 'jequitiba',
+	scale: 1.3
+} as const;
+
+/** The two NPCs of Act 1 and where they look. */
+export const NPCS = {
+	ana: { at: [112, 106] as XZ, name: 'Bióloga Ana', facing: CLAREIRA.centre },
+	ze: { at: [96, 30] as XZ, name: 'Seu Zé', facing: [78, 30] as XZ }
+} as const;
+/** "Sementes para o viveiro": six fallen seeds, two each of three species, round the clareira, off the trails. */
+export const SEED_SPOTS: readonly { at: XZ; species: string }[] = [
+	{ at: [130, 118], species: 'pau-brasil' },
+	{ at: [123, 129], species: 'jequitiba' },
+	{ at: [112, 136], species: 'ipe-rosa' },
+	{ at: [98, 126], species: 'pau-brasil' },
+	{ at: [98, 110], species: 'jequitiba' },
+	{ at: [112, 100], species: 'ipe-rosa' }
+];
+/** "Fotografe 3 aves": where each bird perches, `lift` u over the ground, 10–15 u from Seu Zé (the camera's 25 u). */
+export const BIRD_PERCHES: readonly { species: string; at: XZ; lift: number }[] = [
+	{ species: 'tucano', at: [104, 38], lift: 7 },
+	{ species: 'saira', at: [88, 22], lift: 5 },
+	{ species: 'sabia', at: [86, 36], lift: 2.5 }
+];
+
+/**
+ * Trail marks (PARK.md §3): about every `spacing` u along every trail, on the
+ * trunk of a tree within `trunkReach` of the centre line, else on a post `postOut`
+ * off the trail's right edge (the left one, or up to `postSearch` further out, where
+ * a trail doubles back); each faces the trail.
+ */
+export const TRAIL_MARKS = { spacing: 20, trunkReach: 6, postOut: 0.6, postSearch: 3, height: 1.6 } as const;
+
+/**
+ * Player-facing text of the Act 1 missions (pt-BR). Keys starting with
+ * FACT_ are checked facts; ACT1_SOURCES gives each one its source.
+ */
+export const ACT1_TEXT: Record<string, string> = {
+	CASA_INTRO: 'Antes de tudo, suba na casa da árvore e olhe a Reserva lá de cima.',
+	CASA_VISTA:
+		'Daqui dá para ver o rio, o mirante e o jequitibá. Guarde esses pontos: eles ajudam a não se perder.',
+	ANA_INTRO:
+		'Oi! Eu sou a Ana, bióloga. O viveiro precisa de sementes: você me ajuda a juntar seis, de três árvores diferentes, aqui em volta da clareira?',
+	ANA_OBRIGADA: 'Obrigada! Dessas sementes o viveiro vai tirar mudas para a mata.',
+	ZE_INTRO:
+		'Psiu, fale baixinho! Eu sou o Seu Zé e observo aves aqui faz tempo. Você consegue fotografar um tucano, uma saíra e um sabiá?',
+	ZE_OBRIGADO: 'Que fotos bonitas! Quem observa sem espantar vê muito mais.',
+	GRUTA_BILHETE: 'Você achou meu esconderijo! Daqui eu escuto a água que desce lá da serra. — Iara',
+	TRILHA_PERDIDA: 'Não estou vendo você perto das marcas da trilha. Volte até a última marca que você viu.',
+	FACT_SEMENTE_PAU_BRASIL:
+		'A vagem do pau-brasil guarda uma ou duas sementes e se abre de repente para soltá-las.',
+	FACT_SEMENTE_JEQUITIBA:
+		'O fruto do jequitibá-rosa parece um potinho de madeira com tampa e guarda de 10 a 15 sementes com asas.',
+	FACT_SEMENTE_IPE_ROSA: 'As sementes do ipê-rosa têm duas asinhas e são levadas pelo vento.',
+	FACT_AVE_TUCANO:
+		'Ao comer frutos de palmito-juçara, o tucano-de-bico-verde leva as sementes para longe da palmeira-mãe.',
+	FACT_AVE_SAIRA:
+		'A saíra-sete-cores tem cabeça azul-turquesa, verde-limão no pescoço e laranja perto da cauda.',
+	FACT_AVE_SABIA:
+		'O sabiá-laranjeira é considerado popularmente a Ave Nacional do Brasil e é homenageado no Dia da Ave, em 5 de outubro.'
+};
+
+/** Source (https URL) of each Act 1 fact, by its ACT1_TEXT key. */
+export const ACT1_SOURCES: Record<string, string> = {
+	FACT_SEMENTE_PAU_BRASIL:
+		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1140103/1/Especies-Arboreas-Brasileiras-vol-1-Pau-Brasil.pdf',
+	FACT_SEMENTE_JEQUITIBA:
+		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1140093/1/Especies-Arboreas-Brasileiras-vol-1-Jequitiba-Rosa.pdf',
+	FACT_SEMENTE_IPE_ROSA:
+		'https://www.alice.cnptia.embrapa.br/alice/bitstream/doc/1140086/1/Especies-Arboreas-Brasileiras-vol-1-Ipe-Roxo.pdf',
+	FACT_AVE_TUCANO: 'https://periodicos.ufjf.br/index.php/zoociencias/article/download/24681/13849',
+	FACT_AVE_SAIRA: 'https://ebird.org/species/grhtan2?siteLanguage=pt_BR',
+	FACT_AVE_SABIA: 'https://www.planalto.gov.br/ccivil_03/dnn/2002/dnn9675.htm'
+};

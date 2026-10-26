@@ -9,9 +9,10 @@
  * square zone (the Reserva, Vale, Copa: 160 × 160) is exactly the Reserva's
  * shape. `world.blocks` holds one CollisionBlock per 40 u chunk, row-major.
  *
- * Skeleton zones (everything but the Reserva, P20) carry relief, rivers,
- * zones and flags, collision, their entry and spawn; no missions, props or
- * vegetation yet. Pure and deterministic (survival/random.ts's rules).
+ * Skeleton zones (P20) carry relief, rivers, zones and flags, collision,
+ * their entry and spawn; no missions, props or vegetation yet. Zones with
+ * content (the Vale, P25: vale.ts) start from the same ground and arrival.
+ * Pure and deterministic (survival/random.ts's rules).
  */
 import { checksumOf } from '../../survival/checksum.ts';
 import { clamp, floor } from '../../survival/noise.ts';
@@ -34,6 +35,7 @@ import {
 import { insidePolygon } from '../geometry.ts';
 import type { Portal, StoryCheckpoint, StoryLevel } from '../types.ts';
 import { type BandResult, type BandSide, stitchBands } from './band.ts';
+import type { ZoneContent, ZoneLandmark, ZoneMission, ZoneTrigger } from './content.ts';
 import { carveRiver, stationsIn } from './river.ts';
 import { coastLine, skeletonHeight } from './skeleton.ts';
 import {
@@ -65,10 +67,19 @@ export interface ZoneArrival {
 
 /**
  * StoryLevel in a zone's local coordinates. The Reserva's carries its F1
- * `portal`; a skeleton zone carries its `arrival` instead (level/types.ts
+ * `portal`; the other zones carry their `arrival` instead (level/types.ts
  * Portal only names the east portal: a wider Portal type is pB's call).
+ * Zone missions, triggers and landmarks widen the Reserva's keys and kinds
+ * (content.ts), and a zone with content adds it under `content`.
  */
-export type ZoneLevel = Omit<StoryLevel, 'portal'> & { portal?: Portal; arrival?: ZoneArrival };
+export type ZoneLevel = Omit<StoryLevel, 'portal' | 'missions' | 'triggers' | 'landmarks'> & {
+	missions: ZoneMission[];
+	triggers: ZoneTrigger[];
+	landmarks: ZoneLandmark[];
+	portal?: Portal;
+	arrival?: ZoneArrival;
+	content?: ZoneContent;
+};
 
 export interface ZoneBuild {
 	id: ZoneId;
@@ -108,19 +119,25 @@ export function seamProfile(fixed: ZoneBuild, seamIndex: number): Float32Array {
 const PI = 3.141592653589793;
 const FACING_IN: Record<Side, number> = { west: PI / 2, east: -PI / 2, north: 0, south: PI };
 
-/** Builds a skeleton zone from the already built zones its seams read (spec.ts BUILD_ORDER). */
-export function buildSkeletonZone(
+/** A zone's ground before the river: its skeleton stitched to the zones built before (world vertex (x0 + i, z0 + j) at j · side + i). */
+export interface ZoneGround {
+	spec: ZoneSpec;
+	width: number;
+	depth: number;
+	side: number;
+	ground: Float64Array;
+	band: BandResult;
+}
+
+export function zoneGround(
 	id: Exclude<ZoneId, 'reserva'>,
 	built: ReadonlyMap<ZoneId, ZoneBuild>
-): ZoneBuild {
+): ZoneGround {
 	const spec = PARK_ZONES[id];
 	const width = spec.x1 - spec.x0;
 	const depth = spec.z1 - spec.z0;
 	const side = width + 1;
-	const n = side * (depth + 1);
-
-	// Relief: the skeleton, stitched to the zones built before, then the park river.
-	const ground = new Float64Array(n);
+	const ground = new Float64Array(side * (depth + 1));
 	for (let j = 0; j <= depth; j++)
 		for (let i = 0; i <= width; i++) ground[j * side + i] = skeletonHeight(id, spec.x0 + i, spec.z0 + j);
 	const sides: BandSide[] = [];
@@ -131,6 +148,49 @@ export function buildSkeletonZone(
 		sides.push({ seam, profile: seamProfile(fixed, k) });
 	});
 	const band = stitchBands(ground, spec.x0, spec.z0, width, depth, sides);
+	return { spec, width, depth, side, ground, band };
+}
+
+/** How a zone is entered (spec.ts ENTRIES), on its final heights: the opening, the spawn just inside and its heading. */
+export function zoneArrival(
+	id: Exclude<ZoneId, 'reserva'>,
+	heights: Float32Array,
+	side: number
+): { arrival: ZoneArrival; inside: Point & { yaw: number }; heading: [number, number] } {
+	const spec = PARK_ZONES[id];
+	const entry = ENTRIES[id];
+	const toLocal = ([x, z]: XZ): XZ => [x - spec.x0, z - spec.z0];
+	const at = (p: XZ): Point => {
+		const [lx, lz] = toLocal(p);
+		return { x: lx, y: heightIn(heights, side, lx, lz), z: lz };
+	};
+	const inside = { ...at(entry.inside), yaw: FACING_IN[entry.side] };
+	const vertical = entry.side === 'west' || entry.side === 'east';
+	const [ex, ez] = toLocal(entry.at);
+	const arrival: ZoneArrival = {
+		id,
+		requires: entry.requires,
+		label: entry.label,
+		gap: {
+			side: entry.side,
+			at: vertical ? ex : ez,
+			from: (vertical ? ez : ex) - 4,
+			to: (vertical ? ez : ex) + 4,
+			y: at(entry.at).y
+		},
+		inside
+	};
+	return { arrival, inside, heading: HEADING_IN[entry.side] };
+}
+
+/** Builds a skeleton zone from the already built zones its seams read (spec.ts BUILD_ORDER). */
+export function buildSkeletonZone(
+	id: Exclude<ZoneId, 'reserva'>,
+	built: ReadonlyMap<ZoneId, ZoneBuild>
+): ZoneBuild {
+	// Relief: the skeleton, stitched to the zones built before, then the park river.
+	const { spec, width, depth, side, ground, band } = zoneGround(id, built);
+	const n = side * (depth + 1);
 	const river = carveRiver(ground, spec.x0, spec.z0, width, depth, band.seam);
 	const heights = Float32Array.from(ground);
 
@@ -174,29 +234,7 @@ export function buildSkeletonZone(
 		}
 
 	// Arrival: the opening on the zone's edge, and a spawn just inside it.
-	const entry = ENTRIES[id];
-	const toLocal = ([x, z]: XZ): XZ => [x - spec.x0, z - spec.z0];
-	const at = (p: XZ): Point => {
-		const [lx, lz] = toLocal(p);
-		return { x: lx, y: heightIn(heights, side, lx, lz), z: lz };
-	};
-	const inside = { ...at(entry.inside), yaw: FACING_IN[entry.side] };
-	const vertical = entry.side === 'west' || entry.side === 'east';
-	const [ex, ez] = toLocal(entry.at);
-	const arrival: ZoneArrival = {
-		id,
-		requires: entry.requires,
-		label: entry.label,
-		gap: {
-			side: entry.side,
-			at: vertical ? ex : ez,
-			from: (vertical ? ez : ex) - 4,
-			to: (vertical ? ez : ex) + 4,
-			y: at(entry.at).y
-		},
-		inside
-	};
-	const spawnHeading = HEADING_IN[entry.side];
+	const { arrival, inside, heading: spawnHeading } = zoneArrival(id, heights, side);
 
 	const steps = walkStepsRect(
 		flags,
@@ -323,7 +361,7 @@ export function heightIn(heights: Float32Array, side: number, lx: number, lz: nu
 	);
 }
 
-function emptyPlacements<K extends string>(kinds: readonly K[]): Placements<K> {
+export function emptyPlacements<K extends string>(kinds: readonly K[]): Placements<K> {
 	return {
 		kinds,
 		count: 0,
@@ -339,7 +377,7 @@ function emptyPlacements<K extends string>(kinds: readonly K[]): Placements<K> {
 }
 
 /** Every count key the runtime sizes pools by, at zero (survival generate.ts countAll's keys). */
-function emptyCounts(): Record<string, number> {
+export function emptyCounts(): Record<string, number> {
 	const counts: Record<string, number> = { instances: 0 };
 	for (const s of TREE_SPECIES) counts[`tree:${s}`] = 0;
 	for (const r of ROCK_KINDS) counts[`rock:${r}`] = 0;
@@ -348,7 +386,7 @@ function emptyCounts(): Record<string, number> {
 }
 
 /** survival collisionBlocks for a rectangle: one block per 40 u chunk, ground every COLLISION_STEP u. */
-function collisionBlocks(heights: Float32Array, width: number, depth: number): CollisionBlock[] {
+export function collisionBlocks(heights: Float32Array, width: number, depth: number): CollisionBlock[] {
 	const side = width + 1;
 	const blocksX = width / BLOCK_SIZE;
 	const blocksZ = depth / BLOCK_SIZE;

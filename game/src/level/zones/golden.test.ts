@@ -4,23 +4,29 @@ import { buildParkFresh } from './park.ts';
 import { ZONE_IDS, ZONE_VERSION } from './spec.ts';
 
 /**
- * Pinned per zone for ZONE_VERSION 1 (the Reserva: level/build.test.ts's pins,
+ * Pinned per zone for ZONE_VERSION 2 (the Reserva: level/build.test.ts's pins,
  * which the adapter must keep). A change means a zone changed: bump
  * ZONE_VERSION (or STORY_VERSION for the Reserva) and re-pin. The same values
- * must come out of every engine (p20-zonas.md, cross-engine page).
+ * must come out of every engine (p20-zonas.md, p25-vale.md: cross-engine page).
+ * Version 2 is the zone-content wave, unshipped: the Vale (P25), the Copa
+ * (P31), the Praia (P33) and the Manguezal (pB's P30) re-pin without a bump
+ * while the zones fill in. Checked
+ * facts and their sources (p27-fatos-guia.md) are text only: they move the
+ * level halves alone, without a bump. The sloths' broadleaf crowns and the
+ * bugios' daytime howling (the same check) re-pin the Vale and the Copa.
  */
 export const GOLDEN_ZONES: Record<string, [world: number, level: number]> = {
-	reserva: [0x222da2a5, 0x23064a06],
-	vale: [0x0c6c3db7, 0xe148edec],
-	copa: [0x6b0f190a, 0x955b8576],
-	praia: [0x4e8cea81, 0x81bdd4d6],
-	manguezal: [0xf1d3e262, 0x4ce07c6a]
+	reserva: [0xdc12d197, 0x15eafb12],
+	vale: [0xd73a9db0, 0xc917cb9e],
+	copa: [0xc2f6aed5, 0xcebcfd3c],
+	praia: [0xc993ece7, 0xbe5404c2],
+	manguezal: [0xdcf2ef02, 0x5a4fcb8c]
 };
 
 describe('golden zone checksums', () => {
 	const park = buildParkFresh();
 	it('keeps the zone version', () => {
-		expect(ZONE_VERSION).toBe(1);
+		expect(ZONE_VERSION).toBe(2);
 	});
 	it.each([...ZONE_IDS])('%s', (id) => {
 		const zone = park.get(id);

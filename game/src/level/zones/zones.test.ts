@@ -4,7 +4,8 @@ import { FLAG, WALK_SLOPE, ZONE } from '../../survival/types.ts';
 import { buildStoryWorld } from '../build.ts';
 import { insidePolygon } from '../geometry.ts';
 import { RIVER, STORY_SEED, STORY_VERSION } from '../layout.ts';
-import { buildPark, buildParkFresh, buildZone } from './park.ts';
+import { buildOne, buildPark, buildParkFresh, buildZone } from './park.ts';
+import { riverInside } from './river.ts';
 import {
 	BUILD_ORDER,
 	COSTAO,
@@ -24,6 +25,21 @@ import { buildSkeletonZone, type ZoneBuild, zoneHeight } from './zone.ts';
 const park = buildPark();
 const story = buildStoryWorld();
 const skeletons = ZONE_IDS.filter((id): id is Exclude<ZoneId, 'reserva'> => id !== 'reserva');
+/**
+ * A zone's skeleton build: its relief stitched to the park, before its content.
+ * The band and crossing tests check the stitching on these; each zone's own
+ * test checks its content (the way in on foot, its paths), which may reshape
+ * the band (the Vale's gorge, the Manguezal's levee and banks).
+ */
+const skeletonBuilds = new Map<ZoneId, ZoneBuild>();
+const skeleton = (id: Exclude<ZoneId, 'reserva'>) => {
+	let b = skeletonBuilds.get(id);
+	if (!b) {
+		b = buildSkeletonZone(id, park);
+		skeletonBuilds.set(id, b);
+	}
+	return b;
+};
 
 /** World (x, z) of every vertex of a zone, with its height and flags. */
 function* vertices(b: ZoneBuild) {
@@ -105,7 +121,8 @@ describe('the park layout (PARK.md §2)', () => {
 		);
 		for (let n = 1; n < PARK_RIVER.length; n++)
 			expect(PARK_RIVER[n].water).toBeLessThanOrEqual(PARK_RIVER[n - 1].water);
-		// Falls: drops steeper than 2 u per unit of run. The Cachoeira Grande (50 → 30) and the Reserva's small waterfall at (132, 30).
+		// Falls: drops steeper than 2 u per unit of run. The Cachoeira Grande (50 → 30), the cascade out of its pool into the
+		// gorge, and the Reserva's small waterfall at (132, 30).
 		const falls = PARK_RIVER.slice(1)
 			.map((s, n) => {
 				const a = PARK_RIVER[n];
@@ -113,8 +130,8 @@ describe('the park layout (PARK.md §2)', () => {
 				return { drop: a.water - s.water, at: [s.x, s.z], steep: (a.water - s.water) / run };
 			})
 			.filter((f) => f.steep > 2);
-		expect(falls.map((f) => f.drop)).toEqual([20, expect.closeTo(5.6, 1)]);
-		expect(falls[1].at).toEqual([132, 30]);
+		expect(falls.map((f) => f.drop)).toEqual([20, 5, expect.closeTo(5.6, 1)]);
+		expect(falls[2].at).toEqual([132, 30]);
 		expect(PARK_RIVER[0].water).toBeGreaterThan(58);
 		expect(PARK_RIVER[PARK_RIVER.length - 1].water).toBe(-0.5);
 	});
@@ -151,11 +168,11 @@ describe('zone builds', () => {
 		expect(Object.keys(world).sort()).toEqual(Object.keys(story.world).sort());
 		expect(
 			Object.keys(level)
-				.filter((k) => k !== 'arrival')
+				.filter((k) => k !== 'arrival' && k !== 'content')
 				.sort()
 		).toEqual(
 			Object.keys(story.level)
-				.filter((k) => k !== 'portal')
+				.filter((k) => k !== 'portal' && k !== 'portals' && k !== 'act1')
 				.sort()
 		);
 		expect(checksumOf(world)).toBe(world.checksum);
@@ -175,7 +192,8 @@ describe('zone builds', () => {
 		const q = Math.round(z) * world.grid + Math.round(x);
 		expect(world.flags[q] & FLAG.walkable).toBeTruthy();
 		expect(world.baseSteps[q]).toBe(0);
-		expect(level.missions).toEqual([]);
+		// Zones without content have no missions yet (the Vale's and the Copa's: vale.test.ts, copa.test.ts).
+		if (!level.content) expect(level.missions).toEqual([]);
 	});
 });
 
@@ -183,8 +201,9 @@ describe('macro skeletons (PARK.md §2)', () => {
 	const at = (id: ZoneId, x: number, z: number) => zoneHeight(buildZone(id), x, z);
 
 	it('give the Vale a 20–30 floor, its portal ridge 26, the waterfall top 50 and the spring 60', () => {
+		// The floor away from the river, north of the hill south of the pool (vale-layout.ts HILL, up to 39.5).
 		for (const v of vertices(buildZone('vale')))
-			if (v.x >= 200 && v.x <= 244 && !(v.f & FLAG.river) && Math.abs(v.z - 40) > 14) {
+			if (v.x >= 200 && v.x <= 244 && !(v.f & FLAG.river) && Math.abs(v.z - 40) > 14 && v.z < 56) {
 				expect(v.h, `${v.x},${v.z}`).toBeGreaterThanOrEqual(20);
 				expect(v.h, `${v.x},${v.z}`).toBeLessThanOrEqual(30.5);
 			}
@@ -213,7 +232,7 @@ describe('macro skeletons (PARK.md §2)', () => {
 		}
 		expect(rock).toBeGreaterThan(40);
 		let mud = 0;
-		for (const v of vertices(buildZone('manguezal')))
+		for (const v of vertices(skeleton('manguezal')))
 			if (v.zone === ZONE.mangrove) {
 				mud++;
 				expect(insidePolygon(MANGUE, v.x, v.z)).toBe(true);
@@ -252,9 +271,10 @@ describe('zone ↔ zone seams', () => {
 	});
 
 	it.each(SEAMS.filter((s) => s.crossings.length > 0).map((s) => [s.id, s] as const))(
-		'%s is walkable through its crossing, 40 u into the zone',
+		'%s is walkable through its crossing, 40 u into the zone (the band, before content)',
 		(_, seam) => {
-			const zone = buildZone(seam.zone);
+			if (seam.zone === 'reserva') throw new Error('the Reserva is never stitched');
+			const zone = skeleton(seam.zone);
 			const [dx, dz] =
 				seam.side === 'west'
 					? [1, 0]
@@ -278,8 +298,8 @@ describe('zone ↔ zone seams', () => {
 		}
 	);
 
-	it.each(skeletons)('keeps every step inside %s band within the walking limits', (id) => {
-		const b = buildZone(id);
+	it.each(skeletons)('keeps every step inside %s band within the walking limits (before content)', (id) => {
+		const b = skeleton(id);
 		const onSeam = (x: number, z: number) =>
 			SEAMS.some(
 				(s) =>
@@ -310,8 +330,9 @@ describe('zone ↔ zone seams', () => {
 				const z2 = v.z + dz;
 				if (x2 > b.offsetX + b.width || z2 > b.offsetZ + b.depth || z2 < b.offsetZ) continue;
 				if (!band(v.x, v.z) || !band(x2, z2) || onSeam(v.x, v.z) || onSeam(x2, z2)) continue;
-				// The river's carved channel keeps its own banks.
+				// The river's carved channel keeps its own banks (the gorge's walls among them).
 				if (v.f & FLAG.river || zoneHeight(b, x2, z2) < -0.5) continue;
+				if (riverInside(v.x, v.z) > -5 || riverInside(x2, z2) > -5) continue;
 				checked++;
 				expect(Math.abs(h(x2, z2) - v.h), `(${v.x},${v.z})→(${x2},${z2})`).toBeLessThanOrEqual(limit + 1e-4);
 			}
@@ -329,8 +350,10 @@ describe('determinism', () => {
 		// The Copa from a map holding only what it reads, built in another order.
 		const built = new Map<ZoneId, ZoneBuild>();
 		built.set('reserva', buildZone('reserva'));
-		built.set('praia', buildSkeletonZone('praia', built));
-		built.set('vale', buildSkeletonZone('vale', built));
-		expect(buildSkeletonZone('copa', built).world.checksum).toBe(park.get('copa')?.world.checksum);
+		built.set('praia', buildOne('praia', built));
+		built.set('vale', buildOne('vale', built));
+		const copa = buildOne('copa', built);
+		expect(copa.world.checksum).toBe(park.get('copa')?.world.checksum);
+		expect(copa.level.checksum).toBe(park.get('copa')?.level.checksum);
 	});
 });

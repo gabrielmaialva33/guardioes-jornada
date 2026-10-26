@@ -12,8 +12,8 @@ import { BLOCK_SIZE } from '../../survival/types.ts';
 export const ZONE_IDS = ['reserva', 'vale', 'copa', 'praia', 'manguezal'] as const;
 export type ZoneId = (typeof ZONE_IDS)[number];
 
-/** Skeleton zones' generator version: bump when any zone's output changes (the Reserva keeps STORY_VERSION). */
-export const ZONE_VERSION = 1;
+/** The zones' generator version: bump when any zone's output changes (the Reserva keeps STORY_VERSION). */
+export const ZONE_VERSION = 2;
 /** level/layout.ts STORY_SEED, copied so this module never imports the level; zones.test.ts checks it. */
 export const PARK_SEED = 0x1a8a2026;
 
@@ -253,6 +253,10 @@ export interface RiverStation {
 	water: number;
 	halfWidth: number;
 	depth: number;
+	/** Rise per unit of the banks (river.ts BANK_SLOPE when absent): a gorge's walls are steep. */
+	bankSlope?: number;
+	/** A fall's lip: the unit normal of its face, pointing downstream (river.ts). */
+	face?: XZ;
 }
 
 /** level/layout.ts RIVER and its surface rule (build.ts riverModel), copied; zones.test.ts checks them. */
@@ -294,35 +298,45 @@ function onSegment(a: XZ, b: XZ, x: number): XZ {
 /**
  * park-plan.py RIVER, from the spring to the mouth, with water heights that
  * only fall (PARK.md §2, §4.1, §5.2): spring 59 (ground 60), the Cachoeira
- * Grande from 50 to its pool at 30, rapids down to the Reserva's edge, the
+ * Grande from 50 to its plunge pool at 30, a 5 u cascade out of the pool into
+ * the gorge under the bridge (x 205), rapids down to the Reserva's edge, the
  * Reserva's small waterfall at (132, 30) into its river (3 → −0.5, exactly
  * level/build.ts's), then at sea level through the mangrove to the mouth.
  * Extra stations on the plan's segments mark the drops: the waterfall's lip
- * and foot at x 250.5 and 249.5, the Reserva's edge at x 160 and the small
- * waterfall's lip at x 133. Between the Reserva's edge and (132, 30) the
- * river crosses the Reserva's serra massif, which has no channel yet: that
- * stretch is the level's (p20-zonas.md).
+ * and foot at x 250.5 and 249.5, the pool's outlet at x 229.5 and 228.5, the
+ * gorge's end at x 198, the rapids at x 170, the Reserva's edge at x 160 and
+ * the small waterfall's lip at x 133. The rapids keep under the Vale's band
+ * ground, which falls to the Reserva's 10 u edge. The pool and the spring are
+ * narrow channels here: the Vale's basins (vale.ts) give them their shape.
+ * Between the Reserva's edge and (132, 30) the river crosses the Reserva's
+ * serra massif: that stretch is the level's (p20-zonas.md).
  */
+const FALL_FACE: XZ = [-1, 0];
+const VALE_RIVER: readonly [XZ, number, number, number, Pick<RiverStation, 'bankSlope' | 'face'>?][] = [
+	[[300, 20], 59, 2.5, 0.8],
+	[[272, 30], 53, 3, 1],
+	[[256, 38], 50, 3, 1],
+	[onSegment([256, 38], [238, 46], 250.5), 50, 3, 1, { face: FALL_FACE }],
+	[onSegment([256, 38], [238, 46], 249.5), 30, 4, 1.6],
+	[[238, 46], 30, 4, 1.6],
+	[onSegment([238, 46], [210, 42], 229.5), 30, 3.5, 1, { face: FALL_FACE }],
+	[onSegment([238, 46], [210, 42], 228.5), 25, 3, 1.2, { bankSlope: 6 }],
+	[[210, 42], 21, 2.5, 1.2, { bankSlope: 6 }],
+	[onSegment([210, 42], [180, 34], 198), 18.2, 3, 1.2, { bankSlope: 6 }],
+	[[180, 34], 14, 3.5, 1.2],
+	[onSegment([180, 34], [132, 30], 170), 10.9, 3.5, 1.1],
+	[onSegment([180, 34], [132, 30], 160), 9.4, 3.5, 1],
+	[onSegment([180, 34], [132, 30], 133), 9, 3, 1]
+];
 export const PARK_RIVER: readonly RiverStation[] = (() => {
-	const vale: [XZ, number, number, number][] = [
-		[[300, 20], 59, 2.5, 0.8],
-		[[272, 30], 53, 3, 1],
-		[[256, 38], 50, 3, 1],
-		[onSegment([256, 38], [238, 46], 250.5), 50, 3, 1],
-		[onSegment([256, 38], [238, 46], 249.5), 30, 6, 1.6],
-		[[238, 46], 30, 8, 1.6],
-		[[210, 42], 24.5, 3.5, 1.2],
-		[[180, 34], 19, 3.5, 1.2],
-		[onSegment([180, 34], [132, 30], 160), 9.4, 3.5, 1],
-		[onSegment([180, 34], [132, 30], 133), 9, 3, 1]
-	];
 	const waters = reservaWaters();
-	const out: RiverStation[] = vale.map(([[x, z], water, halfWidth, depth]) => ({
+	const out: RiverStation[] = VALE_RIVER.map(([[x, z], water, halfWidth, depth, extra]) => ({
 		x,
 		z,
 		water,
 		halfWidth,
-		depth
+		depth,
+		...extra
 	}));
 	RESERVA_RIVER.forEach(([x, z], k) => {
 		out.push({ x, z, water: waters[k], halfWidth: RESERVA_HALF_WIDTH, depth: RESERVA_DEPTH });
@@ -339,4 +353,7 @@ export const PARK_RIVER: readonly RiverStation[] = (() => {
 })();
 
 /** Index of the first and last station of the Reserva's own river within PARK_RIVER. */
-export const RESERVA_RIVER_SPAN: readonly [number, number] = [10, 10 + RESERVA_RIVER.length - 1];
+export const RESERVA_RIVER_SPAN: readonly [number, number] = [
+	VALE_RIVER.length,
+	VALE_RIVER.length + RESERVA_RIVER.length - 1
+];

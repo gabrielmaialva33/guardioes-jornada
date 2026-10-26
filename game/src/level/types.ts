@@ -14,10 +14,19 @@ import type { Placed, Point, SurvivalWorld } from '../survival/types.ts';
 /** The map has exactly the survival map's shape. */
 export type StoryWorld = SurvivalWorld;
 
-export type MissionKey = 'sementes' | 'corte-ilegal' | 'pedras' | 'mudas' | 'armadilhas' | 'mirante';
+export type MissionKey =
+	| 'sementes'
+	| 'corte-ilegal'
+	| 'pedras'
+	| 'mudas'
+	| 'armadilhas'
+	| 'mirante'
+	| 'casa-na-arvore'
+	| 'sementes-viveiro'
+	| 'fotografe-aves';
 
 export interface Mission {
-	/** 1 to 6, the suggested order; the arrow points at `target`. */
+	/** 1 to 6, the suggested order; the arrow points at `target`. Act 1's additions are 0, 7 and 8. */
 	id: number;
 	key: MissionKey;
 	/** Player-facing name (pt-BR). */
@@ -38,7 +47,8 @@ export interface StoryCheckpoint extends Checkpoint {
 	mission: number;
 }
 
-export type ObbyPiece = 'stone' | 'ledge';
+/** Stones and branches are disks, ledges oriented squares. */
+export type ObbyPiece = 'stone' | 'ledge' | 'branch';
 
 /** One obby top: a disk (stones) or an oriented square (ledges), its top at `y`. */
 export interface ObbyTop extends Placed {
@@ -62,7 +72,8 @@ export interface ObbyGap {
 }
 
 export interface Obby {
-	id: 'stones' | 'ledges';
+	/** The river stones and the mirante ledges; Act 1 adds the grotto's stones and the canopy branches. */
+	id: 'stones' | 'ledges' | 'gruta' | 'copa';
 	mission: number;
 	/** Where the first jump starts and the last one lands (feet on the ground or the plateau). */
 	takeoff: Point;
@@ -166,28 +177,179 @@ export interface PortalPost extends Point {
 	height: number;
 }
 
+export type PortalId = 'leste' | 'norte' | 'sul';
+/** The map edge a portal opens: east (x = 160) to the Vale, north (z = 0) to the Praia, south (z = 160) to the Manguezal. */
+export type PortalSide = 'east' | 'north' | 'south';
+
+/** The opening in an edge rail: the edge's own coordinate (`at`: x for east, z for north and south), the range along it, its floor height. */
+export interface PortalGap {
+	at: number;
+	from: number;
+	to: number;
+	y: number;
+}
+
 /**
- * The east portal (F1, WORLD.md §3): data only, the runtime draws the posts,
- * the sign and the gate, opens its edge rail inside `gap`, and keeps the gate
- * closed until the mission named by `requires` is done.
+ * An edge portal (F1, WORLD.md §3; PARK.md §2): data only, the runtime draws
+ * the posts, the sign and the gate, opens its edge rail inside `gap`, and keeps
+ * the gate closed until the mission named by `requires` is done.
  */
 export interface Portal {
-	id: 'leste';
+	id: PortalId;
+	side: PortalSide;
 	/** The mission that opens the gate ('mirante', mission 6), and its id. */
 	requires: MissionKey;
 	mission: number;
-	/** The opening in the east edge rail: x = 160, z from z0 to z1, its floor at y. */
-	gap: { x: number; z0: number; z1: number; y: number };
+	gap: PortalGap;
 	posts: [PortalPost, PortalPost];
-	/** "Rumo à serra", facing the trail that leads here. */
+	/** "Rumo à serra" and so on, beside the trail that leads here, facing it. */
 	sign: Landmark;
 	/** The closed gate, between the posts, until `requires` is done. */
 	gate: { from: Point; to: Point; height: number };
-	/** On the causeway facing home (yaw as the engine's), and the first step out of the map. */
+	/** Where "voltar" lands, facing home (yaw as the engine's), and the first step out of the map. */
 	inside: Point & { yaw: number };
 	outside: Point;
-	/** The trail spur that leads here from the mirante top. */
+	/** The trail spur that leads here. */
 	trail: string;
+}
+
+/** A railing: a straight segment from (x0, z0) to (x1, z1), standing `height` u on `y`. */
+export interface Rail {
+	x0: number;
+	z0: number;
+	x1: number;
+	z1: number;
+	y: number;
+	height: number;
+}
+
+/** A flat walkable deck over x0..x1, z0..z1, its top at `y`, with its rails. */
+export interface Deck {
+	id: string;
+	x0: number;
+	x1: number;
+	z0: number;
+	z1: number;
+	y: number;
+	rails: Rail[];
+}
+
+/**
+ * A ladder (the ladder mechanic's anchor): feet at `bottom` on the ground, the
+ * top dismount at `top` on the deck. The climber faces (yawS, yawC), the engine's
+ * `yaw`, towards the ladder.
+ */
+export interface Ladder {
+	id: string;
+	bottom: Point;
+	top: Point;
+	yaw: number;
+	yawC: number;
+	yawS: number;
+	width: number;
+	/** The deck it leads to. */
+	deck: string;
+}
+
+/** The zipline (PARK.md §6): a straight cable `cableAbove` over the rider's feet from `start` to `end`. */
+export interface Zipline {
+	id: string;
+	start: Point;
+	end: Point;
+	cableAbove: number;
+	/** Length along the cable and its drop, in u. */
+	length: number;
+	drop: number;
+	/** Ground clearance kept on either side of the cable's line (no tree, rock or ground cover). */
+	clearance: number;
+	brake: number;
+	maxSpeed: number;
+	/** It opens with this mission (the mirante, mission 6). */
+	requires: MissionKey;
+	mission: number;
+	startDeck: string;
+	endDeck: string;
+}
+
+/**
+ * Water that is neither the river nor the stones pool: a stream along `points`, with
+ * its surface and its banks' distances north and south of the line per point (linear
+ * between), over a flat bed `depth` under the surface.
+ */
+export interface Stream {
+	id: string;
+	points: { x: number; z: number; water: number; north: number; south: number }[];
+	depth: number;
+}
+
+/** The grotto behind the small waterfall: its niche floor, the plunge pool and the stones across it. */
+export interface Grotto {
+	niche: { x0: number; x1: number; z0: number; z1: number; y: number };
+	pool: Pool;
+	obby: Obby;
+	leaf: Collectible;
+	/** Iara's hidden note, with its text key. */
+	note: Point & { text: string };
+}
+
+/** The canopy gold leaf: the branch path and the crown tree it climbs into. */
+export interface Canopy {
+	obby: Obby;
+	leaf: Collectible;
+	tree: Point;
+}
+
+export interface Npc extends Placed {
+	id: 'ana' | 'ze';
+	name: string;
+	mission: number;
+}
+
+/** A fallen seed to pick up, of one tree species. */
+export interface SeedSpot extends Point {
+	id: string;
+	species: string;
+	mission: number;
+	radius: number;
+}
+
+/** A bird to photograph, perched over the ground. */
+export interface BirdPerch extends Point {
+	id: string;
+	species: string;
+	mission: number;
+}
+
+/** A yellow and black mico-paw trail mark, on a post or on a trunk, facing the trail (front (yawS, yawC)). */
+export interface TrailMark extends Placed {
+	trail: string;
+	on: 'post' | 'trunk';
+	/** Height of the mark's centre over `y` (the ground). */
+	height: number;
+}
+
+/**
+ * Act 1's additions (PARK.md §3): data only for now. The runtime merges
+ * `missions` into the story when their mechanics land: mission 0 runs first
+ * (mission 1 then requires it, `firstRequires`), the two NPC missions open after
+ * mission 1.
+ */
+export interface Act1 {
+	missions: Mission[];
+	firstRequires: number[];
+	triggers: TriggerZone[];
+	treehouse: { tree: Point; deck: Deck; ladder: Ladder };
+	zipline: Zipline;
+	decks: Deck[];
+	gorge: Stream;
+	grotto: Grotto;
+	canopy: Canopy;
+	npcs: Npc[];
+	seeds: SeedSpot[];
+	birds: BirdPerch[];
+	marks: TrailMark[];
+	/** pt-BR lines by key; 'TODO-SOURCE' marks a fact still to be written from a source. */
+	text: Record<string, string>;
 }
 
 export interface StoryLevel {
@@ -209,8 +371,12 @@ export interface StoryLevel {
 	mirante: Point;
 	/** Muriqui branch handholds along the canopy row by the cutting, in order. */
 	handholds: Point[];
-	/** The east portal to the generated world. */
+	/** The east portal, also portals[0]: kept for the zone adapter (level/zones/reserva.ts). */
 	portal: Portal;
+	/** Every edge portal, east first. Optional only so the skeleton zones' levels keep their shape. */
+	portals?: Portal[];
+	/** Act 1's additions (PARK.md §3); optional for the same reason. */
+	act1?: Act1;
 	/** Stable hash of everything above. */
 	checksum: number;
 }

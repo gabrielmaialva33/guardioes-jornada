@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * survival/determinism.test.ts's scan over every zone source: only operations
- * ECMA-262 defines exactly (rules in survival/random.ts). spec.ts, skeleton.ts,
- * band.ts, river.ts and zone.ts must also stay free of three.js and the level
- * builder, so world-gen's Worker can read them.
+ * ECMA-262 defines exactly (rules in survival/random.ts). Every builder file
+ * but park.ts and reserva.ts must also stay free of three.js and the level
+ * builder, so a Worker can build the zones.
  */
 const ALLOWED_MATH = new Set(['imul', 'sqrt', 'abs', 'min', 'max']);
 const BANNED = [
@@ -30,7 +30,27 @@ function violations(source: string): string[] {
 
 const dir = fileURLToPath(new URL('.', import.meta.url));
 const sources = readdirSync(dir).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'));
-const PURE = ['band.ts', 'river.ts', 'skeleton.ts', 'spec.ts', 'zone.ts'];
+const PURE = [
+	'band.ts',
+	'content.ts',
+	'copa.ts',
+	'copa-layout.ts',
+	'copa-text.ts',
+	'kit.ts',
+	'manguezal.ts',
+	'manguezal-layout.ts',
+	'manguezal-text.ts',
+	'praia.ts',
+	'praia-layout.ts',
+	'praia-text.ts',
+	'river.ts',
+	'skeleton.ts',
+	'spec.ts',
+	'vale.ts',
+	'vale-layout.ts',
+	'vale-text.ts',
+	'zone.ts'
+];
 
 describe('zone determinism', () => {
 	it('scans every source', () => {

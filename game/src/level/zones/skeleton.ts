@@ -71,18 +71,23 @@ function manguezal(x: number, z: number): number {
 }
 
 /** The Vale's floor: 20 → 30 eastwards, plus the ridge the F1 causeway runs on (26 by x 200). */
-function valeFloor(x: number, z: number): number {
+export function valeFloor(x: number, z: number): number {
 	const floor = 20 + 10 * smooth(170, 240, x);
 	const dz = z - 70;
 	const ridge = 2.5 * (1 - smooth(4, 14, dz < 0 ? -dz : dz)) * (1 - smooth(200, 236, x));
 	return floor + ridge;
 }
 
+/** The Vale's upper valley behind the Cachoeira Grande: 50 at its top, 60 at the spring. */
+export const valeUpper = (x: number) => 50 + 10 * smooth(252, 300, x);
+
+/** Where the skeleton's wall rises from the floor to the upper valley, 0 to 1. */
+export const valeWall = (x: number) => smooth(246, 252, x);
+
 /** Vale das Cachoeiras: the floor, then the Cachoeira Grande's wall up to the upper valley (50 → 60 at the spring). */
 function vale(x: number, z: number): number {
 	const floor = valeFloor(x, z);
-	const upper = 50 + 10 * smooth(252, 300, x);
-	return floor + (upper - floor) * smooth(246, 252, x);
+	return floor + (valeUpper(x) - floor) * valeWall(x);
 }
 
 /** Gentle rolling of the Copa's floor, ±1 u at ~90 u. */

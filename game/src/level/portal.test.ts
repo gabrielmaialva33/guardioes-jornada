@@ -32,30 +32,30 @@ describe('the east portal (F1)', () => {
 
 	it('opens about 8 u of the east edge near z 70, inside the plateau’s z span', () => {
 		const { gap } = portal;
-		expect(gap.x).toBe(world.size);
-		expect(gap.z1 - gap.z0).toBe(8);
-		expect((gap.z0 + gap.z1) / 2).toBe(70);
+		expect(gap.at).toBe(world.size);
+		expect(gap.to - gap.from).toBe(8);
+		expect((gap.from + gap.to) / 2).toBe(70);
 		const zs = PLATEAU.map(([, z]) => z);
-		expect(gap.z0).toBeGreaterThan(Math.min(...zs));
-		expect(gap.z1).toBeLessThan(Math.max(...zs));
+		expect(gap.from).toBeGreaterThan(Math.min(...zs));
+		expect(gap.to).toBeLessThan(Math.max(...zs));
 		expect(gap.y).toBe(RELIEF.plateauY);
 	});
 
 	it('carries the plateau’s top across the edge strip to x 160, flat and walkable, with no edge lip', () => {
 		const { gap } = portal;
-		for (let z = gap.z0; z <= gap.z1; z++)
-			for (let x = PORTAL.fromX; x <= gap.x; x++) {
+		for (let z = gap.from; z <= gap.to; z++)
+			for (let x = PORTAL.fromX; x <= gap.at; x++) {
 				expect(h(x, z), `${x},${z}`).toBe(RELIEF.plateauY);
 				expect(world.flags[z * n + x] & FLAG.walkable, `${x},${z}`).toBeTruthy();
 			}
 		// Every step on the causeway and the plateau top around it, through its eased lip, is walkable
 		// (the plateau's top ends at x 157; past it, outside the opening, is its east face).
-		for (let z = gap.z0 - PORTAL.lipBlend; z <= gap.z1 + PORTAL.lipBlend; z++) {
-			const last = z >= gap.z0 && z <= gap.z1 ? gap.x : 157;
+		for (let z = gap.from - PORTAL.lipBlend; z <= gap.to + PORTAL.lipBlend; z++) {
+			const last = z >= gap.from && z <= gap.to ? gap.at : 157;
 			for (let x = PORTAL.fromX; x <= last; x++) {
 				if (x < last)
 					expect(Math.abs(h(x + 1, z) - h(x, z)), `${x}→${x + 1}, ${z}`).toBeLessThanOrEqual(WALK_SLOPE);
-				const zLast = x > 157 ? gap.z1 : gap.z1 + PORTAL.lipBlend;
+				const zLast = x > 157 ? gap.to : gap.to + PORTAL.lipBlend;
 				if (z < zLast)
 					expect(Math.abs(h(x, z + 1) - h(x, z)), `${x}, ${z}→${z + 1}`).toBeLessThanOrEqual(WALK_SLOPE);
 			}
@@ -64,12 +64,12 @@ describe('the east portal (F1)', () => {
 
 	it('keeps the east cliff and the edge strip everywhere else, the causeway’s flanks one-cell cliffs', () => {
 		const { gap } = portal;
-		for (let x = 158; x <= gap.x; x++) {
-			expect(h(x, gap.z0) - h(x, gap.z0 - 1), `${x} north flank`).toBeGreaterThan(4);
-			expect(h(x, gap.z1) - h(x, gap.z1 + 1), `${x} south flank`).toBeGreaterThan(4);
+		for (let x = 158; x <= gap.at; x++) {
+			expect(h(x, gap.from) - h(x, gap.from - 1), `${x} north flank`).toBeGreaterThan(4);
+			expect(h(x, gap.to) - h(x, gap.to + 1), `${x} south flank`).toBeGreaterThan(4);
 		}
 		for (let z = 42; z < 98; z++) {
-			if (z >= gap.z0 - 1 && z <= gap.z1 + 1) continue;
+			if (z >= gap.from - 1 && z <= gap.to + 1) continue;
 			for (const x of [158, 159, 160]) {
 				expect(h(x, z), `${x},${z}`).toBeGreaterThan(9);
 				expect(h(x, z), `${x},${z}`).toBeLessThan(10.5);
@@ -86,9 +86,9 @@ describe('the east portal (F1)', () => {
 		expect(top?.yaw).toBe(FACING[CHECKPOINT_FACING.mirante]);
 		expect(spur.points[0]).toEqual([...MIRANTE_TOP]);
 		const end = spur.points[spur.points.length - 1];
-		expect(end[0]).toBe(portal.gap.x);
-		expect(end[1]).toBeGreaterThanOrEqual(portal.gap.z0 + TRAIL_HALF_WIDTH);
-		expect(end[1]).toBeLessThanOrEqual(portal.gap.z1 - TRAIL_HALF_WIDTH);
+		expect(end[0]).toBe(portal.gap.at);
+		expect(end[1]).toBeGreaterThanOrEqual(portal.gap.from + TRAIL_HALF_WIDTH);
+		expect(end[1]).toBeLessThanOrEqual(portal.gap.to - TRAIL_HALF_WIDTH);
 		// Along it, the ground never climbs or drops faster than WALK_SLOPE.
 		for (let k = 1; k < spur.points.length; k++) {
 			const [ax, az] = spur.points[k - 1];
@@ -109,9 +109,9 @@ describe('the east portal (F1)', () => {
 	it('stands its posts in the opening, the gate between them, the sign beside the trail facing it', () => {
 		const { gap, posts, gate, sign, inside, outside } = portal;
 		for (const p of posts) {
-			expect(p.z).toBeGreaterThan(gap.z0);
-			expect(p.z).toBeLessThan(gap.z1);
-			expect(gap.x - p.x).toBeLessThan(1);
+			expect(p.z).toBeGreaterThan(gap.from);
+			expect(p.z).toBeLessThan(gap.to);
+			expect(gap.at - p.x).toBeLessThan(1);
 			expect(p.y).toBe(RELIEF.plateauY);
 			expect(p.height).toBeGreaterThan(2);
 		}
@@ -125,13 +125,13 @@ describe('the east portal (F1)', () => {
 		// Faces west, towards the mirante top the trail comes from: front (yawS, yawC) = (−1, 0).
 		expect([sign.yawS, sign.yawC]).toEqual([-1, 0]);
 		expect(inside.yaw).toBe(FACING.west);
-		expect(inside.x).toBeLessThan(gap.x);
-		expect(outside.x).toBeGreaterThan(gap.x);
+		expect(inside.x).toBeLessThan(gap.at);
+		expect(outside.x).toBeGreaterThan(gap.at);
 		// Nothing collides in the opening.
 		for (const b of world.blocks)
 			for (let k = 0; k < b.cylinders.length; k += 5) {
 				const [x, , z] = b.cylinders.subarray(k, k + 3);
-				expect(x >= PORTAL.fromX && z >= gap.z0 - 1 && z <= gap.z1 + 1, `${x},${z}`).toBe(false);
+				expect(x >= PORTAL.fromX && z >= gap.from - 1 && z <= gap.to + 1, `${x},${z}`).toBe(false);
 			}
 	});
 });
