@@ -171,7 +171,7 @@ export function findSpot(
 ): { x: number; z: number } | null {
 	const cx = Math.round(x);
 	const cz = Math.round(z);
-	let best: { x: number; z: number; d: number } | null = null;
+	let best = null as { x: number; z: number; d: number } | null;
 	for (let r = 0; r <= reach; r++) {
 		for (let dz = -r; dz <= r; dz++)
 			for (let dx = -r; dx <= r; dx++) {
