@@ -34,6 +34,9 @@ export class BlockGrid {
 	readonly columns: number;
 	readonly rows: number;
 	readonly blockSize: number;
+	/** Last cull eye, for mutually exclusive per-instance geometry LOD bands. */
+	cameraX = 0;
+	cameraZ = 0;
 	/** columns × rows; block index = row * columns + column, as in the survival generator. */
 	readonly count: number;
 	/**
@@ -121,6 +124,8 @@ export class BlockGrid {
 		const e = camera.matrixWorld.elements;
 		const px = e[12];
 		const pz = e[14];
+		this.cameraX = px;
+		this.cameraZ = pz;
 		let visible = 0;
 		for (let b = 0; b < this.count; b++) {
 			const box = this.bounds[b];

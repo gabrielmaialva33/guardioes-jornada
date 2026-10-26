@@ -418,3 +418,36 @@ it('keeps per-instance fades attached to stable ids across culling, compaction a
 	expect(attribute.getX(0)).toBe(1);
 	pool.dispose();
 });
+
+it('switches geometry bands without showing both LODs, including exact boundaries and a moving camera', () => {
+	const grid = new BlockGrid({ minX: 0, minZ: 0, columns: 1, rows: 1 });
+	showAll(grid);
+	const make = (min: number, max: number) =>
+		new InstancePool([{ geometry: new BoxGeometry(), material: new MeshLambertMaterial() }], {
+			capacity: 3,
+			grid,
+			distanceBand: { min, max }
+		});
+	const near = make(0, 10),
+		far = make(10, 20);
+	for (const pool of [near, far]) for (const x of [5, 15, 25]) pool.add(x, 0, 0);
+	near.sync();
+	far.sync();
+	expect(near.count).toBe(1);
+	expect(far.count).toBe(1);
+	expect(far.idAt(0)).toBe(1);
+	grid.cameraX = 10;
+	near.sync();
+	far.sync();
+	expect(near.count).toBe(2);
+	expect(far.count).toBe(1);
+	expect(far.idAt(0)).toBe(2);
+	near.distanceBand = { min: 0, max: 5 };
+	far.distanceBand = { min: 5, max: 20 };
+	near.sync();
+	far.sync();
+	expect(near.count).toBe(0);
+	expect(far.count).toBe(3);
+	near.dispose();
+	far.dispose();
+});

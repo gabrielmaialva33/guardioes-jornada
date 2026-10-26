@@ -59,6 +59,7 @@ export interface InstancePoolOptions {
 	 * Created up front, so the shader program never changes later.
 	 */
 	colors?: boolean;
+	distanceBand?: { min: number; max: number };
 	/** Per-instance opaque canopy dither, independent of colour and draw order. */
 	fades?: boolean;
 	/** Distance thinning of far blocks (fog-lod.ts lodProfiles); null draws all of a visible block. */
@@ -144,6 +145,11 @@ export class InstancePool implements BlockSyncTarget {
 	readonly localSphere = new Sphere();
 	/** Distance thinning; changing it takes effect at the next sync. */
 	lod: LodProfile | null;
+	distanceBand: { min: number; max: number } | undefined;
+	#lodX = NaN;
+	#lodZ = NaN;
+	#lodMin = NaN;
+	#lodMax = NaN;
 	readonly #ownsGeometry: boolean;
 	readonly #matrices: Float32Array;
 	readonly #colors: Float32Array | null;
@@ -188,6 +194,7 @@ export class InstancePool implements BlockSyncTarget {
 		this.capacity = capacity;
 		this.grid = options.grid;
 		this.lod = options.lod ?? null;
+		this.distanceBand = options.distanceBand;
 		this.#ownsGeometry = options.ownsGeometry ?? false;
 		this.object.name = this.name;
 		this.object.matrixAutoUpdate = false;
@@ -443,6 +450,20 @@ export class InstancePool implements BlockSyncTarget {
 		const grid = this.grid;
 		const lod = this.lod;
 		let changed = this.#dirty;
+		const band = this.distanceBand;
+		if (
+			band &&
+			(this.#lodX !== grid.cameraX ||
+				this.#lodZ !== grid.cameraZ ||
+				this.#lodMin !== band.min ||
+				this.#lodMax !== band.max)
+		) {
+			this.#lodX = grid.cameraX;
+			this.#lodZ = grid.cameraZ;
+			this.#lodMin = band.min;
+			this.#lodMax = band.max;
+			changed = true;
+		}
 		for (let b = 0; b < grid.count; b++) {
 			let keep = 0;
 			if (this.#members[b] > 0 && grid.visible[b] === 1)
@@ -468,6 +489,7 @@ export class InstancePool implements BlockSyncTarget {
 		this.grid.unregister(this);
 		for (const mesh of this.meshes) {
 			mesh.dispose();
+			mesh.customDepthMaterial?.dispose();
 			if (this.#ownsGeometry) mesh.geometry.dispose();
 		}
 		this.object.clear();
@@ -568,6 +590,13 @@ export class InstancePool implements BlockSyncTarget {
 			if (keep > 0) {
 				for (let slot = this.#head[b]; slot !== -1; slot = next[slot]) {
 					if (rank[slot] >= keep) continue;
+					const band = this.distanceBand;
+					if (band) {
+						const dx = m[slot * 16 + 12] - this.grid.cameraX,
+							dz = m[slot * 16 + 14] - this.grid.cameraZ,
+							d2 = dx * dx + dz * dz;
+						if (d2 < band.min * band.min || d2 >= band.max * band.max) continue;
+					}
 					const from = slot * 16;
 					const to = n * 16;
 					for (let i = 0; i < 16; i++) g[to + i] = m[from + i];

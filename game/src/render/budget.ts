@@ -12,7 +12,7 @@
  * `debugSnapshot()` reads the active budget; Codex exposes it as
  * `globalThis.__gameDebug` under `?debug`.
  */
-import type { Object3D, Texture } from 'three';
+import { FloatType, HalfFloatType, type Object3D, RedFormat, RGBFormat, SkinnedMesh, Texture } from 'three';
 import type { Quality } from './quality.ts';
 
 /** The gates on the target phone. */
@@ -242,21 +242,30 @@ export function collectTextures(root: Object3D, into: Set<Texture> = new Set()):
 	root.traverse((object) => {
 		const material = (object as Object3D & { material?: unknown }).material;
 		const list = Array.isArray(material) ? material : material ? [material] : [];
-		for (const m of list)
+		for (const m of list) {
 			for (const value of Object.values(m as Record<string, unknown>))
-				if ((value as Texture | null)?.isTexture) into.add(value as Texture);
+				if (value instanceof Texture) into.add(value);
+			const uniforms = (m as { uniforms?: Record<string, { value: unknown }> }).uniforms;
+			if (uniforms)
+				for (const uniform of Object.values(uniforms))
+					if (uniform.value instanceof Texture) into.add(uniform.value);
+		}
+		if (object instanceof SkinnedMesh && object.skeleton.boneTexture) into.add(object.skeleton.boneTexture);
 	});
 	return into;
 }
 
-/** GPU bytes of textures as RGBA8, with a third more for mipmaps where they are generated. */
+/** GPU bytes including shader atlases and bone formats; render targets are counted separately. */
 export function textureBytes(textures: Iterable<Texture>): number {
 	let bytes = 0;
 	for (const texture of textures) {
 		const image = texture.image as { width?: number; height?: number } | null | undefined;
 		const width = image?.width ?? 0;
 		const height = image?.height ?? 0;
-		const base = width * height * 4;
+		if (texture.isRenderTargetTexture) continue;
+		const channels = texture.format === RedFormat ? 1 : texture.format === RGBFormat ? 3 : 4,
+			component = texture.type === FloatType ? 4 : texture.type === HalfFloatType ? 2 : 1;
+		const base = width * height * channels * component;
 		bytes += texture.generateMipmaps ? Math.ceil((base * 4) / 3) : base;
 	}
 	return bytes;

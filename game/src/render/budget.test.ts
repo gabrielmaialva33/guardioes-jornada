@@ -1,4 +1,4 @@
-import { DataTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { DataTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, RedFormat, ShaderMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
 	BUDGET,
@@ -147,4 +147,19 @@ describe('memory estimates', () => {
 		expect(shadowMapBytes(1024)).toBe(8 * 1024 * 1024);
 		expect(shadowMapBytes(2048)).toBeGreaterThan(BUDGET.textureBytes);
 	});
+});
+
+it('counts shader atlas uniforms once and respects the R8 canopy map format', () => {
+	const map = new DataTexture(new Uint8Array(100), 10, 10, RedFormat);
+	map.generateMipmaps = false;
+	const mesh = new Mesh(
+		new PlaneGeometry(),
+		new ShaderMaterial({ uniforms: { a: { value: map }, b: { value: map } } })
+	);
+	const root = new Group();
+	root.add(mesh);
+	expect(textureBytes(collectTextures(root))).toBe(100);
+	map.dispose();
+	mesh.geometry.dispose();
+	mesh.material.dispose();
 });

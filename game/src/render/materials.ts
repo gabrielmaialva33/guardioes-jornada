@@ -72,6 +72,7 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 		vertexColors: true,
 		side: source.side,
 		transparent: source.transparent,
+		depthWrite: source.depthWrite,
 		opacity: source.opacity,
 		alphaTest: source.alphaTest
 	});
