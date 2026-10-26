@@ -489,6 +489,8 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			setStatus('ready');
 			options.onready?.(metrics());
 			loadThumbnailAvatar();
+			// Allocate the thumbnail target's framebuffers now, not inside the first thumbnail's budget.
+			renderer.initRenderTarget?.(target);
 			compile(target, thumbCamera).then(
 				() => {
 					thumbShaders = true;

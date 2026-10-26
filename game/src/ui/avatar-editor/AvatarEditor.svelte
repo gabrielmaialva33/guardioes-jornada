@@ -738,6 +738,7 @@
 	}
 	fieldset {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 10px;
 		min-width: 0;
 		margin: 0;
@@ -820,7 +821,7 @@
 	}
 	.grid.big {
 		grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-		max-width: 26rem;
+		max-width: min(100%, 26rem);
 	}
 	.tile {
 		position: relative;
