@@ -13,6 +13,7 @@ import { AVATAR_LAYOUT, BLOCKY_RIG } from '../animation/joints.ts';
 import { applyToRig, bindRig } from '../animation/rig.ts';
 import iaraPalette from '../assets/skins/palette-iara.png?url';
 import type { StoryLevel } from '../level/types.ts';
+import { IaraLife } from '../life/index.ts';
 import { houseMaterial } from '../render/index.ts';
 import { stylize } from '../render/stylized.ts';
 import { disposeModel, loadAvatar, loadModel } from '../scene/avatar.ts';
@@ -239,6 +240,14 @@ export async function loadStoryProps(
 		const rig = bindRig(npc.model, AVATAR_LAYOUT, BLOCKY_RIG),
 			animator = new AvatarAnimator(),
 			input = createAvatarInput();
+		const motion = matchMedia('(prefers-reduced-motion: reduce)');
+		const iaraLife = new IaraLife({
+			x: iara.x,
+			y: iara.y,
+			z: iara.z,
+			yaw: actor.rotation.y,
+			trail: { x: 42, z: 70 }
+		});
 		input.yaw = actor.rotation.y;
 		input.x = iara.x;
 		input.y = iara.y;
@@ -284,8 +293,18 @@ export async function loadStoryProps(
 			sync,
 			update(dt: number) {
 				sync();
-				input.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-				applyToRig(animator.update(dt, input), rig);
+				input.reducedMotion = motion.matches;
+				const f = iaraLife.frame;
+				f.dt = dt;
+				f.playerX = game.position.x;
+				f.playerY = game.position.y;
+				f.playerZ = game.position.z;
+				f.talking = game.dialogue?.speaker === 'Iara';
+				f.busy = animator.state === 'emote';
+				f.reducedMotion = input.reducedMotion;
+				input.yaw = actor.rotation.y = iaraLife.yaw;
+				applyToRig(iaraLife.update(animator.update(dt, input)), rig);
+				actor.rotation.y = iaraLife.yaw;
 			},
 			dispose() {
 				ownedNpc.dispose();
