@@ -210,20 +210,31 @@ function budgetForModel(fileName, nodeName) {
 	if (fileName.includes('silhueta') || nodeName.includes('silhueta')) {
 		return { kind: 'Landmark Silhouette', limit: 80 };
 	}
+	if (fileName.includes('jequitiba-rosa') || nodeName.includes('jequitiba-rosa')) {
+		return { kind: 'Tree (Emergent Jequitibá)', limit: 700 };
+	}
 	if (
 		nodeName.startsWith('tree') ||
 		[
 			'araucaria',
-			'jequitiba-rosa',
 			'palmeira-jucara',
 			'embauba',
 			'ipe-amarelo',
 			'ipe-rosa',
 			'pau-brasil',
+			'jeriva',
+			'mangue-vermelho',
 			'xaxim'
 		].some((t) => fileName.includes(t) || nodeName.includes(t))
 	) {
-		return { kind: 'Tree', limit: 400 };
+		return { kind: 'Tree (v2)', limit: 450 };
+	}
+	if (
+		['bromelia', 'samambaia', 'flores-mata', 'serapilheira'].some(
+			(t) => fileName.includes(t) || nodeName.includes(t)
+		)
+	) {
+		return { kind: 'Ground Cover (v2)', limit: 150 };
 	}
 	if (
 		['mico', 'tucano', 'bugio', 'muriqui', 'preguica'].some(

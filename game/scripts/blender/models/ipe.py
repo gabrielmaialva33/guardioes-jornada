@@ -46,12 +46,16 @@ def tree(flower: str) -> C.Mesh:
         tip = fork + d * reach + Vector((0, 0, rise))
         m.tube([fork - d * 0.1, mid, tip], [0.28, 0.2, 0.13], 5, BARK, cap_end=False, twist=a)
         tips.append((a, tip))
-    # Flower masses at the limb tips, plus a crown mass and one low side mass.
-    for a, tip in tips:
-        m.chunk(tip + Vector((0, 0, -0.55)), 1.9, 1.75, 1.75, 6, flower, chamfer=0.32, twist=a)
-    m.chunk((0.15, 0.1, 8.75), 2.0, 1.9, 1.7, 6, flower, chamfer=0.32, twist=0.5)
+    # Shrunken flower masses + opaque blossom-cluster fringe (ART.md v2)
+    for idx, (a, tip) in enumerate(tips):
+        c_pos = tip + Vector((0, 0, -0.55))
+        m.chunk(c_pos, 1.9 * 0.86, 1.75 * 0.86, 1.75 * 0.88, 6, flower, chamfer=0.32, twist=a)
+        m.leaf_fringe(c_pos + Vector((0, 0, 0.80)), 1.85, 1.70, 0.90, 7, flower, length=1.15, width=0.68, seed=30 + idx)
+    m.chunk((0.15, 0.1, 8.75), 2.0 * 0.86, 1.9 * 0.86, 1.7 * 0.88, 6, flower, chamfer=0.32, twist=0.5)
+    m.leaf_fringe((0.15, 0.1, 9.55), 1.95, 1.85, 0.88, 7, flower, length=1.18, width=0.68, seed=41)
     lo = Vector((math.cos(1.25), math.sin(1.25), 0)) * 2.1 + Vector((0, 0, 6.7))
-    m.chunk(lo, 1.35, 1.25, 1.3, 6, flower, chamfer=0.32, twist=1.25)
+    m.chunk(lo, 1.35 * 0.86, 1.25 * 0.86, 1.3 * 0.88, 6, flower, chamfer=0.32, twist=1.25)
+    m.leaf_fringe(lo + Vector((0, 0, 0.60)), 1.30, 1.20, 0.65, 4, flower, length=1.0, width=0.58, seed=52)
     # The first few leaves of the season, low in the crown.
     for a, r, z in [(3.3, 2.2, 6.6), (5.4, 2.4, 7.1)]:
         c = Vector((math.cos(a) * r, math.sin(a) * r, z))
@@ -77,14 +81,16 @@ def fallen(flower: str) -> C.Mesh:
 def build_variant(flower: str, name: str):
     def build():
         root = C.build_object(tree(flower), name)
-        C.build_object(fallen(flower), "flores-caidas", parent=root, pivot=(0, 0, 0))
+        C.apply_v2_foliage(root, mode="tree")
+        fl = C.build_object(fallen(flower), "flores-caidas", parent=root, pivot=(0, 0, 0))
+        C.apply_v2_foliage(fl, mode="cover")
         return root
 
     return build
 
 
 if __name__ == "__main__":
-    C.run(build_variant(C.ACCENT["ipeAmarelo"], "ipe-amarelo"), name="ipe-amarelo", budget=400,
+    C.run(build_variant(C.ACCENT["ipeAmarelo"], "ipe-amarelo"), name="ipe-amarelo", budget=450,
           target="~11 u (canopy)", preview_kw=C.TREE_VIEW)
-    C.run(build_variant(C.ACCENT["ipeRosa"], "ipe-rosa"), name="ipe-rosa", budget=400,
+    C.run(build_variant(C.ACCENT["ipeRosa"], "ipe-rosa"), name="ipe-rosa", budget=450,
           target="~11 u (canopy)", preview_kw=C.TREE_VIEW)

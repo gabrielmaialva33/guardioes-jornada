@@ -120,7 +120,8 @@ def hex_linear(h: str) -> tuple[float, float, float, float]:
 
 
 def colour_source(h: str) -> str:
-    """Where a colour comes from: 'leaf[1]', 'ACCENT.ipeRosa' or 'SPECIES.jucaraFruto'."""
+    """Where a colour comes from: 'leaf[1]', 'ACCENT.ipeRosa', 'SPECIES.jucaraFruto',
+    or '~<ramp> (v2 gradient)' when within ART.md lightness bounds [0.12, 0.90]."""
     h = h.lower()
     for name, values in RAMPS.items():
         for i, v in enumerate(values):
@@ -132,7 +133,33 @@ def colour_source(h: str) -> str:
     for name, v in SPECIES.items():
         if v.lower() == h:
             return f"SPECIES.{name}"
+    r, g, b = hex_rgb(h)
+    lum = (max(r, g, b) + min(r, g, b)) * 0.5
+    if 0.115 <= lum <= 0.905:
+        best_name = "leaf[1]"
+        best_d = 1e9
+        for name, values in RAMPS.items():
+            for i, v in enumerate(values):
+                vr, vg, vb = hex_rgb(v)
+                d = (r - vr) ** 2 + (g - vg) ** 2 + (b - vb) ** 2
+                if d < best_d:
+                    best_d = d
+                    best_name = f"{name}[{i}]"
+        return f"~{best_name}"
     return "UNLISTED"
+
+
+def clamp_srgb_lightness(r: float, g: float, b: float, lo: float = 0.125, hi: float = 0.895) -> tuple[float, float, float]:
+    """Clamp sRGB (0..1) so HSL lightness stays strictly inside [lo, hi] (ART.md section 2)."""
+    import colorsys
+
+    r = max(0.0, min(1.0, r))
+    g = max(0.0, min(1.0, g))
+    b = max(0.0, min(1.0, b))
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    s = min(0.78, s)
+    l_clamped = max(lo, min(hi, l))
+    return colorsys.hls_to_rgb(h, l_clamped, s)
 
 
 # --------------------------------------------------------------------------- geometry
@@ -368,6 +395,65 @@ class Mesh:
                     self.add2([q[0], q[1], q[2]], colour, under, uv)
                     self.add2([q[0], q[2], q[3]], colour, under, uv)
 
+    def leaf_fringe(
+        self,
+        centre,
+        rx: float,
+        ry: float,
+        rz: float,
+        count: int,
+        colour: str,
+        *,
+        colour_alt: str | None = None,
+        length: float = 1.15,
+        width: float = 0.62,
+        z_min: float = -0.55,
+        z_max: float = 0.90,
+        seed: int = 7,
+    ) -> None:
+        """Opaque chunky leaf-shaped diamond quads (2 tris each, no alpha test) distributed
+        around a canopy lobe's ellipsoid shell to break up the polygonal silhouette (ART.md §1/§5)."""
+        c = Vector(centre)
+        golden = math.pi * (3.0 - math.sqrt(5.0))
+        for i in range(count):
+            t = (i + 0.5) / max(1, count)
+            zz = z_max - t * (z_max - z_min)
+            rad = math.sqrt(max(0.0, 1.0 - zz * zz))
+            th = golden * i + seed * 0.73
+            dx = math.cos(th) * rad
+            dy = math.sin(th) * rad
+            #Deterministic pseudo-random jitter from index & seed
+            j1 = math.sin(i * 12.9898 + seed * 78.233) * 43758.5453
+            j1 = j1 - math.floor(j1)
+            j2 = math.sin(i * 93.989 + seed * 17.13) * 24634.6345
+            j2 = j2 - math.floor(j2)
+
+            shell_scale = 0.88 + 0.12 * j1
+            pos = c + Vector((dx * rx, dy * ry, zz * rz)) * shell_scale
+            out_n = Vector((dx / max(0.1, rx), dy / max(0.1, ry), zz / max(0.1, rz))).normalized()
+            # Leaf axis points outward from the lobe and droops slightly at the rim
+            radial_xy = Vector((dx, dy, 0.0))
+            if radial_xy.length < 1e-4:
+                radial_xy = Vector((1.0, 0.0, 0.0))
+            else:
+                radial_xy.normalize()
+            tangent = Vector((-radial_xy.y, radial_xy.x, 0.0))
+            leaf_dir = (radial_xy * 0.78 + tangent * ((j2 - 0.5) * 0.55) + Vector((0.0, 0.0, 0.25 * zz - 0.18))).normalized()
+            side = leaf_dir.cross(out_n)
+            if side.length < 1e-4:
+                side = leaf_dir.cross(Vector((0.0, 0.0, 1.0)))
+            side.normalize()
+
+            L = length * (0.85 + 0.30 * j1)
+            W = width * (0.85 + 0.30 * j2)
+            p_root = pos - leaf_dir * (L * 0.28)
+            p_mid = pos + leaf_dir * (L * 0.22) + out_n * 0.06
+            p_tip = pos + leaf_dir * (L * 0.72)
+            p_left = p_mid + side * (W * 0.5)
+            p_right = p_mid - side * (W * 0.5)
+            col = (colour_alt or colour) if (i % 3 == 0) else colour
+            self.add_out([p_root, p_left, p_tip, p_right], col, c)
+
     def merge(self, other: "Mesh") -> None:
         base = len(self.verts)
         self.verts.extend(other.verts)
@@ -400,6 +486,7 @@ def vertex_colour_material(name: str = "mata-vertex-colour") -> bpy.types.Materi
     nt.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
     bsdf.inputs["Roughness"].default_value = 1.0
     bsdf.inputs["Metallic"].default_value = 0.0
+    mat.use_backface_culling = False
     return mat
 
 
@@ -446,6 +533,153 @@ def build_object(mesh: Mesh, name: str | None = None, parent=None, pivot=(0, 0, 
         ob.location = piv - parent_world_pivot(parent)
     else:
         ob.location = piv
+    return ob
+
+
+def apply_v2_foliage(ob, mode: str = "tree"):
+    """Apply Art Direction v2 volume normals (or 'up' normals for ground cover), smooth
+    canopy shading, flat trunk/branch/root normals, and 3-step hue-shifted vertex colour
+    gradient + baked AO in COLOR_0 (ART.md sections 1, 2, 5 & a-visual.md T3a)."""
+    import bmesh
+    import colorsys
+
+    bpy.context.view_layer.update()
+    targets = [o for o in [ob, *ob.children_recursive] if o.type == "MESH"]
+    foliage_hexes = {h.lower() for h in (*RAMPS["leaf"], *RAMPS["grass"], ACCENT["ipeAmarelo"], ACCENT["ipeRosa"], RAMPS["rock"][3])}
+
+    for m_obj in targets:
+        me = m_obj.data
+        attr = me.color_attributes.active_color or me.color_attributes[0]
+        loops = me.loops
+        co = [m_obj.matrix_world @ v.co for v in me.vertices]
+
+        if mode == "cover":
+            lo = Vector((min(v.x for v in co), min(v.y for v in co), min(v.z for v in co)))
+            hi = Vector((max(v.x for v in co), max(v.y for v in co), max(v.z for v in co)))
+            c = (lo + hi) * 0.5
+            r_xy = max(0.15, math.hypot(hi.x - lo.x, hi.y - lo.y) * 0.5)
+            z_span = max(0.05, hi.z - lo.z)
+            normals = [None] * len(loops)
+            for p in me.polygons:
+                p.use_smooth = True
+                for li in p.loop_indices:
+                    v = co[loops[li].vertex_index]
+                    rad_vec = Vector((v.x - c.x, v.y - c.y, 0.0))
+                    if rad_vec.length > 1e-4:
+                        rad_vec.normalize()
+                    # "Up" normal (0, 0, 1) in Blender Z-up -> (0, 1, 0) in glTF Y-up so ground cover never shows black edges
+                    normals[li] = (Vector((0.0, 0.0, 1.0)) * 0.88 + rad_vec * 0.12).normalized()
+                    t_z = max(0.0, min(1.0, (v.z - lo.z) / z_span))
+                    t_r = max(0.0, min(1.0, math.hypot(v.x - c.x, v.y - c.y) / r_xy))
+                    u = max(0.0, min(1.0, 0.65 * t_z + 0.35 * t_r))
+                    sr, sg, sb, _ = attr.data[li].color_srgb
+                    # 3-step gradient: cool shaded base -> midtone -> warm sunlit tip
+                    k = 0.68 + 0.42 * u
+                    tint_r = 0.84 + 0.24 * u
+                    tint_g = 0.94 + 0.10 * u
+                    tint_b = 1.08 - 0.18 * u
+                    nr, ng, nb = clamp_srgb_lightness(sr * k * tint_r, sg * k * tint_g, sb * k * tint_b)
+                    attr.data[li].color_srgb = (nr, ng, nb, 1.0)
+            me.normals_split_custom_set(normals)
+            continue
+
+        # Tree mode: classify foliage faces vs trunk/branch/root faces
+        fol_faces = set()
+        for p in me.polygons:
+            li0 = p.loop_indices[0]
+            sr, sg, sb, _ = attr.data[li0].color_srgb
+            h_hex = "#%02x%02x%02x" % (int(round(sr * 255)), int(round(sg * 255)), int(round(sb * 255)))
+            h_val, _l_val, _s_val = colorsys.rgb_to_hls(sr, sg, sb)
+            if h_hex in foliage_hexes or (0.20 <= h_val <= 0.48):
+                # Exclude vertical grey stem on embaúba/juçara/jerivá (rock[1..2] below z=6.2)
+                avg_z = sum(co[loops[li].vertex_index].z for li in p.loop_indices) / p.loop_total
+                if h_hex == RAMPS["rock"][3].lower() and avg_z < 5.0:
+                    continue
+                fol_faces.add(p.index)
+
+        # Connected foliage islands (lobes)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bm.faces.ensure_lookup_table()
+        island: dict[int, int] = {}
+        nid = 0
+        for f in bm.faces:
+            if f.index in fol_faces and f.index not in island:
+                stack = [f]
+                island[f.index] = nid
+                while stack:
+                    cur = stack.pop()
+                    for e in cur.edges:
+                        for nf in e.link_faces:
+                            if nf.index in fol_faces and nf.index not in island:
+                                island[nf.index] = nid
+                                stack.append(nf)
+                nid += 1
+        bm.free()
+
+        fv = [co[loops[li].vertex_index] for fi in fol_faces for li in me.polygons[fi].loop_indices]
+        trunk_v = [co[loops[li].vertex_index] for p in me.polygons if p.index not in fol_faces for li in p.loop_indices]
+        tz0 = min((v.z for v in trunk_v), default=0.0)
+        tz1 = max((v.z for v in trunk_v), default=1.0)
+
+        if fv:
+            lo = Vector((min(v.x for v in fv), min(v.y for v in fv), min(v.z for v in fv)))
+            hi = Vector((max(v.x for v in fv), max(v.y for v in fv), max(v.z for v in fv)))
+            c = (lo + hi) * 0.5
+            r = Vector((max(0.25, (hi.x - lo.x) * 0.5), max(0.25, (hi.y - lo.y) * 0.5), max(0.25, (hi.z - lo.z) * 0.5)))
+            c_norm = c.copy()
+            c_norm.z -= r.z * 0.35
+        else:
+            lo = Vector((0.0, 0.0, 0.0))
+            hi = Vector((1.0, 1.0, 1.0))
+            c = Vector((0.0, 0.0, 0.5))
+            c_norm = c.copy()
+            r = Vector((1.0, 1.0, 1.0))
+
+        icent: dict[int, tuple[Vector, float]] = {}
+        for fi, isl_id in island.items():
+            icent.setdefault(isl_id, []).extend(co[loops[li].vertex_index] for li in me.polygons[fi].loop_indices)
+        icent_stats = {}
+        for isl_id, vs in icent.items():
+            ctr = sum(vs, Vector()) / len(vs)
+            rad = max(0.2, max((v - ctr).length for v in vs))
+            icent_stats[isl_id] = (ctr, rad)
+
+        normals = [None] * len(loops)
+        for p in me.polygons:
+            is_fol = p.index in fol_faces
+            p.use_smooth = is_fol
+            for li in p.loop_indices:
+                v = co[loops[li].vertex_index]
+                sr, sg, sb, _ = attr.data[li].color_srgb
+                if is_fol:
+                    g = Vector(((v.x - c_norm.x) / (r.x ** 2), (v.y - c_norm.y) / (r.y ** 2), (v.z - c_norm.z) / (r.z ** 2))).normalized()
+                    ctr, rad = icent_stats[island[p.index]]
+                    l_vec = v - Vector((ctr.x, ctr.y, ctr.z - rad * 0.25))
+                    l_n = l_vec.normalized() if l_vec.length > 1e-4 else g
+                    normals[li] = (g * 0.58 + l_n * 0.42).normalized()
+
+                    t = max(0.0, min(1.0, (v.z - lo.z) / max(0.2, hi.z - lo.z)))
+                    core = max(0.15, min(1.0, (v - ctr).length / rad))
+                    u = max(0.0, min(1.0, 0.62 * t + 0.38 * core))
+                    # 3-step gradient: cool teal shadow -> ramp midtone -> warm sunlit highlight + AO
+                    k = 0.58 + 0.54 * u
+                    tint_r = 0.80 + 0.28 * u
+                    tint_g = 0.92 + 0.12 * u
+                    tint_b = 1.12 - 0.24 * u
+                    nr, ng, nb = clamp_srgb_lightness(sr * k * tint_r, sg * k * tint_g, sb * k * tint_b)
+                    attr.data[li].color_srgb = (nr, ng, nb, 1.0)
+                else:
+                    # Trunks, branches, and roots stay flat-shaded with ground & under-canopy AO
+                    normals[li] = p.normal.copy()
+                    t_trunk = max(0.0, min(1.0, (v.z - tz0) / max(0.2, tz1 - tz0)))
+                    base_ao = 0.62 + 0.38 * min(1.0, t_trunk * 2.8)
+                    canopy_occ = 0.76 if (fv and v.z > lo.z + 0.15 * (hi.z - lo.z)) else 1.0
+                    k = base_ao * canopy_occ
+                    nr, ng, nb = clamp_srgb_lightness(sr * k, sg * k, sb * k)
+                    attr.data[li].color_srgb = (nr, ng, nb, 1.0)
+
+        me.normals_split_custom_set(normals)
     return ob
 
 

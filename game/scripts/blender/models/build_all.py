@@ -15,8 +15,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 BLENDER = os.environ.get("BLENDER", "/usr/sbin/blender")
-GENERATORS = ["araucaria", "jequitiba", "jucara", "embauba", "ipe", "xaxim", "bromelia", "armadilhas",
-              "bico_tucano", "rosetas_onca", "juba_mico", "placas", "avatar_hair", "story_map"]
+GENERATORS = ["araucaria", "jequitiba", "jucara", "embauba", "ipe", "xaxim", "pau_brasil", "jeriva", "mangue",
+              "bromelia", "ground_cover_v2", "armadilhas", "bico_tucano", "rosetas_onca", "juba_mico", "placas",
+              "avatar_hair", "story_map"]
 
 
 def run(script: str, extra: list[str]) -> None:

@@ -86,12 +86,12 @@ def rosette(red_centre: bool) -> C.Mesh:
 
 
 def build_variant(red: bool, name: str):
-    return lambda: C.build_object(rosette(red), name)
+    return lambda: C.apply_v2_foliage(C.build_object(rosette(red), name), mode="cover")
 
 
 if __name__ == "__main__":
     small = {"elevation_deg": 22.0, "closeup": True, "res": (900, 900)}
-    C.run(build_variant(False, "bromelia"), name="bromelia", budget=110, target="~1 u tall, ~1.6 u wide",
+    C.run(build_variant(False, "bromelia"), name="bromelia", budget=150, target="~1 u tall, ~1.6 u wide",
           preview_kw=small)
-    C.run(build_variant(True, "bromelia-centro-vermelho"), name="bromelia-centro-vermelho", budget=110,
+    C.run(build_variant(True, "bromelia-centro-vermelho"), name="bromelia-centro-vermelho", budget=150,
           target="~1 u tall, ~1.6 u wide", preview_kw=small)

@@ -36,9 +36,12 @@ NEEDLES_UNDER = C.ramp("leaf", 0)
 
 
 def plate(m: C.Mesh, centre, r, h, twist):
-    """A grimpa tuft: a flat 6-sided plate, narrow below and wide on top."""
-    m.slab(centre, r * 0.5, r * 0.5, h, 6, NEEDLES, twist=twist, taper=1 / 0.5,
+    """A grimpa tuft: a shrunken 6-sided bowl core plus radial needle-cluster fringe."""
+    c = Vector(centre)
+    m.slab(c, r * 0.45, r * 0.45, h, 6, NEEDLES, twist=twist, taper=1 / 0.48,
            colour_top=NEEDLES_TOP, colour_bottom=NEEDLES_UNDER)
+    m.leaf_fringe(c + Vector((0, 0, h * 0.65)), r * 0.92, r * 0.92, h * 0.55, 3, NEEDLES_TOP,
+                  colour_alt=C.ramp("leaf", 3), length=0.95, width=0.55, z_min=-0.2, z_max=0.75, seed=int(abs(twist * 100)) + 3)
 
 
 def build():
@@ -72,8 +75,8 @@ def build():
 
     # Crown centre on the trunk top.
     plate(m, (0, 0, 12.65), 1.15, 0.75, 0.0)
-    return C.build_object(m, "araucaria")
+    return C.apply_v2_foliage(C.build_object(m, "araucaria"), mode="tree")
 
 
 if __name__ == "__main__":
-    C.run(build, name="araucaria", budget=400, target="12-14 u (canopy)", preview_kw=C.TREE_VIEW)
+    C.run(build, name="araucaria", budget=450, target="12-14 u (canopy)", preview_kw=C.TREE_VIEW)

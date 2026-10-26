@@ -89,11 +89,13 @@ def cluster(anchor: Vector) -> C.Mesh:
 
 
 def build():
-    root = C.build_object(palm(), "palmeira-jucara")
+    palm_mesh = palm()
+    palm_mesh.leaf_fringe((0.06, 0.0, SHAFT_TOP + 0.35), 2.1, 2.1, 0.95, 18, C.ramp("leaf", 3), colour_alt=FROND, length=1.25, width=0.48, seed=23)
+    root = C.build_object(palm_mesh, "palmeira-jucara")
     anchor = Vector((0.06, 0, SHAFT_BOTTOM - 0.05)) + Vector((-0.55, -0.83, 0)).normalized() * 0.12
     C.build_object(cluster(anchor), "cacho-frutos", parent=root, pivot=anchor)
-    return root
+    return C.apply_v2_foliage(root, mode="tree")
 
 
 if __name__ == "__main__":
-    C.run(build, name="palmeira-jucara", budget=400, target="~8 u (understorey/mid-storey)", preview_kw=C.TREE_VIEW)
+    C.run(build, name="palmeira-jucara", budget=450, target="~8 u (understorey/mid-storey)", preview_kw=C.TREE_VIEW)

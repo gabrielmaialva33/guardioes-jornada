@@ -81,8 +81,9 @@ def build():
     leader = fork + Vector((0.05, -0.05, 3.0))
     m.tube([fork, leader], [0.2, 0.13], 4, BRANCH, cap_end=True, twist=math.pi / 4)
     palmate_leaf(m, leader + Vector((0, 0, 0.14)), Vector((0, 0, 1)), 1.55, 7, 0.2, LEAF)
-    return C.build_object(m, "embauba")
+    m.leaf_fringe(leader + Vector((0, 0, -0.15)), 1.9, 1.9, 0.85, 16, C.ramp("leaf", 3), colour_alt=LEAF, length=1.05, width=0.58, seed=17)
+    return C.apply_v2_foliage(C.build_object(m, "embauba"), mode="tree")
 
 
 if __name__ == "__main__":
-    C.run(build, name="embauba", budget=400, target="~10 u (canopy tier floor)", preview_kw=C.TREE_VIEW)
+    C.run(build, name="embauba", budget=450, target="~10 u (canopy tier floor)", preview_kw=C.TREE_VIEW)

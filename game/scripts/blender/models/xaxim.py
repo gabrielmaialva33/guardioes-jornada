@@ -140,8 +140,9 @@ def build():
         tip_z = -0.45 - 0.18 * (i % 3)
         add_arched_fern_frond(m, top + Vector((0, 0, -0.06)), a, reach, rise, tip_z, 0.36, FROND, FROND_UNDER)
 
-    return C.build_object(m, "xaxim")
+    m.leaf_fringe(top + Vector((0, 0, 0.65)), 2.2, 2.2, 0.85, 16, FROND_YOUNG, colour_alt=FROND, length=0.95, width=0.42, seed=61)
+    return C.apply_v2_foliage(C.build_object(m, "xaxim"), mode="tree")
 
 
 if __name__ == "__main__":
-    C.run(build, name="xaxim", budget=400, target="~6 u (understorey)", preview_kw=C.TREE_VIEW)
+    C.run(build, name="xaxim", budget=450, target="~6 u (understorey)", preview_kw=C.TREE_VIEW)

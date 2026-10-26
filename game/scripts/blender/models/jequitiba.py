@@ -37,6 +37,19 @@ def build():
     m = C.Mesh("jequitiba-rosa")
     m.tube([(0, 0, 0), (0, 0, 0.9), (0, 0, 12.6)], [1.5, 1.0, 0.66], 6, BARK, cap_end=False, twist=0.2)
 
+    # 4 flared buttress roots (sapopemas) at the base of the emergent trunk (z = 0..2.8 u)
+    for k in range(4):
+        ang = k * (math.pi / 2) + 0.35
+        d = Vector((math.cos(ang), math.sin(ang), 0))
+        s = Vector((-d.y, d.x, 0)) * 0.22
+        p_in_bot = d * 0.85
+        p_out_bot = d * 2.25
+        p_in_top = d * 0.72 + Vector((0, 0, 2.8))
+        p_out_mid = d * 1.35 + Vector((0, 0, 1.35))
+        m.add_out([p_in_bot - s, p_out_bot, p_out_mid, p_in_top - s * 0.5], BARK, (0, 0, 1.0))
+        m.add_out([p_in_bot + s, p_in_top + s * 0.5, p_out_mid, p_out_bot], BARK, (0, 0, 1.0))
+        m.add_out([p_out_bot - s * 0.4, p_out_bot + s * 0.4, p_out_mid, p_in_top], BARK, (0, 0, 1.0))
+
     # Thick limbs opening the umbrella.
     limbs = [(0.3, 3.2, 14.6), (1.9, 3.0, 14.4), (3.4, 3.3, 14.8), (4.8, 2.8, 14.5)]
     for a, reach, ztop in limbs:
@@ -44,16 +57,20 @@ def build():
         m.tube([Vector((0, 0, 11.4)) + d * 0.2, d * reach + Vector((0, 0, ztop))], [0.5, 0.3], 5, BARK,
                cap_end=False, twist=a)
 
-    # The umbrella: a broad, flat-bottomed block ...
-    m.chunk((0, 0, 13.3), 5.9, 5.6, 3.0, 8, CROWN_LOW, chamfer=0.36, twist=math.radians(11), top_scale=0.8)
-    # ... domed by a ring of lobes and a crown lobe, globose on top.
-    lobes = [(0.55, 4.1, 14.6, 2.6), (2.15, 3.9, 14.8, 2.45), (3.7, 4.2, 14.5, 2.55), (5.2, 3.8, 14.7, 2.5)]
-    for a, r, z, size in lobes:
-        m.chunk((math.cos(a) * r, math.sin(a) * r, z), size, size * 0.92, 2.3, 6, CROWN_HIGH, chamfer=0.3,
-                twist=a)
-    m.chunk((0.2, -0.1, 15.85), 3.1, 2.9, 2.15, 6, CROWN_HIGH, chamfer=0.32, twist=0.4)
-    return C.build_object(m, "jequitiba-rosa")
+    # Shrunken smooth umbrella core (shrink = 0.88) + opaque chunky leaf fringe (ART.md v2)
+    m.chunk((0, 0, 13.35), 5.9 * 0.88, 5.6 * 0.88, 2.8, 8, CROWN_LOW, chamfer=0.36, twist=math.radians(11), top_scale=0.82)
+    m.leaf_fringe((0, 0, 14.75), 5.6, 5.3, 1.45, 38, CROWN_HIGH, colour_alt=C.ramp("leaf", 3), length=1.55, width=0.88, z_min=-0.65, z_max=0.65, seed=11)
+
+    lobes = [(0.55, 4.0, 14.6, 2.5), (2.15, 3.8, 14.8, 2.35), (3.7, 4.1, 14.5, 2.45), (5.2, 3.7, 14.7, 2.4)]
+    for idx, (a, r, z, size) in enumerate(lobes):
+        cx, cy = math.cos(a) * r, math.sin(a) * r
+        m.chunk((cx, cy, z), size * 0.88, size * 0.82, 2.15, 6, CROWN_HIGH, chamfer=0.32, twist=a)
+        m.leaf_fringe((cx, cy, z + 1.1), size * 0.95, size * 0.88, 1.15, 10, CROWN_HIGH, colour_alt=C.ramp("leaf", 3), length=1.35, width=0.78, seed=20 + idx)
+
+    m.chunk((0.2, -0.1, 15.85), 3.1 * 0.88, 2.9 * 0.88, 2.15, 6, CROWN_HIGH, chamfer=0.32, twist=0.4)
+    m.leaf_fringe((0.2, -0.1, 16.9), 3.0, 2.8, 1.1, 14, C.ramp("leaf", 3), colour_alt=CROWN_HIGH, length=1.35, width=0.78, z_min=-0.3, z_max=0.92, seed=99)
+    return C.apply_v2_foliage(C.build_object(m, "jequitiba-rosa"), mode="tree")
 
 
 if __name__ == "__main__":
-    C.run(build, name="jequitiba-rosa", budget=400, target="~18 u (emergent)", preview_kw=C.TREE_VIEW)
+    C.run(build, name="jequitiba-rosa", budget=700, target="~18 u (emergent)", preview_kw=C.TREE_VIEW)

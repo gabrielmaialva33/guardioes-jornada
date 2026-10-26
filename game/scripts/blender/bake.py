@@ -466,13 +466,34 @@ def main() -> None:
                 stem = custom_in.stem
                 out_name = f"{stem}.glb" if stem.startswith("custom-") else f"custom-{stem}.glb"
                 out_target = MODELS_DIR / out_name
-                is_attachment = any(
-                    k in stem for k in ("bico-", "juba-", "rosetas-", "garras-", "silhueta")
+                v2_foliage_or_att = any(
+                    k in stem
+                    for k in (
+                        "bico-",
+                        "juba-",
+                        "rosetas-",
+                        "garras-",
+                        "silhueta",
+                        "araucaria",
+                        "embauba",
+                        "ipe-amarelo",
+                        "ipe-rosa",
+                        "jequitiba-rosa",
+                        "palmeira-jucara",
+                        "xaxim",
+                        "pau-brasil",
+                        "jeriva",
+                        "mangue-vermelho",
+                        "bromelia",
+                        "samambaia",
+                        "flores-mata",
+                        "serapilheira",
+                    )
                 )
                 with tempfile.TemporaryDirectory() as tmp:
                     recolored = Path(tmp) / out_name
                     recolor.recolor_custom_glb(custom_in, recolored, cmap)
-                    if is_attachment:
+                    if v2_foliage_or_att:
                         pre_raw = len(recolored.read_bytes())
                         pre_gz = len(gzip.compress(recolored.read_bytes(), compresslevel=9))
                         subprocess.run(
@@ -488,6 +509,8 @@ def main() -> None:
                                 "-kn",
                                 "-vtf",
                                 "-vpf",
+                                "-vn",
+                                "12",
                             ],
                             check=True,
                             stdout=subprocess.PIPE,
@@ -498,7 +521,7 @@ def main() -> None:
                         deltas.append(
                             {
                                 "file": out_target.name,
-                                "gpu": "direct-pack (character attachment)",
+                                "gpu": "direct-pack v2 (preserves volume/up normals -vn 12 & 3-step gradient COLOR_0)",
                                 "preRawBytes": pre_raw,
                                 "postRawBytes": post_raw,
                                 "deltaRawBytes": post_raw - pre_raw,
