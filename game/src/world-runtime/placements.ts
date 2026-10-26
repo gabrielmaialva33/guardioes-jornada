@@ -1,6 +1,7 @@
 import { Box3, BoxGeometry, CylinderGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
 import araucaria from '../assets/models/custom-araucaria.glb?url';
 import bromelia from '../assets/models/custom-bromelia.glb?url';
+import bromeliaRed from '../assets/models/custom-bromelia-centro-vermelho.glb?url';
 import embauba from '../assets/models/custom-embauba.glb?url';
 import ipeAmarelo from '../assets/models/custom-ipe-amarelo.glb?url';
 import ipeRosa from '../assets/models/custom-ipe-rosa.glb?url';
@@ -17,6 +18,7 @@ import {
 	lodProfilesFor,
 	type Quality
 } from '../render/index.ts';
+import { visualStep } from '../render/stylized.ts';
 import { disposeModel, loadModel } from '../scene/avatar.ts';
 import { RAMPS } from '../style/palette.ts';
 import type { Placements, SurvivalWorld } from '../survival/types.ts';
@@ -50,6 +52,15 @@ export async function loadWorldPlacements(
 	signal: AbortSignal,
 	trails: readonly Trail[] = []
 ) {
+	const decorations = {
+		...world.decorations,
+		kinds: [...world.decorations.kinds, 'bromelia-red'],
+		kind: world.decorations.kind.slice()
+	};
+	for (let i = 0; i < decorations.count; i++)
+		if (decorations.kinds[decorations.kind[i]] === 'bromelia' && i % 3 === 0)
+			decorations.kind[i] = decorations.kinds.length - 1;
+	const grassy = (kind: string) => ['grass', 'fern', 'beach-grass'].includes(kind);
 	const source = new Group(),
 		categories: Record<string, LodCategory> = {},
 		scales: Record<string, number> = {},
@@ -73,7 +84,8 @@ export async function loadWorldPlacements(
 				[...counts].map(async ([kind, count]) => {
 					const name = `${family}:${kind}`;
 					let model: Group | Mesh;
-					if (family === 'cover' && kind === 'bromelia') model = await loadModel(bromelia, signal);
+					if (family === 'cover' && kind.startsWith('bromelia'))
+						model = await loadModel(kind === 'bromelia-red' ? bromeliaRed : bromelia, signal);
 					else if (family === 'tree' && treeFiles[kind]) model = await loadModel(treeFiles[kind], signal);
 					else if (family !== 'tree' && kit.getObjectByName(props[kind])) {
 						const node = kit.getObjectByName(props[kind]);
@@ -93,7 +105,12 @@ export async function loadWorldPlacements(
 							if (node instanceof Mesh) {
 								const convert = (m: import('three').Material) => {
 									const copy = m.clone();
-									copy.userData = { ...copy.userData, vegetation: true, cover: family === 'cover' };
+									copy.userData = {
+										...copy.userData,
+										vegetation: true,
+										cover: family === 'cover',
+										groundTint: family === 'cover' && grassy(kind)
+									};
 									m.dispose();
 									return copy;
 								};
@@ -138,11 +155,13 @@ export async function loadWorldPlacements(
 			for (const [family, placements] of [
 				['tree', world.trees],
 				['rock', world.rocks],
-				['cover', world.decorations]
+				['cover', decorations]
 			] as const)
 				addPlacements(placements, (kind) => pools.get(`${family}:${kind}`), {
-					colorFor: (_kind, i) =>
-						family === 'cover' ? terrainTint(world, placements.x[i], placements.z[i], trails) : null,
+					colorFor: (kind, i) =>
+						family === 'cover' && grassy(kind) && visualStep() >= 1
+							? terrainTint(world, placements.x[i], placements.z[i], trails)
+							: null,
 					scaleFor: (kind) => scales[`${family}:${kind}`]
 				});
 		} catch (error) {
