@@ -11,7 +11,12 @@ const collision = new CollisionWorld([{ geometry }]);
 geometry.dispose();
 const sample = new AvatarGroundContext(collision, world, level);
 const input = createAvatarInput();
-const character = { position: new Vector3(), previousPosition: new Vector3(), groundNormal: new Vector3(0, 1, 0), grounded: true };
+const character = {
+	position: new Vector3(),
+	previousPosition: new Vector3(),
+	groundNormal: new Vector3(0, 1, 0),
+	grounded: true
+};
 
 it('balances on authored stone tops and sloping bridge decks, never on the riverbed below', () => {
 	const stone = level.obbies.find((o) => o.id === 'stones')?.pieces[0];
@@ -21,7 +26,11 @@ it('balances on authored stone tops and sloping bridge decks, never on the river
 	expect(input.surface).toBe('narrow');
 	const bridge = world.crossings.find((c) => c.kind === 'bridge');
 	if (!bridge) throw new Error('bridge');
-	character.position.set((bridge.from.x + bridge.to.x) / 2, (bridge.from.y + bridge.to.y) / 2, (bridge.from.z + bridge.to.z) / 2);
+	character.position.set(
+		(bridge.from.x + bridge.to.x) / 2,
+		(bridge.from.y + bridge.to.y) / 2,
+		(bridge.from.z + bridge.to.z) / 2
+	);
 	sample.update(input, character);
 	expect(input.surface).toBe('narrow');
 	character.position.y -= 1.5;
@@ -57,6 +66,7 @@ it('uses facing-relative ground normals and a real down-probe at a ledge', () =>
 	expect(input.edgeAhead).toBeLessThan(0.4);
 	// Movement direction wins over facing: walking back away from the edge is safe.
 	character.previousPosition.z = 4.9;
+	input.speed = 2;
 	sample.update(input, character);
 	expect(input.edgeAhead).toBe(Infinity);
 });
