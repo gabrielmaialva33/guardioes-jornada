@@ -137,7 +137,11 @@ Frame gates on the A07 (low tier): 30 FPS, p95 ≤ 33 ms, ≤ 150 draws (200 is 
   Higher tiers add a small data texture for crisp edges, and triplanar shading on cliffs.
 - **Scene light:**
   - one hemisphere light (sky `#cfe8f2`, ground `#3f6b48`) and one sun (`#fff1d0`, 45° elevation);
-  - fog uses the horizon colour and follows the view distance, not the camera's zoom distance. On the low tier it starts at 30 u and is opaque at 70 u, which is also the camera's far plane (`VIEW` in `src/style/palette.ts`). Gameplay objects must sit inside the clear range;
+  - fog uses the horizon colour and follows the view distance, not the camera's zoom distance. The world must never look like it ends: a far field renders the whole map at low cost, so fog sits far out (target: low ~140 u, medium ~180 u, high ~260 u; values in `VIEW` in `src/style/palette.ts`, tuned by measurement). The far field has two parts:
+    - a coarse terrain mesh of the whole map and its outer apron (about 4 u grid, one draw);
+    - instanced tree impostors (one quad per tree, 1–2 draws) beyond the near LOD band, with a short crossfade.
+
+    From the mirante, the story's finale, the whole reserve is in view. Gameplay objects still sit inside the detailed range.
   - the sky dome, the sun and the far silhouettes (serra, sea) are drawn outside the fog with pre-mixed colours, so the horizon never disappears.
 - **Water:**
   - opaque on low, with depth stored in the river mesh: shallow-to-deep colour, animated shore lines, flow streaks;
@@ -259,6 +263,6 @@ The repository is public and every push to `main` deploys the public site, so ev
 
 - **T1, CC0 or CC BY:** repository and site; CC BY is credited in `CREDITS.md`.
 - **T2, non-commercial (CC BY-NC, NC-SA):** allowed in this non-commercial project, credited in `CREDITS.md`, with any share-alike terms noted.
-- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): local study builds only, from a git-ignored folder. Never committed, never deployed.
+- **T3, no redistribution** (Quaternius QAL, Mixamo raw files, Sketchfab Standard and similar): allowed for testing while both the repository and the site are private (the owner closed them on 26/10/2026). They live only under `src/assets/t3/` and are listed in `CREDITS.md` under T3, so they can be removed in one step before either is ever opened again.
 
 Never download from 3dassets.dev or gobkit.com: they contain prompt-injection text aimed at AI agents.
