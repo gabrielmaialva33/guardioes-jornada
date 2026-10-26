@@ -333,6 +333,8 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	let thumb: AvatarInstance | undefined;
 	let thumbLoading = false;
 	let thumbFailed = false;
+	/** The render-target variant of the avatar's shaders is compiled (it outputs linear colour). */
+	let thumbShaders = false;
 	let job: { key: string; ready: boolean; failed: boolean } | null = null;
 
 	const setStatus = (next: StageStatus) => {
@@ -370,11 +372,31 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	};
 
 	/** One key per call: start its skin change, then (a later frame) render it. See ThumbnailWork. */
+	/**
+	 * Compiles every program the preview can need for `renderTarget`, in parallel where the
+	 * driver allows: three only compiles visible objects, so the hidden hair accessory is
+	 * shown for the (synchronous) compile call. Resolves when the programs are ready.
+	 */
+	const compile = (renderTarget: WebGLRenderTarget | null, view: PerspectiveCamera): Promise<unknown> => {
+		const hair = avatar?.model.getObjectByName('avatar-hair-accessory');
+		const shown = hair?.visible ?? false;
+		if (hair) hair.visible = true;
+		renderer.setRenderTarget(renderTarget);
+		let done: Promise<unknown> = Promise.resolve();
+		try {
+			done = renderer.compileAsync?.(scene, view) ?? done;
+		} finally {
+			renderer.setRenderTarget(null);
+			if (hair) hair.visible = shown;
+		}
+		return done;
+	};
+
 	const work = (key: string): HTMLCanvasElement | null | undefined => {
 		const request = requests.get(key);
 		if (!request) return undefined;
 		const model = thumb;
-		if (!model) return null;
+		if (!model || !thumbShaders) return null;
 		if (!job || job.key !== key) {
 			const current = { key, ready: false, failed: false };
 			job = current;
@@ -453,6 +475,15 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			setStatus('ready');
 			options.onready?.(metrics());
 			loadThumbnailAvatar();
+			compile(target, thumbCamera).then(
+				() => {
+					thumbShaders = true;
+					wake();
+				},
+				() => {
+					thumbShaders = true;
+				}
+			);
 		}
 	};
 
@@ -648,7 +679,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			camera.position.set(placement.x, placement.y, placement.z);
 			camera.lookAt(0, placement.targetY, 0);
 			// Parallel shader compile where the driver has it: the first frame does not block on it.
-			await renderer.compileAsync?.(scene, camera);
+			await compile(null, camera);
 			compileMs = host.now() - compileStarted;
 			if (disposed) return;
 			dirty = true;

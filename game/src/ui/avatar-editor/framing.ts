@@ -24,10 +24,11 @@ export interface Framing {
 }
 
 export const FRAMINGS: Readonly<Record<FramingId, Readonly<Framing>>> = {
-	// From under the pedestal (−0.3) to above the tallest hair (3.3), plus a margin.
-	body: { targetY: 1.42, height: 4.15, width: 3.1, pitch: 7 * DEG, yaw: -0.38 },
+	// From under the pedestal (−0.3) to above the tallest hair (3.4), with room for the
+	// title over the top and the hint under the feet.
+	body: { targetY: 1.5, height: 5.3, width: 3.4, pitch: 8 * DEG, yaw: -0.38 },
 	// The head block (2.1 to 3.0) with the bun, afro and cap above it, and the shoulders' tops.
-	head: { targetY: 2.62, height: 1.75, width: 1.75, pitch: 4 * DEG, yaw: -0.18 }
+	head: { targetY: 2.68, height: 2.2, width: 2.0, pitch: 4 * DEG, yaw: -0.18 }
 };
 
 /** Square thumbnails: the same idea, tighter, since there is no pedestal. */
