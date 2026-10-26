@@ -1,5 +1,7 @@
 # Local Forest Vegetation Implementation Plan
 
+> **Policy update, 26/10/2026:** the owner subsequently authorized direct reuse of the Green Hell collection (`game/PARK.md` §10). The reference-only, no-metadata and no-shipping constraints below record the original study implementation scope; they are superseded as ongoing project policy. The completed DEV integration and its validation record remain historical facts. Production pack integration is separate implementation work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add layered, habitat-aware understorey from the corrected local extraction to the study forest.
