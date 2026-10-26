@@ -32,25 +32,14 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 	const loading = new LoadingProgress();
 	const host = document.createElement('div');
 	element.append(host);
+	// Goldens capture the world as it is: no screen over it.
+	const showsScreen = !golden.enabled;
 	let screen: ReturnType<typeof mount> | undefined;
 	const removeScreen = () => {
 		if (screen) void unmount(screen);
 		screen = undefined;
 		host.remove();
 	};
-	// Goldens capture the world as it is: no screen over it.
-	if (!golden.enabled) {
-		screen = mount(LoadingScreen, {
-			target: host,
-			props: {
-				model: loading,
-				firstFact: Math.floor(Math.random() * FACTS.length),
-				onexit: () => bridge.exit(),
-				ondone: removeScreen
-			}
-		});
-		flushSync();
-	}
 	let game: GameDispose | undefined;
 	let attempt = 0;
 	let disposed: Promise<void> | undefined;
@@ -64,16 +53,14 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 					game = mountWorld(element, bridge, { loading });
 				} catch (error) {
 					loading.fail(error);
-					if (!screen) throw error;
+					if (!showsScreen) throw error;
 					return;
 				}
-				// A game that does not report its tasks (no wiring yet) is shown as soon as it mounts.
-				requestAnimationFrame(() => {
-					if (!disposed && current === attempt && !loading.tracksWorld) loading.ready();
-				});
+				// A game that does not report its tasks (main.ts without `reportsLoading`) is shown once mounted.
+				if (!('reportsLoading' in module && module.reportsLoading === true)) loading.ready();
 			},
 			(error: unknown) => {
-				if (!screen) throw error;
+				if (!showsScreen) throw error;
 			}
 		);
 	};
@@ -84,7 +71,20 @@ export function mountGame(element: HTMLElement, bridge: GameBridge): GameDispose
 			if (!disposed) start();
 		});
 	};
+	// The game chunk starts downloading first; the screen paints while it parses.
 	start();
+	if (showsScreen) {
+		screen = mount(LoadingScreen, {
+			target: host,
+			props: {
+				model: loading,
+				firstFact: Math.floor(Math.random() * FACTS.length),
+				onexit: () => bridge.exit(),
+				ondone: removeScreen
+			}
+		});
+		flushSync();
+	}
 	return () => {
 		if (!disposed)
 			disposed = (async () => {

@@ -85,7 +85,10 @@
 		<svg class="land mid" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
 			<path d="M0 400V262C100 240 180 208 280 226S450 272 560 240 760 188 880 214 1080 262 1200 230V400Z" />
 			<!-- Araucárias standing out on the ridge, far away. -->
-			{#each ridge as [x, y] (x)}<path transform="translate({x} {y - 119}) scale(0.42)" d={ARAUCARIA} />{/each}
+			{#each ridge as [x, y] (x)}<path
+					transform="translate({x} {y - 119}) scale(0.42)"
+					d={ARAUCARIA}
+				/>{/each}
 		</svg>
 		<svg class="land back" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
 			{#each back as [x, y, r] (x)}<circle cx={x} cy={y} {r} />{/each}
@@ -103,12 +106,17 @@
 		<div class="content">
 			<header>
 				<h1>Trilha secreta</h1>
-				{#if view.phase !== 'error'}<p class="stage">{view.label}…</p>{/if}
+				{#if view.phase !== 'error'}<p class="stage">
+						{view.label}{view.label.endsWith('!') ? '' : '…'}
+					</p>{/if}
 			</header>
 			{#if view.phase === 'error'}
 				<section class="card" role="alert">
 					{#if view.error === 'unsupported'}
-						<p>Este aparelho não consegue abrir o mundo 3D da trilha. Sua jornada continua no app!</p>
+						<p>
+							Este aparelho não consegue abrir o mundo 3D da trilha. Sua jornada continua funcionando
+							normalmente!
+						</p>
 						<div class="actions"><button type="button" onclick={() => onexit?.()}>Voltar</button></div>
 					{:else}
 						<p>Não foi possível abrir a clareira.</p>
@@ -133,7 +141,7 @@
 			aria-valuemin="0"
 			aria-valuemax="100"
 			aria-valuenow={view.percent}
-			aria-valuetext={`${view.label}: ${view.percent}%`}
+			aria-valuetext={`${view.label} (${view.percent}%)`}
 		>
 			<div class="path"></div>
 			<div class="prints"></div>
