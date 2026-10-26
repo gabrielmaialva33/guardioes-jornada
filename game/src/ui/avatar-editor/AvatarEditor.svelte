@@ -13,6 +13,7 @@
 	import type { Quality } from '../../render/quality.ts';
 	import {
 		buildSwatches,
+		CLOTHES,
 		cloneProfile,
 		EDITOR_TABS,
 		type EditorOption,
@@ -86,6 +87,13 @@
 	let thumbVersion = $state(0);
 	let degrees = $state(0);
 	let dragHint = $state(true);
+	/** The Roupas tab's piece: camiseta, calça or sapatos. */
+	let piece = $state<(typeof CLOTHES)[number]>('shirt');
+	const PIECE_TITLES: Record<(typeof CLOTHES)[number], string> = {
+		shirt: 'Cor da camiseta',
+		pants: 'Cor da calça',
+		shoes: 'Cor dos sapatos'
+	};
 	let closed = false;
 
 	const motionQuery =
@@ -210,9 +218,18 @@
 	}
 
 	function selectTab(id: TabId, focus: boolean) {
+		if (id !== tab) document.getElementById('avatar-editor-panel')?.scrollTo(0, 0);
 		tab = id;
 		message = '';
 		if (focus) document.getElementById(`avatar-editor-tab-${id}`)?.focus();
+	}
+
+	function pieceKey(event: KeyboardEvent, index: number) {
+		const next = tabMove(event.key, index, CLOTHES.length);
+		if (next === null) return;
+		event.preventDefault();
+		piece = CLOTHES[next];
+		document.getElementById(`avatar-editor-piece-${piece}`)?.focus();
 	}
 
 	function tabKey(event: KeyboardEvent, index: number) {
@@ -317,12 +334,12 @@
 	</div>
 {/snippet}
 
-{#snippet swatches(part: AvatarPart, title: string)}
+{#snippet swatches(part: AvatarPart, title: string, hideTitle = false)}
 	{@const list = SWATCHES[part]}
 	{@const value = draft.colors[part]}
 	{@const known = list.some((swatch) => swatch.hex === value)}
 	<div class="swatch-block">
-		<h3 id={`avatar-editor-${part}`}>{title}</h3>
+		<h3 id={`avatar-editor-${part}`} class:sr-only={hideTitle}>{title}</h3>
 		<div class="swatches">
 			<div class="swatch-group" role="radiogroup" aria-labelledby={`avatar-editor-${part}`}>
 				{#each list as swatch, i (swatch.hex)}
@@ -445,9 +462,31 @@
 								O boné usa a cor da camiseta.
 							</p>{/if}
 					{:else if tab === 'clothes'}
-						{@render swatches('shirt', 'Camiseta')}
-						{@render swatches('pants', 'Calça')}
-						{@render swatches('shoes', 'Sapatos')}
+						<div class="pieces" role="tablist" aria-label="Peças de roupa">
+							{#each CLOTHES as part, i (part)}
+								<button
+									type="button"
+									role="tab"
+									class="piece"
+									id={`avatar-editor-piece-${part}`}
+									aria-selected={piece === part}
+									aria-controls="avatar-editor-piece-panel"
+									tabindex={piece === part ? 0 : -1}
+									onclick={() => (piece = part)}
+									onkeydown={(event) => pieceKey(event, i)}
+									><span class="piece-dot" style:--swatch={draft.colors[part]}></span>{PART_LABELS[
+										part
+									]}</button
+								>
+							{/each}
+						</div>
+						<div
+							id="avatar-editor-piece-panel"
+							role="tabpanel"
+							aria-labelledby={`avatar-editor-piece-${piece}`}
+						>
+							{@render swatches(piece, PIECE_TITLES[piece], true)}
+						</div>
 						<p class="hint">O dourado fica para os objetivos da trilha.</p>
 					{:else}
 						{@render grid(options, 'Skins da Kenney', 'skins')}
@@ -689,7 +728,13 @@
 		touch-action: pan-y;
 		border: 1px solid #ffffff26;
 		border-radius: 18px;
-		background: #173a2b;
+		/* Scroll shadows: a dark edge appears only where there is more to scroll to. */
+		background:
+			linear-gradient(#173a2b 40%, #173a2b00) top / 100% 28px no-repeat local,
+			linear-gradient(#173a2b00, #173a2b 60%) bottom / 100% 28px no-repeat local,
+			radial-gradient(farthest-side at 50% 0, #0009, #0000) top / 100% 12px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, #0009, #0000) bottom / 100% 12px no-repeat scroll,
+			#173a2b;
 	}
 	fieldset {
 		display: grid;
@@ -704,6 +749,35 @@
 		font-size: 0.8rem;
 		font-weight: 700;
 		color: #d4e8d6;
+	}
+	.pieces {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 6px;
+	}
+	.piece {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-width: 0;
+		padding: 6px 8px;
+		border-radius: 999px;
+		font-weight: 700;
+		font-size: 0.8rem;
+	}
+	.piece[aria-selected='true'] {
+		background: #f1f6ed;
+		border-color: #f1f6ed;
+		color: #173a2b;
+	}
+	.piece-dot {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		border: 2px solid #ffffff99;
+		border-radius: 50%;
+		background: var(--swatch);
 	}
 	.hint {
 		margin: 0;
@@ -745,7 +819,8 @@
 		grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
 	}
 	.grid.big {
-		grid-template-columns: repeat(auto-fill, minmax(110px, 150px));
+		grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+		max-width: 26rem;
 	}
 	.tile {
 		position: relative;

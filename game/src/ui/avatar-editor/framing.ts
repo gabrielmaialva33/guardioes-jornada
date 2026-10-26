@@ -28,7 +28,8 @@ export const FRAMINGS: Readonly<Record<FramingId, Readonly<Framing>>> = {
 	// title over the top and the hint under the feet.
 	body: { targetY: 1.5, height: 5.3, width: 3.4, pitch: 8 * DEG, yaw: -0.38 },
 	// The head block (2.1 to 3.0) with the bun, afro and cap above it, and the shoulders' tops.
-	head: { targetY: 2.68, height: 2.2, width: 2.0, pitch: 4 * DEG, yaw: -0.18 }
+	// Centred low enough that the drag hint under it covers the chest, never the mouth.
+	head: { targetY: 2.5, height: 2.6, width: 2.2, pitch: 4 * DEG, yaw: -0.18 }
 };
 
 /** Square thumbnails: the same idea, tighter, since there is no pedestal. */
