@@ -28,6 +28,7 @@
 		ShadowRig,
 		applyFog,
 		createHemisphere,
+		applyHemisphere,
 		debugSnapshot,
 		collectTextures,
 		textureBytes,
@@ -89,11 +90,14 @@
 	let goldenFrames = 0;
 	let goldenPlaced = false;
 	let visualTime = 0;
+	let lightPhase: NonNullable<LifeFrame['light']> =
+		golden.enabled && golden.night ? 'night' : untrack(() => environment.streaming?.light(0) ?? 'day');
 	const camera = new PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, fogSettings(quality).far);
 	const visual = new Group();
 	const proxies = untrack(() => environment.createVisual());
 	const actor = new Group();
-	visual.add(proxies.object, actor, createHemisphere(golden.enabled && golden.night ? 'night' : 'daylight'));
+	const hemisphere = createHemisphere(lightPhase === 'night' ? 'night' : 'daylight');
+	visual.add(proxies.object, actor, hemisphere);
 	lighting.uHemisphereSky.value.set(
 		golden.enabled && golden.night ? LIGHT.night.hemisphereSky : LIGHT.daylight.hemisphereSky
 	);
@@ -101,7 +105,7 @@
 		golden.enabled && golden.night ? LIGHT.night.hemisphereGround : LIGHT.daylight.hemisphereGround
 	);
 	const shadows = new ShadowRig(renderer, { blobs: 48 });
-	if (golden.enabled && golden.night) shadows.setVariant('night');
+	if (lightPhase === 'night') shadows.setVariant('night');
 	visual.add(shadows.object);
 	shadows.addReceiver(proxies.object);
 	shadows.addCaster(proxies.object, 'static');
@@ -111,6 +115,7 @@
 	let life: LivingWorld | undefined;
 	let lifeRevision = -1;
 	const lifeFrame: LifeFrame = {
+		light: lightPhase,
 		dt: 0,
 		camera,
 		time: 0,
@@ -153,6 +158,7 @@
 	let lastHud = 0;
 	let splashUntil = 0;
 	let lastYaw = 0;
+	let stressRunning = false;
 	$effect(() => {
 		if (paused) input.releaseAll();
 		controller.resume();
@@ -178,7 +184,7 @@
 	function setQuality(next: Quality) {
 		quality = next;
 		budget.quality = next;
-		applyFog(scene, camera, fogSettings(next));
+		applyFog(scene, camera, fogSettings(next, lightPhase === 'night' ? 'night' : 'daylight'));
 		// The CSS sky is a gradient whose horizon matches the fog. Do not replace it with a flat clear colour.
 		scene.background = null;
 		shadows.setTier(next, scene);
@@ -187,7 +193,7 @@
 			camera.far = 120;
 			camera.updateProjectionMatrix();
 		}
-		if (golden.enabled && golden.night) {
+		if (lightPhase === 'night') {
 			if (scene.fog) scene.fog.color.set(LIGHT.night.horizon);
 			lighting.uHemisphereSky.value.set(LIGHT.night.hemisphereSky);
 			lighting.uHemisphereGround.value.set(LIGHT.night.hemisphereGround);
@@ -203,7 +209,26 @@
 		const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
 		return {
 			...debugSnapshot(),
-			...(debug && new URLSearchParams(location.search).has('textureDebug') ? { textureBreakdown: [...collectTextures(scene), ...(proxies.textures??[]), ...(lighting.uShadeMap.value?[lighting.uShadeMap.value]:[])].map(texture=>({name:texture.name,source:texture.source.uuid,format:texture.format,dataBytes:texture.image?.data?.byteLength,mips:texture.generateMipmaps,width:texture.image?.width??0,height:texture.image?.height??0,bytes:textureBytes([texture])})) } : {}),
+			...(debug && new URLSearchParams(location.search).has('textureDebug')
+				? {
+						textureBreakdown: [
+							...collectTextures(scene),
+							...(proxies.textures ?? []),
+							...(lighting.uShadeMap.value ? [lighting.uShadeMap.value] : [])
+						].map((texture) => {
+							const image = texture.image;
+							const width =
+								image && typeof image === 'object' && 'width' in image && typeof image.width === 'number'
+									? image.width
+									: 0;
+							const height =
+								image && typeof image === 'object' && 'height' in image && typeof image.height === 'number'
+									? image.height
+									: 0;
+							return { name: texture.name, width, height, bytes: textureBytes([texture]) };
+						})
+					}
+				: {}),
 			streaming: environment.streaming?.debug(),
 			goldenReady,
 			visualTime,
@@ -273,6 +298,7 @@
 		};
 	};
 	onMount(() => {
+		let stressHook: typeof globalThis.__gameStreamTest;
 		if (environment.story) environment.story.onGesture = avatarWiring.enqueue;
 		const abort = new AbortController();
 		setQuality(quality);
@@ -319,6 +345,51 @@
 			{ signal: abort.signal }
 		);
 		if (debug) globalThis.__gameDebug = readDebug;
+		if (
+			import.meta.env.DEV &&
+			debug &&
+			new URLSearchParams(location.search).has('streamStress') &&
+			environment.streaming
+		) {
+			const stream = environment.streaming;
+			const checkpoint = { ...environment.start, spawn: { ...environment.start.spawn } };
+			stressHook = {
+				async warm() {
+					const generator = stream.runtime?.generator;
+					if (!generator) return;
+					const jobs: Promise<unknown>[] = [];
+					for (let i = 0; i < 150; i++) jobs.push(generator.request(100 + i, 100, 0));
+					await Promise.all(jobs);
+				},
+				advance(x, z, yaw) {
+					if (!ready) return false;
+					if (!stressRunning) input.releaseAll();
+					stressRunning = true;
+					checkpoint.spawn.x = x;
+					checkpoint.spawn.z = z;
+					checkpoint.yaw = yaw;
+					if (!stream.update(checkpoint.spawn, yaw)) return false;
+					const height = stream.runtime?.height(x, z),
+						water = stream.water(x, z);
+					checkpoint.spawn.y = Math.max(height ?? 0, water !== null ? water + 0.7 : -Infinity) + 0.03;
+					controller.respawnAt(checkpoint);
+					controller.resume();
+					const frame = controller.update(1 / 60, input.sample(1 / 60), lens);
+					placeObject(actor, frame.position, yaw);
+					applyCameraPose(camera, frame.pose);
+					present(frame.position);
+					return true;
+				},
+				end() {
+					stressRunning = false;
+					input.releaseAll();
+					controller.respawnAt(environment.start);
+					stream.relocate(environment.start.spawn);
+					controller.resume();
+				}
+			};
+			globalThis.__gameStreamTest = stressHook;
+		}
 		if (golden.enabled)
 			globalThis.__gameGoldenMask = (hide) => {
 				proxies.setBackgroundVisible?.(!hide);
@@ -352,7 +423,13 @@
 			sound?.preloadEssential(abort.signal),
 			environment
 				.loadLife?.(quality, abort.signal, shadows.blobs, (event) => {
-					sound?.audio.play('howler', { x: event.x, y: event.y, z: event.z, gain: event.chorus ? 1.1 : 1 });
+					const origin = environment.streaming?.audioOrigin;
+					sound?.audio.play('howler', {
+						x: event.x - (origin?.x ?? 0),
+						y: event.y,
+						z: event.z - (origin?.z ?? 0),
+						gain: event.chorus ? 1.1 : 1
+					});
 				})
 				.then((value) => {
 					if (abort.signal.aborted) {
@@ -441,6 +518,7 @@
 				}
 			});
 		return () => {
+			if (globalThis.__gameStreamTest === stressHook) delete globalThis.__gameStreamTest;
 			avatarWiring.dispose();
 			abort.abort();
 			detach();
@@ -520,6 +598,25 @@
 	const budgetStage = useStage(Symbol('game-budget'), { before: mainStage });
 	useTask(
 		(delta) => {
+			if (stressRunning) {
+				visualTime += delta;
+				updateLife(delta, controller.frame.grounded, false);
+				animateAvatar(delta);
+				sound?.update(delta, camera, controller.frame, animator.footstep, animator.states.runWeight);
+				return;
+			}
+			const phase =
+				golden.enabled && golden.night ? 'night' : (environment.streaming?.light(visualTime) ?? 'day');
+			if (phase !== lightPhase) {
+				lightPhase = phase;
+				const variant = phase === 'night' ? 'night' : 'daylight';
+				applyHemisphere(hemisphere, variant);
+				shadows.setVariant(variant);
+				lighting.uHemisphereSky.value.set(LIGHT[variant].hemisphereSky);
+				lighting.uHemisphereGround.value.set(LIGHT[variant].hemisphereGround);
+				applyFog(scene, camera, fogSettings(quality, variant));
+				scene.background = null;
+			}
 			budget.beginFrame(performance.now());
 			if (!golden.enabled && governor.sample(delta * 1000)) dpr.set(governor.dpr);
 			if (!golden.enabled && governor.saturated >= 3 && quality !== 'low') {
@@ -634,12 +731,7 @@
 		() => {
 			lighting.uSunSpots.value = motion.matches ? 0 : 1;
 			lighting.uGameEye.value.copy(camera.position);
-			proxies.prepareFrame?.(
-				camera,
-				motion.matches ? 0 : visualTime,
-				quality,
-				(golden.enabled && golden.night) || environment.streaming?.light(visualTime) === 'night'
-			);
+			proxies.prepareFrame?.(camera, motion.matches ? 0 : visualTime, quality, lightPhase === 'night');
 			grid.update(camera);
 			shadows.blobs.sync();
 			const p = controller.frame.position;

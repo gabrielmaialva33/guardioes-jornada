@@ -192,6 +192,12 @@
 		story
 	});
 	let audioSettings = $state.raw(soundscape.audio.settings());
+	if (environment.streaming)
+		environment.streaming.onZoneChanged = (cut) =>
+			soundscape.setMap(
+				cut ? { world: cut.world, level: cut.level, zone: cut.id } : null,
+				cut ? { x: cut.offsetX, z: cut.offsetZ } : undefined
+			);
 	// Entering the trail was a tap: while that activation lasts the context may start at once.
 	if ((navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive)
 		void soundscape.audio.unlock();

@@ -74,6 +74,10 @@ export interface HudState {
 	debug: GameDebug | null;
 }
 declare global {
+	/** DEV-only deterministic streaming traversal; real-control gameplay has separate e2e coverage. */
+	var __gameStreamTest:
+		| { advance(x: number, z: number, yaw: number): boolean; warm(): Promise<void>; end(): void }
+		| undefined;
 	var __gameGoldenMask: ((hide: boolean) => void) | undefined;
 	var __gameDebug: (() => GameDebug) | undefined;
 }
