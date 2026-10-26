@@ -36,7 +36,7 @@ export function createLineupEnvironment(): SceneEnvironment {
 		collision,
 		grid,
 		placements: Object.keys(files).length,
-		target: { ...spawn, name: 'Escala de 3 metros' },
+		target: { ...spawn, name: 'Escala de 3 unidades' },
 		nextTarget() {},
 		createVisual() {
 			lighting.uShadeEnabled.value = 0;

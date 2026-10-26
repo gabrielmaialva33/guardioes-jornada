@@ -271,7 +271,7 @@
 	class="secret-game"
 	class:golden={golden.enabled}
 	class:choosing
-	style:background={`linear-gradient(${LIGHT.daylight.skyTop}, ${LIGHT.daylight.horizon} 65%)`}
+	style:background={`linear-gradient(${golden.enabled && golden.night ? LIGHT.night.skyTop : LIGHT.daylight.skyTop}, ${golden.enabled && golden.night ? LIGHT.night.horizon : LIGHT.daylight.horizon} 65%)`}
 	data-game-root
 	tabindex="-1"
 	role="application"
