@@ -8,6 +8,8 @@
  */
 
 import {
+	LinearFilter,
+	LinearMipmapLinearFilter,
 	type Material,
 	type MeshBasicMaterial,
 	MeshLambertMaterial,
@@ -47,6 +49,12 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 	};
 	const lit = source as Partial<MeshStandardMaterial & MeshBasicMaterial>;
 	const map = lit.map ? preparePaletteMap(lit.map) : null;
+	if (map && options.vegetation && map.image && map.image.width > 64) {
+		map.magFilter = LinearFilter;
+		map.minFilter = LinearMipmapLinearFilter;
+		map.generateMipmaps = true;
+		map.needsUpdate = true;
+	}
 	const material = new MeshLambertMaterial({
 		name: source.name,
 		map,
@@ -58,7 +66,7 @@ export function houseMaterial(source: Material, options: StylizedOptions = {}): 
 		alphaTest: source.alphaTest
 	});
 	if (lit.color) material.color.copy(lit.color);
-	if (options.cover) {
+	if (source.userData.groundTint === true) {
 		material.map = null;
 		material.color.set('#ffffff');
 	}

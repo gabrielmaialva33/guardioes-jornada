@@ -544,14 +544,16 @@ export class ShadowRig {
 		const casters = this.#settings.casters;
 		const cast = casters === 'all' || (casters === 'actors' && kind === 'actor');
 		object.traverse((child) => {
-			if ((child as Object3D & { isMesh?: boolean }).isMesh) child.castShadow = cast;
+			if ((child as Object3D & { isMesh?: boolean }).isMesh)
+				child.castShadow = cast && child.userData.noShadow !== true;
 		});
 	}
 
 	#applyReceiver(object: Object3D): void {
 		const receive = this.#settings.mapSize > 0;
 		object.traverse((child) => {
-			if ((child as Object3D & { isMesh?: boolean }).isMesh) child.receiveShadow = receive;
+			if ((child as Object3D & { isMesh?: boolean }).isMesh)
+				child.receiveShadow = receive && child.userData.noShadow !== true;
 		});
 	}
 }
