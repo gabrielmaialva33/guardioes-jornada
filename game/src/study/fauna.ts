@@ -624,6 +624,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 	#clock = 0;
 	#pending = 0;
 	#disposed = false;
+	readonly #still = typeof location !== 'undefined' && new URLSearchParams(location.search).has('golden');
 
 	constructor(host: StudyFaunaHost) {
 		this.#host = host;
@@ -688,6 +689,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 		}
 		actor.holder.position.set(actor.x, actor.y, actor.z);
 		actor.holder.rotation.y = actor.yaw + (actor.template.tuning.sideways ?? 0);
+		const radius = actor.template.blobRadius * actor.member.size;
+		if (actor.blob >= 0) this.#host.blobs?.set(actor.blob, actor.x, actor.y, actor.z, radius, 0);
 	}
 
 	/**
@@ -706,16 +709,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 	}
 
 	#placeStart(actor: StudyActor) {
-		const m = actor.member;
-		if (m.y !== null) actor.y = m.y;
-		else {
-			this.#ground.x = actor.x;
-			this.#ground.z = actor.z;
-			this.#ground.sample();
-			actor.y = this.#ground.y;
-		}
-		actor.holder.position.set(actor.x, actor.y, actor.z);
-		actor.holder.rotation.y = actor.yaw + (actor.template.tuning.sideways ?? 0);
+		if (actor.member.y !== null) actor.y = actor.member.y;
+		this.#pose(actor);
 	}
 
 	#valid(actor: StudyActor, x: number, z: number) {
@@ -1003,7 +998,8 @@ export class StudyFaunaRuntime implements StudyFauna {
 	}
 
 	update(frame: StudyFrame) {
-		if (this.#disposed) return;
+		// Golden captures are stills: the warm-up alone places the animals, the same way every run.
+		if (this.#disposed || this.#still) return;
 		const start = performance.now();
 		const dt = frame.dt > 0 ? Math.min(frame.dt, 0.1) : 0;
 		this.#clock += dt;
@@ -1035,11 +1031,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 				actor.mixer.update(dt);
 				actor.animated = true;
 			}
-			if (blobs && actor.blob >= 0) {
-				if (actor.visible)
-					blobs.set(actor.blob, actor.x, actor.y, actor.z, actor.template.blobRadius * actor.member.size, 0);
-				else blobs.hide(actor.blob);
-			}
+			if (blobs && actor.blob >= 0 && !actor.visible) blobs.hide(actor.blob);
 		}
 		this.#cpu[this.#cpuAt] = performance.now() - start;
 		this.#cpuAt = (this.#cpuAt + 1) % CPU_WINDOW;
