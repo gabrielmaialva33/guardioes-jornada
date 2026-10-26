@@ -3,6 +3,9 @@ export interface GameDebug {
 	visualTime?: number;
 	worldKind: string;
 	cameraYaw: number;
+	cameraMode?: string;
+	cameraDistance?: number;
+	canopiesFading?: number;
 	storyProgress: (number | undefined)[];
 	storyFinished: boolean;
 	fps: number;

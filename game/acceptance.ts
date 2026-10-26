@@ -395,6 +395,7 @@ try {
 		.slice(beforeDownload)
 		.filter((path) => path.startsWith(`/game-packs/${manifests[0].packId}/`));
 	assert.equal(downloadedA.filter((path) => path.endsWith('.m4a')).length, 0);
+	await writeFile(join(output, 'download-requests.json'), JSON.stringify(downloadedA, null, 2));
 	assert.equal(downloadedA.length, firstDownload.files);
 	const audioA = await packAudio(manifests[0].packId);
 	assert.deepEqual(audioA, {

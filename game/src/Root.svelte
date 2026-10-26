@@ -8,7 +8,7 @@
 	import { CheckpointTracker } from './engine/checkpoints.ts';
 	import { PlayerController } from './engine/controller.ts';
 	import { buildCollisionWorld, createGraybox } from './engine/graybox.ts';
-	import { InputModel, type ButtonRole } from './engine/input.ts';
+	import { InputModel } from './engine/input.ts';
 	import Graybox from './scene/Graybox.svelte';
 	import { StoryGame } from './missions/story.ts';
 	import { storyView, type StoryView } from './missions/view.ts';
@@ -18,7 +18,9 @@
 	import { createLocalSave, type AvatarProfile } from './data/local-save.ts';
 	import { forestLayout } from './scene/forest-layout.ts';
 	import HudIcon from './scene/HudIcon.svelte';
-	import { DURATION } from './style/motion.ts';
+	import TouchControls from './scene/TouchControls.svelte';
+	import ControlSettings from './scene/ControlSettings.svelte';
+	import type { ControlPreferences } from './scene/controls.ts';
 	import { LIGHT } from './style/palette.ts';
 	import { generateWorld } from './survival/generate.ts';
 	import { buildStoryWorld } from './level/build.ts';
@@ -37,10 +39,10 @@
 		createRenderer
 	}: { bridge: GameBridge; createRenderer: (canvas: HTMLCanvasElement) => WebGLRenderer } = $props();
 	let wrapper: HTMLDivElement | undefined = $state();
-	let stickBase: HTMLDivElement;
-	let stickThumb: HTMLDivElement;
-	let jump: HTMLButtonElement;
-	let sideButtons: HTMLDivElement;
+	let touchControls: { draw(): void } | undefined = $state();
+	let safeArea: HTMLDivElement;
+	let tooltip = $state('');
+	let tooltipTimer: ReturnType<typeof setTimeout> | undefined;
 	let hud: HudState = $state({ notice: 'Abrindo a clareira…', shiftLock: false, ready: false, debug: null });
 	let portrait = $state(innerWidth < innerHeight);
 	let allowPortrait = $state(false);
@@ -49,6 +51,8 @@
 		DEFAULT_AVATAR,
 		golden.enabled ? { getItem: () => null, setItem: () => {} } : undefined
 	);
+	let controls = $state.raw(gameSave.controls());
+	let controlsError = $state('');
 	let avatarProfile = $state.raw(golden.enabled ? DEFAULT_AVATAR : gameSave.avatar());
 	let choosing = $state(false);
 	let missionMenu = $state(false);
@@ -59,6 +63,7 @@
 	const rotate = $derived(!golden.enabled && portrait && !allowPortrait && !choosing);
 	const showNotice = $derived(saveMessage || !hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
+	input.configure(gameSave.controls());
 	const query = new URLSearchParams(location.search);
 	const debugGraybox = query.has('graybox');
 	const mapData =
@@ -120,6 +125,7 @@
 		yaw: golden.enabled && golden.avatar ? golden.avatar[2] : initial.yaw,
 		checkpoints
 	});
+	controller.camera.mode = matchMedia('(pointer: coarse)').matches ? 'follow' : 'classic';
 	story?.repairBadge();
 	// Settings are written 400 ms after the last change (a slider drag fires many), and on exit.
 	let audioSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -145,6 +151,7 @@
 		void soundscape.audio.unlock();
 	onDestroy(() => {
 		disposed = true;
+		clearTimeout(tooltipTimer);
 		chooserGeneration++;
 		world.dispose();
 		if (audioSaveTimer !== undefined) {
@@ -182,9 +189,20 @@
 		const listeners = new AbortController();
 		const resize = () => {
 			portrait = innerWidth < innerHeight;
+			const padding = getComputedStyle(safeArea);
+			input.configure({
+				...controls,
+				insets: {
+					left: parseFloat(padding.paddingLeft) || 0,
+					right: parseFloat(padding.paddingRight) || 0,
+					top: parseFloat(padding.paddingTop) || 0,
+					bottom: parseFloat(padding.paddingBottom) || 0
+				}
+			});
 			input.releaseAll();
 			controller.resume();
 		};
+		resize();
 		window.addEventListener('resize', resize, { signal: listeners.signal });
 		// UI taps on HUD and panel buttons; jump and the contextual action have their own sounds.
 		wrapper?.addEventListener(
@@ -239,23 +257,36 @@
 
 		if (saveMessage && controller.frame.speed > 0.1) saveMessage = '';
 		if (!hasMoved && controller.frame.speed > 0.1) hasMoved = true;
-		const stick = input.stick;
-		stickBase.style.display = stick.active ? 'block' : 'none';
-		stickBase.style.transform = `translate(${stick.originX}px, ${stick.originY}px)`;
-		stickThumb.style.transform = `translate(${stick.x}px, ${stick.y}px)`;
-		stickThumb.style.display = stick.active ? 'block' : 'none';
-		const rect = input.layout.jumpButton;
-		sideButtons.style.bottom = `${wrapper ? wrapper.clientHeight - rect.y + 16 : 106}px`;
-		jump.style.left = `${rect.x}px`;
-		jump.style.top = `${rect.y}px`;
-		jump.style.width = `${rect.width}px`;
-		jump.style.height = `${rect.height}px`;
+		touchControls?.draw();
 	}
 	function keyboardButton(event: KeyboardEvent) {
 		if (event.code === 'Space' || event.code === 'Enter') event.stopPropagation();
 	}
-	function activate(event: MouseEvent, role: ButtonRole) {
-		if (event.detail === 0) input.tapButton(role);
+	function changeControls(patch: Partial<ControlPreferences>) {
+		controls = { ...controls, ...patch };
+		input.configure(controls);
+		controlsError = gameSave.setControls(controls)
+			? ''
+			: 'Não foi possível guardar os controles neste celular.';
+	}
+	function hint(id: string, label: string) {
+		if (controls.hintsSeen.includes(id)) return;
+		changeControls({ hintsSeen: [...controls.hintsSeen, id] });
+		tooltip = label;
+		clearTimeout(tooltipTimer);
+		tooltipTimer = setTimeout(() => {
+			tooltip = '';
+		}, 2200);
+	}
+	function nextTarget() {
+		if (story && storyUi) {
+			const available = storyUi.missions.filter((m) => m.available && !m.completed);
+			const current = available.findIndex((m) => m.id === storyUi?.selected);
+			const next = available[(current + 1) % available.length];
+			if (next) story.select(next.id);
+			refreshStory();
+		} else environment.nextTarget();
+		hint('compass', 'Bússola: aponta para o próximo destino');
 	}
 	function backToBase() {
 		input.releaseAll();
@@ -277,6 +308,7 @@
 	role="application"
 	aria-label="Trilha secreta. Use W A S D para andar, espaço para pular e arraste para olhar."
 >
+	<div bind:this={safeArea} class="safe-area" aria-hidden="true"></div>
 	<div class="world">
 		<Canvas dpr={1} shadows={false} toneMapping={NoToneMapping} colorSpace={SRGBColorSpace} {createRenderer}
 			>{#if wrapper}<Graybox
@@ -322,7 +354,46 @@
 				onpointerdown={(event) => event.stopPropagation()}
 				onkeydown={keyboardButton}
 				onkeyup={keyboardButton}
-				onclick={openChooser}><HudIcon name="avatar" /></button
+				onclick={() => {
+					hint('avatar', 'Personagem, som e controles');
+					openChooser();
+				}}><HudIcon name="avatar" /></button
+			>
+			<button
+				type="button"
+				data-game-button="shiftLock"
+				aria-label="Travar câmera"
+				title="Travar câmera"
+				aria-pressed={hud.shiftLock}
+				onpointerdown={(e) => e.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={() => {
+					input.tapButton('shiftLock');
+					hint('lock', 'Travar câmera: olhe para onde seu personagem aponta');
+				}}><HudIcon name="lock" /></button
+			>
+			<button
+				type="button"
+				aria-label="Próximo destino"
+				title="Próximo destino"
+				onpointerdown={(e) => e.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={nextTarget}><HudIcon name="explore" /></button
+			>
+			<button
+				type="button"
+				data-game-button="emote"
+				aria-label="Acenar"
+				title="Acenar"
+				onpointerdown={(e) => e.stopPropagation()}
+				onkeydown={keyboardButton}
+				onkeyup={keyboardButton}
+				onclick={() => {
+					input.tapButton('emote');
+					hint('emote', 'Acenar: dê um oi para a floresta');
+				}}><HudIcon name="wave" /></button
 			>
 			<button
 				type="button"
@@ -336,6 +407,7 @@
 				><HudIcon name={audioSettings.muted.master ? 'muted' : 'sound'} /></button
 			>
 		</div>
+		{#if tooltip}<p class="tooltip" role="status">{tooltip}</p>{/if}
 		{#if showNotice && (!story || !hud.ready)}<p
 				class="notice"
 				class:sr-only={!!hud.debug}
@@ -343,16 +415,14 @@
 			>
 				{saveMessage || hud.notice}
 			</p>{/if}
-		<div
-			class="stick-zone"
-			class:moved={hasMoved}
-			style:--hint-duration={`${DURATION.state}s`}
-			aria-hidden="true"
-		>
-			Arraste para andar
-		</div>
-		<div bind:this={stickBase} class="stick-base" aria-hidden="true"></div>
-		<div bind:this={stickThumb} class="stick-thumb" aria-hidden="true"></div>
+		<TouchControls
+			bind:this={touchControls}
+			{input}
+			action={storyUi?.action}
+			preferences={controls}
+			moved={hasMoved}
+			ready={hud.ready}
+		/>
 		{#if environment.kind === 'map'}<div class="mission" aria-live="polite">
 				<span>Exploração do mapa</span><strong>{hud.target ?? environment.target.name}</strong><span
 					>{hud.distance ?? 0} m · {story
@@ -362,51 +432,6 @@
 			</div>{/if}
 		{#if hud.splash}<div class="splash" role="status">Água funda. Voltando ao ponto seguro…</div>{/if}
 		{#if hud.shiftLock}<div class="crosshair" aria-hidden="true"><HudIcon name="lock" /></div>{/if}
-		<div bind:this={sideButtons} class="side-buttons">
-			<button
-				type="button"
-				data-game-button="shiftLock"
-				aria-label="Travar câmera"
-				title="Travar câmera"
-				aria-pressed={hud.shiftLock}
-				onkeydown={keyboardButton}
-				onkeyup={keyboardButton}
-				onclick={(event) => activate(event, 'shiftLock')}><HudIcon name="lock" /></button
-			>
-			<button
-				type="button"
-				data-game-button="emote"
-				aria-label="Acenar"
-				title="Acenar"
-				onkeydown={keyboardButton}
-				onkeyup={keyboardButton}
-				onclick={(event) => activate(event, 'emote')}><HudIcon name="wave" /></button
-			>
-			<button
-				type="button"
-				data-game-button="action"
-				aria-label={storyUi?.action?.label ?? 'Explorar'}
-				title={storyUi?.action?.label ?? 'Explorar'}
-				aria-disabled={story ? !storyUi?.action || !!storyUi.action.disabled : false}
-				onkeydown={keyboardButton}
-				onkeyup={keyboardButton}
-				onclick={(event) => activate(event, 'action')}
-				><HudIcon name="explore" />{#if storyUi?.action}<span class="action-label"
-						>{storyUi.action.label}</span
-					>{/if}</button
-			>
-		</div>
-		<button
-			bind:this={jump}
-			class="jump"
-			type="button"
-			data-game-button="jump"
-			aria-label="Pular"
-			title="Pular"
-			onkeydown={keyboardButton}
-			onkeyup={keyboardButton}
-			onclick={(event) => activate(event, 'jump')}><HudIcon name="jump" /></button
-		>
 	</div>
 	{#if storyUi && !rotate && !choosing}<StoryPanel
 			view={storyUi}
@@ -431,7 +456,11 @@
 			kenneyUrls={KENNEY_SKINS}
 			onapply={applyAvatar}
 			onclose={closeChooser}
-			>{#snippet sound()}<SoundSettings
+			>{#snippet sound()}<ControlSettings
+					settings={controls}
+					onchange={changeControls}
+					error={controlsError}
+				/><SoundSettings
 					settings={audioSettings}
 					onvolume={(bus, volume) => soundscape.audio.setBusVolume(bus, volume)}
 					onmute={(muted) => soundscape.audio.mute(muted)}
@@ -517,13 +546,13 @@
 		top: max(12px, env(safe-area-inset-top));
 		left: max(12px, env(safe-area-inset-left));
 		display: flex;
-		gap: 8px;
+		gap: 4px;
 	}
 	button {
 		display: grid;
 		place-items: center;
-		width: 48px;
-		height: 48px;
+		width: 44px;
+		height: 44px;
 		border: 1px solid #ffffff66;
 		border-radius: 50%;
 		padding: 0;
@@ -535,12 +564,12 @@
 		pointer-events: auto;
 	}
 	button[aria-pressed='true'] {
-		background: #f1d364df;
+		background: #74c69ddf;
 		color: #173a2b;
 	}
 	button:focus-visible,
 	.secret-game:focus-visible {
-		outline: 3px solid #f6d968;
+		outline: 3px solid #74c69d;
 		outline-offset: 3px;
 	}
 	.notice {
@@ -556,78 +585,27 @@
 		font-size: 0.75rem;
 		line-height: 1.4;
 	}
-	.side-buttons button[data-game-button='action'] {
-		position: relative;
-	}
-	.action-label {
+	.safe-area {
 		position: absolute;
-		right: calc(100% + 8px);
-		min-width: 7rem;
-		max-width: 11rem;
-		padding: 6px 8px;
-		border-radius: 8px;
-		background: #173a2be8;
-		font-size: 0.75rem;
-		line-height: 1.2;
+		visibility: hidden;
 		pointer-events: none;
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+			env(safe-area-inset-left);
 	}
-	.side-buttons {
+	.tooltip {
 		position: absolute;
-		right: max(12px, env(safe-area-inset-right));
-		bottom: 106px;
-		display: grid;
-		gap: 8px;
-	}
-	.jump {
-		position: absolute;
-		right: 25px;
-		bottom: 20px;
-		width: 70px;
-		height: 70px;
-		background: #f1d364b8;
-		color: #173a2b;
-	}
-	.jump :global(svg) {
-		width: 36px;
-		height: 36px;
-	}
-	.stick-zone {
-		position: absolute;
-		left: max(20px, env(safe-area-inset-left));
-		bottom: max(20px, env(safe-area-inset-bottom));
+		top: 64px;
+		left: max(12px, env(safe-area-inset-left));
+		max-width: 18rem;
+		margin: 0;
 		padding: 8px 12px;
-		border-radius: 999px;
-		background: #173a2be8;
-		color: #f1f6ed;
-		text-shadow: 0 1px 2px #10271b;
-		transition: opacity var(--hint-duration) ease;
-	}
-	.stick-zone.moved {
-		opacity: 0;
-	}
-	.stick-base,
-	.stick-thumb {
-		display: none;
-		position: absolute;
-		left: -40px;
-		top: -40px;
-		width: 80px;
-		height: 80px;
-		border: 2px solid #ffffffaa;
-		border-radius: 50%;
-		background: #173a2b60;
-		pointer-events: none;
-	}
-	.stick-thumb {
-		left: -19px;
-		top: -19px;
-		width: 38px;
-		height: 38px;
-		background: #f1f6edb0;
+		border-radius: 10px;
+		background: #10271bf0;
+		font-size: 0.75rem;
 	}
 	.mission {
 		position: absolute;
-		top: max(12px, env(safe-area-inset-top));
+		top: max(68px, calc(env(safe-area-inset-top) + 56px));
 		right: max(12px, env(safe-area-inset-right));
 		display: grid;
 		gap: 3px;
@@ -705,13 +683,8 @@
 		padding: 12px 20px;
 		min-height: 48px;
 		border-radius: 999px;
-		background: #f1d364;
+		background: #74c69d;
 		color: #173a2b;
 		font-weight: 700;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.stick-zone {
-			transition: none;
-		}
 	}
 </style>

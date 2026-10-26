@@ -2,6 +2,7 @@ import type { Group, PerspectiveCamera } from 'three';
 import type { Checkpoint } from '../engine/checkpoints.ts';
 import type { CollisionWorld } from '../engine/world.ts';
 import type { StoryGame } from '../missions/story.ts';
+import type { CanopyVisibility } from '../render/canopy-visibility.ts';
 import type { BlockGrid, PoolSet, Quality } from '../render/index.ts';
 
 export interface SceneVisual {
@@ -26,7 +27,12 @@ export interface SceneEnvironment {
 	loadPlacements(
 		quality: Quality,
 		signal: AbortSignal
-	): Promise<{ pools: PoolSet; setQuality?: (quality: Quality) => void; dispose(): void }>;
+	): Promise<{
+		canopies?: CanopyVisibility;
+		pools: PoolSet;
+		setQuality?: (quality: Quality) => void;
+		dispose(): void;
+	}>;
 	target: { x: number; z: number; name: string };
 	nextTarget(): void;
 }

@@ -196,6 +196,26 @@
 			},
 			"references": ["29-altos-odyssey-camadas-neblina.jpg", "26-sky-ilha-mar-de-nuvens.jpg"],
 			"notes": "Not one of the ten; captured because the runtime has it and the canopy framing there is a known issue (p5-map-runtime-codex.md)."
+		},
+		{
+			"id": "P11",
+			"name": "Mirante olhando para a baixada com zoom aberto",
+			"covers": "far-plane clipping, terrain y bounds and distant reserve",
+			"status": "exists",
+			"runtimePose": "mirante",
+			"timeOfDay": "day",
+			"camera": {
+				"position": [155, 44, 80],
+				"target": [100, 1.8, 75],
+				"fov": 70
+			},
+			"avatar": {
+				"x": 134,
+				"z": 72,
+				"yaw": -1.5708
+			},
+			"references": ["20-a-short-hike-floresta-paleta.jpg"],
+			"notes": "Owner void regression: elevated camera above the mirante ledges looking down across the lowland. Low far=70 clips the floor; far field must cover the lower frame."
 		}
 	]
 }

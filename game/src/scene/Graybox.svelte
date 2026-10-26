@@ -102,6 +102,7 @@
 	const preset = QUALITY[quality];
 	const governor = new DprGovernor({ start: preset.dprStart, max: preset.dprMax });
 	const lens = { fov: CAMERA_FOV, aspect: 1, near: CAMERA_NEAR };
+	const canopyHead = new Vector3();
 	const shadowRay = new Ray(new Vector3(), new Vector3(0, -1, 0));
 	const animator = new AvatarAnimator();
 	const animationInput = createAvatarInput();
@@ -198,6 +199,9 @@
 			avatarAtlasSource: ATLAS_SOURCE,
 			proxyDraws: proxies.object.children.length,
 			floraDraws: forest?.pools.drawCalls ?? 0,
+			cameraMode: controller.camera.mode,
+			cameraDistance: controller.frame.pose.distance,
+			canopiesFading: forest?.canopies?.fading ?? 0,
 			floraInstances: environment.placements,
 			qualityReason: golden.enabled ? 'golden-forced' : choice.reason,
 			shadowRenders: shadows.renders,
@@ -287,6 +291,7 @@
 					return;
 				}
 				forest = value;
+				if (!golden.enabled) controller.camera.extraOcclusion = value.canopies?.occlusion;
 				visual.add(value.pools.object);
 				shadows.addCaster(value.pools.object, 'static');
 				shadows.addReceiver(value.pools.object);
@@ -367,6 +372,12 @@
 					for (let i = 0; i < 60; i++) frame = controller.update(1 / 60, input.sample(0), lens);
 					placeObject(actor, frame.position, frame.yaw);
 					applyCameraPose(camera, frame.pose);
+					canopyHead.set(
+						frame.position.x,
+						frame.position.y + controller.camera.focusHeight,
+						frame.position.z
+					);
+					forest?.canopies?.update(camera.position, canopyHead, delta, motion.matches);
 					goldenPlaced = true;
 				}
 				present(controller.character.position);
@@ -478,6 +489,7 @@
 	);
 	onDestroy(() => {
 		storyAssets?.dispose();
+		controller.camera.extraOcclusion = undefined;
 		forest?.dispose();
 		appearanceGeneration++;
 		avatarInstance?.dispose();

@@ -53,7 +53,7 @@ try {
 			maxP95 = Math.max(...states.map((s) => s.frameP95Ms));
 		result[pose] = { ...snapshot, maxDraws, maxTriangles, maxP95 };
 		assert.equal(snapshot.quality, 'low');
-		assert.ok(maxDraws <= 200);
+		assert.ok(maxDraws <= 150);
 		assert.ok(maxTriangles <= 200000);
 		assert.ok(maxP95 <= 33.3);
 		await page.screenshot({ path: join(output, `${pose}.png`) });
