@@ -90,6 +90,12 @@ export interface ThumbnailQueueOptions<T> {
 	now?: () => number;
 	/** A thumbnail was stored (repaint its tile). */
 	onready?: (key: string) => void;
+	/**
+	 * Called at the end of a frame with the next key still pending, so its async
+	 * preparation (a skin change) overlaps the wait for the next frame instead of
+	 * costing a frame of its own. Must be cheap and idempotent.
+	 */
+	prepare?: (key: string) => void;
 }
 
 export interface ThumbnailStats {
@@ -108,6 +114,7 @@ export class ThumbnailQueue<T> {
 	readonly budgetMs: number;
 	readonly #now: () => number;
 	readonly #onready: ((key: string) => void) | undefined;
+	readonly #prepare: ((key: string) => void) | undefined;
 	#pending: string[] = [];
 	readonly #failed = new Set<string>();
 	/** Moving estimate of one job's cost, ms (0: nothing measured yet). */
@@ -124,6 +131,7 @@ export class ThumbnailQueue<T> {
 		this.budgetMs = Math.max(0.5, options.budgetMs ?? 4);
 		this.#now = options.now ?? (() => performance.now());
 		this.#onready = options.onready;
+		this.#prepare = options.prepare;
 	}
 
 	/** Keys still to render. */
@@ -199,6 +207,8 @@ export class ThumbnailQueue<T> {
 			this.#maxFrame = Math.max(this.#maxFrame, spent);
 		}
 		if (spent > budgetMs) this.#debt += spent - budgetMs;
+		const next = this.#pending[0];
+		if (next !== undefined && this.#prepare && !this.cache.has(next)) this.#prepare(next);
 		return done;
 	}
 

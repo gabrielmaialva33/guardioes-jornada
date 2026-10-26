@@ -66,6 +66,28 @@ describe('ThumbnailQueue budget', () => {
 		expect(queue.pump(work)).toBe(2);
 		expect(cache.peek('a')).toBe('image:a');
 	});
+	it('starts preparing the next key when the frame budget is spent', () => {
+		const time = clock();
+		const cache = new ThumbnailCache<string>();
+		const prepared: string[] = [];
+		const queue = new ThumbnailQueue<string>({
+			cache,
+			budgetMs: 4,
+			now: time.now,
+			prepare: (key) => prepared.push(key)
+		});
+		const work = (key: string) => {
+			time.advance(3);
+			return `image:${key}`;
+		};
+		queue.request(['a', 'b', 'c']);
+		expect(queue.pump(work)).toBe(1);
+		expect(prepared).toEqual(['b']);
+		expect(queue.pump(work)).toBe(1);
+		expect(prepared).toEqual(['b', 'c']);
+		queue.pump(work);
+		expect(prepared).toEqual(['b', 'c']);
+	});
 	it('skips keys that cannot render until reset', () => {
 		const { queue } = setup(1);
 		const work = (key: string) => (key === 'bad' ? undefined : `image:${key}`);

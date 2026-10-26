@@ -138,6 +138,8 @@ export interface StageMetrics {
 	thumbnails: ThumbnailStats & { cached: number; pending: number };
 	drawCalls: number;
 	triangles: number;
+	/** Preview frames drawn so far (idle with reduced motion: it stops growing). */
+	frames: number;
 }
 
 export interface DisposeReport {
@@ -305,6 +307,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	let rig: RigBinding | undefined;
 	let dangles: Mesh[] = [];
 	let firstFrameAt: number | null = null;
+	let frames = 0;
 	let avatarMs: number | null = null;
 	let compileMs: number | null = null;
 	let report: DisposeReport | undefined;
@@ -319,7 +322,8 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 		cache,
 		budgetMs: THUMB_BUDGET_MS,
 		now: host.now,
-		onready: (key) => options.onthumbnail?.(key)
+		onready: (key) => options.onthumbnail?.(key),
+		prepare: (key) => prepare(key)
 	});
 	const target = new WebGLRenderTarget(thumbSize, thumbSize, {
 		samples: tier.samples,
@@ -393,24 +397,31 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 		return done;
 	};
 
+	/** Starts dressing the hidden avatar for `key` (async for Kenney skins); idempotent. */
+	const prepare = (key: string) => {
+		const request = requests.get(key);
+		const model = thumb;
+		if (!request || !model || !thumbShaders || job?.key === key) return;
+		const current = { key, ready: false, failed: false };
+		job = current;
+		model.appearance.apply(request.profile).then(
+			() => {
+				current.ready = true;
+				wake();
+			},
+			() => {
+				current.failed = true;
+				wake();
+			}
+		);
+	};
+
 	const work = (key: string): HTMLCanvasElement | null | undefined => {
 		const request = requests.get(key);
 		if (!request) return undefined;
-		const model = thumb;
-		if (!model || !thumbShaders) return null;
+		if (!thumb || !thumbShaders) return null;
 		if (!job || job.key !== key) {
-			const current = { key, ready: false, failed: false };
-			job = current;
-			model.appearance.apply(request.profile).then(
-				() => {
-					current.ready = true;
-					wake();
-				},
-				() => {
-					current.failed = true;
-					wake();
-				}
-			);
+			prepare(key);
 			return null;
 		}
 		if (job.failed) {
@@ -472,6 +483,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 		eye.copy(camera.position);
 		renderNeutral(null, camera);
 		dirty = false;
+		frames++;
 		if (firstFrameAt === null) {
 			firstFrameAt = host.now();
 			setStatus('ready');
@@ -707,7 +719,8 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 			compileMs,
 			thumbnails: { ...queue.stats(), cached: cache.size, pending: queue.pending },
 			drawCalls: info.render.calls,
-			triangles: info.render.triangles
+			triangles: info.render.triangles,
+			frames
 		};
 	}
 
