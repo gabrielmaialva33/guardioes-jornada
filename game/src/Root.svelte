@@ -13,7 +13,9 @@
 	import { StoryGame } from './missions/story.ts';
 	import { storyView, type StoryView } from './missions/view.ts';
 	import StoryPanel from './missions/StoryPanel.svelte';
-	import AvatarChooser from './scene/AvatarChooser.svelte';
+	import AvatarEditor from './ui/avatar-editor/AvatarEditor.svelte';
+	import { releaseThumbnails } from './ui/avatar-editor/stage.ts';
+	import SettingsPanel from './scene/SettingsPanel.svelte';
 	import { AVATAR_PRESETS, DEFAULT_AVATAR, KENNEY_SKINS } from './avatar/catalog.ts';
 	import { createLocalSave, type AvatarProfile } from './data/local-save.ts';
 	import { forestLayout } from './scene/forest-layout.ts';
@@ -62,12 +64,13 @@
 	let controlsError = $state('');
 	let avatarProfile = $state.raw(golden.enabled ? DEFAULT_AVATAR : gameSave.avatar());
 	let choosing = $state(false);
+	let settingsOpen = $state(false);
 	let missionMenu = $state(false);
 	let saveMessage = $state('');
 	let sceneRef: { setAvatarProfile: (profile: AvatarProfile) => Promise<void> } | undefined = $state();
 	let chooserGeneration = 0;
 	let disposed = false;
-	const rotate = $derived(!golden.enabled && portrait && !allowPortrait && !choosing);
+	const rotate = $derived(!golden.enabled && portrait && !allowPortrait && !choosing && !settingsOpen);
 	const showNotice = $derived(saveMessage || !hasMoved || !hud.notice.startsWith('Siga em frente'));
 	const input = new InputModel();
 	input.configure(gameSave.controls());
@@ -158,6 +161,7 @@
 		void soundscape.audio.unlock();
 	onDestroy(() => {
 		disposed = true;
+		releaseThumbnails();
 		clearTimeout(tooltipTimer);
 		chooserGeneration++;
 		world.dispose();
@@ -179,6 +183,17 @@
 		input.releaseAll();
 		controller.resume();
 		void sceneRef?.setAvatarProfile(avatarProfile).catch(() => {});
+		wrapper?.focus({ preventScroll: true });
+	}
+	function openSettings() {
+		settingsOpen = true;
+		input.releaseAll();
+		controller.resume();
+	}
+	function closeSettings() {
+		settingsOpen = false;
+		input.releaseAll();
+		controller.resume();
 		wrapper?.focus({ preventScroll: true });
 	}
 	async function applyAvatar(value: AvatarProfile) {
@@ -308,7 +323,7 @@
 	bind:this={wrapper}
 	class="secret-game"
 	class:golden={golden.enabled}
-	class:choosing
+	class:choosing={choosing || settingsOpen}
 	style:background={`linear-gradient(${golden.enabled && golden.night ? LIGHT.night.skyTop : LIGHT.daylight.skyTop}, ${golden.enabled && golden.night ? LIGHT.night.horizon : LIGHT.daylight.horizon} 65%)`}
 	data-game-root
 	tabindex="-1"
@@ -321,7 +336,7 @@
 			>{#if wrapper}<Graybox
 					{wrapper}
 					bind:this={sceneRef}
-					paused={rotate || choosing || missionMenu || !!storyUi?.dialogue}
+					paused={rotate || choosing || settingsOpen || missionMenu || !!storyUi?.dialogue}
 					{avatarProfile}
 					{controller}
 					{input}
@@ -334,7 +349,7 @@
 				/>{/if}</Canvas
 		>
 	</div>
-	<div class="hud" inert={rotate || choosing || missionMenu || !!storyUi?.dialogue}>
+	<div class="hud" inert={rotate || choosing || settingsOpen || missionMenu || !!storyUi?.dialogue}>
 		<div class="top-bar">
 			<button
 				type="button"
@@ -363,7 +378,7 @@
 				onkeydown={keyboardButton}
 				onkeyup={keyboardButton}
 				onclick={() => {
-					hint('avatar', 'Personagem, som e controles');
+					hint('avatar', 'Personagem: monte o seu visual');
 					openChooser();
 				}}><HudIcon name="avatar" /></button
 			>
@@ -405,14 +420,15 @@
 			>
 			<button
 				type="button"
-				aria-label="Som"
-				aria-pressed={!audioSettings.muted.master}
-				title={audioSettings.muted.master ? 'Ligar o som' : 'Desligar o som'}
+				aria-label="Som e controles"
+				title={audioSettings.muted.master ? 'Som e controles (som desligado)' : 'Som e controles'}
 				onpointerdown={(event) => event.stopPropagation()}
 				onkeydown={keyboardButton}
 				onkeyup={keyboardButton}
-				onclick={() => soundscape.audio.mute(!audioSettings.muted.master)}
-				><HudIcon name={audioSettings.muted.master ? 'muted' : 'sound'} /></button
+				onclick={() => {
+					hint('settings', 'Som e controles');
+					openSettings();
+				}}><HudIcon name={audioSettings.muted.master ? 'muted' : 'settings'} /></button
 			>
 		</div>
 		{#if tooltip}<p class="tooltip" role="status">{tooltip}</p>{/if}
@@ -441,7 +457,7 @@
 		{#if hud.splash}<div class="splash" role="status">Água funda. Voltando ao ponto seguro…</div>{/if}
 		{#if hud.shiftLock}<div class="crosshair" aria-hidden="true"><HudIcon name="lock" /></div>{/if}
 	</div>
-	{#if storyUi && !rotate && !choosing}<StoryPanel
+	{#if storyUi && !rotate && !choosing && !settingsOpen}<StoryPanel
 			view={storyUi}
 			onmenu={(open) => {
 				missionMenu = open;
@@ -458,21 +474,19 @@
 			onrestart={restartStory}
 			onexit={() => bridge.exit()}
 		/>{/if}
-	{#if choosing}<AvatarChooser
+	{#if choosing}<AvatarEditor
 			profile={avatarProfile}
 			presets={AVATAR_PRESETS}
-			kenneyUrls={KENNEY_SKINS}
+			skins={Object.keys(KENNEY_SKINS)}
 			onapply={applyAvatar}
 			onclose={closeChooser}
-			>{#snippet sound()}<ControlSettings
-					settings={controls}
-					onchange={changeControls}
-					error={controlsError}
-				/><SoundSettings
-					settings={audioSettings}
-					onvolume={(bus, volume) => soundscape.audio.setBusVolume(bus, volume)}
-					onmute={(muted) => soundscape.audio.mute(muted)}
-				/>{/snippet}</AvatarChooser
+		/>{/if}
+	{#if settingsOpen}<SettingsPanel onclose={closeSettings}
+			><ControlSettings settings={controls} onchange={changeControls} error={controlsError} /><SoundSettings
+				settings={audioSettings}
+				onvolume={(bus, volume) => soundscape.audio.setBusVolume(bus, volume)}
+				onmute={(muted) => soundscape.audio.mute(muted)}
+			/></SettingsPanel
 		>{/if}
 
 	{#if rotate}

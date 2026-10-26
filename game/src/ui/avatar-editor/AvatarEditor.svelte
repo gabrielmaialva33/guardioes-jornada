@@ -163,7 +163,21 @@
 			stage = undefined;
 			untrack(() => onstage?.(undefined));
 			const report = created.dispose();
+			// The context is lost already; this drops the canvas's own buffer too.
+			canvas.width = canvas.height = 0;
 			untrack(() => ondispose?.(report));
+		};
+	}
+
+	/**
+	 * Frees a canvas's pixels when the editor goes away. A closed editor's detached DOM can
+	 * outlive it for a while (V8 can keep the last delegated event's `currentTarget` getter, and
+	 * with it the dialog, in a cached hidden class); emptied canvases make that shell nearly free.
+	 * Reads no state, so it runs only on mount and destroy, never on repaints.
+	 */
+	function releaseOnDestroy(canvas: HTMLCanvasElement) {
+		return () => {
+			canvas.width = canvas.height = 0;
 		};
 	}
 
@@ -326,7 +340,13 @@
 				tabindex={option.selected || (!anySelected && i === 0) ? 0 : -1}
 				onclick={() => change(option.profile)}
 				onkeydown={(event) => radioKey(event, i, (next) => change(list[next].profile))}
-				><canvas class="thumb" width={thumbSize} height={thumbSize} aria-hidden="true" {@attach paint(key)}
+				><canvas
+					class="thumb"
+					width={thumbSize}
+					height={thumbSize}
+					aria-hidden="true"
+					{@attach paint(key)}
+					{@attach releaseOnDestroy}
 				></canvas>{#if option.caption}<span class="caption">{option.caption}</span
 					>{/if}{#if option.selected}<span class="check"><EditorIcon name="check" size={14} /></span
 					>{/if}</button

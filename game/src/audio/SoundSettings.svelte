@@ -23,7 +23,7 @@
 
 <section class="sound" aria-labelledby="sound-title">
 	<h3 id="sound-title">Som</h3>
-	<p class="hint">Muda na hora. Cancelar vale só para o personagem.</p>
+	<p class="hint">Muda na hora.</p>
 	<button
 		type="button"
 		class="toggle"
