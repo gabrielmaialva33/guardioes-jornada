@@ -83,6 +83,12 @@
 	const proxies = untrack(() => environment.createVisual());
 	const actor = new Group();
 	visual.add(proxies.object, actor, createHemisphere(golden.enabled && golden.night ? 'night' : 'daylight'));
+	lighting.uHemisphereSky.value.set(
+		golden.enabled && golden.night ? LIGHT.night.hemisphereSky : LIGHT.daylight.hemisphereSky
+	);
+	lighting.uHemisphereGround.value.set(
+		golden.enabled && golden.night ? LIGHT.night.hemisphereGround : LIGHT.daylight.hemisphereGround
+	);
 	const shadows = new ShadowRig(renderer, { blobs: 48 });
 	if (golden.enabled && golden.night) shadows.setVariant('night');
 	visual.add(shadows.object);

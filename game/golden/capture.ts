@@ -53,7 +53,7 @@ let origin = args.get('url') ?? 'http://localhost:5196/';
 if (mode !== 'gpu' && mode !== 'swiftshader')
 	throw new Error(`--mode must be gpu or swiftshader, not ${mode}`);
 if (clockMode !== 'fake' && clockMode !== 'real' && clockMode !== 'runtime')
-	throw new Error(`--clock must be fake or real`);
+	throw new Error(`--clock must be runtime, fake or real`);
 if (mode === 'swiftshader' && !serve)
 	console.warn(
 		'swiftshader: the game refuses software GPUs unless its server runs with GAME_ALLOW_SOFTWARE_TEST=1; use --serve <port>'
@@ -206,6 +206,8 @@ async function settle(page: Page, pose: Pose, tier: Tier) {
 
 async function capture(page: Page, pose: Pose, tier: Tier, dir: string, errors: string[]) {
 	const counters = await settle(page, pose, tier);
+	if (hooked && counters.last.goldenReady !== true)
+		throw new Error(`pose ${pose.id}: runtime reset during capture`);
 	const png = join(dir, `${pose.id}.png`);
 	const maskPng = join(dir, `${pose.id}.mask.png`);
 	await page.screenshot({ path: png, animations: 'disabled', caret: 'hide' });
