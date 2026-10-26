@@ -48,13 +48,14 @@ import { createHemisphere, LIGHT_INTENSITY } from '../../render/shadows.ts';
 import { lighting } from '../../render/stylized.ts';
 import { type AvatarInstance, loadAvatar } from '../../scene/avatar.ts';
 import { LIGHT } from '../../style/palette.ts';
-import type { FramingId } from './editor.ts';
+import type { FramingId, ThumbView } from './editor.ts';
 import {
 	type CameraPlacement,
 	FOV_DEG,
 	FRAMINGS,
 	FramingTween,
 	placeCamera,
+	THUMB_BACK_FRAMING,
 	THUMB_FRAMINGS
 } from './framing.ts';
 import { createPedestal } from './pedestal.ts';
@@ -89,6 +90,8 @@ export interface StageThumbnailRequest {
 	key: string;
 	profile: AvatarProfile;
 	framing: FramingId;
+	/** Front (default) or a 3/4 view of the head from behind (THUMB_BACK_FRAMING). */
+	view?: ThumbView;
 }
 
 /** Everything the stage needs from the page; tests replace it. */
@@ -265,6 +268,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	sun.target = root;
 	const turntable = new Group();
 	const thumbStand = new Group();
+	thumbStand.name = 'avatar-editor-thumb-stand';
 	thumbStand.visible = false;
 	const floor = createPedestal();
 	turntable.add(floor.object);
@@ -361,7 +365,7 @@ export function createAvatarStage(options: StageOptions): AvatarStage {
 	};
 
 	const renderThumbnail = (request: StageThumbnailRequest): HTMLCanvasElement | undefined => {
-		const shot = THUMB_FRAMINGS[request.framing];
+		const shot = request.view === 'back' ? THUMB_BACK_FRAMING : THUMB_FRAMINGS[request.framing];
 		thumbStand.rotation.y = shot.yaw;
 		placeCamera(shot, 1, placement);
 		thumbCamera.position.set(placement.x, placement.y, placement.z);

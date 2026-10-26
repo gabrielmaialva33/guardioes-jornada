@@ -23,6 +23,7 @@ import { BLOCKY_RIG } from '../../animation/joints.ts';
 import { DEFAULT_AVATAR } from '../../avatar/catalog.ts';
 import type { AvatarProfile } from '../../data/local-save.ts';
 import type { AvatarInstance } from '../../scene/avatar.ts';
+import { THUMB_BACK_YAW, THUMB_FRAMINGS } from './framing.ts';
 import { createAvatarStage, type StageOptions } from './stage.ts';
 import { ThumbnailCache } from './thumbnails.ts';
 
@@ -39,7 +40,7 @@ function fakeRenderer() {
 		};
 		item.addEventListener('dispose', forget);
 	};
-	const calls = { render: 0, toTarget: 0, read: 0, disposed: false, lost: false };
+	const calls = { render: 0, toTarget: 0, read: 0, disposed: false, lost: false, thumbYaws: [] as number[] };
 	let target: WebGLRenderTarget | null = null;
 	const info = {
 		memory: {
@@ -70,7 +71,11 @@ function fakeRenderer() {
 		},
 		render(scene: Object3D) {
 			calls.render++;
-			if (target) calls.toTarget++;
+			if (target) {
+				calls.toTarget++;
+				const stand = scene.getObjectByName('avatar-editor-thumb-stand');
+				if (stand) calls.thumbYaws.push(stand.rotation.y);
+			}
 			scene.traverseVisible((object) => {
 				if (!(object instanceof Mesh)) return;
 				track(live.geometries, object.geometry as BufferGeometry);
@@ -253,6 +258,22 @@ describe('AvatarStage', () => {
 		expect(stage.metrics().thumbnails).toMatchObject({ count: 3, cached: 3, pending: 0 });
 		// The preview avatar never wore the thumbnails' looks.
 		expect(avatars[0].applied).not.toContain(profiles[0]);
+		stage.dispose();
+	});
+
+	it('turns the thumbnail avatar 135° for back views, and keeps the front pose otherwise', async () => {
+		const { stage, calls, tick } = await setup();
+		await tick(2);
+		const rabo: AvatarProfile = { ...DEFAULT_AVATAR, style: 'classic', hairStyle: 'rabo' };
+		stage.requestThumbnails([
+			{ key: 'front', profile: DEFAULT_AVATAR, framing: 'head' },
+			{ key: 'back', profile: rabo, framing: 'head', view: 'back' }
+		]);
+		await tick(8);
+		expect(calls.thumbYaws).toHaveLength(2);
+		expect(calls.thumbYaws[0]).toBeCloseTo(THUMB_FRAMINGS.head.yaw);
+		expect(calls.thumbYaws[1]).toBeCloseTo((-135 * Math.PI) / 180);
+		expect(THUMB_BACK_YAW).toBeCloseTo((-135 * Math.PI) / 180);
 		stage.dispose();
 	});
 

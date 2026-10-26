@@ -131,9 +131,10 @@
 	$effect(() => {
 		stage?.requestThumbnails(
 			options.map((option) => ({
-				key: thumbnailKey(option.framing, option.profile),
+				key: thumbnailKey(option.framing, option.profile, option.view),
 				profile: option.profile,
-				framing: option.framing
+				framing: option.framing,
+				view: option.view
 			}))
 		);
 	});
@@ -312,7 +313,7 @@
 	{@const anySelected = list.some((option) => option.selected)}
 	<div class="grid {variant}" role="radiogroup" aria-label={label}>
 		{#each list as option, i (option.id)}
-			{@const key = thumbnailKey(option.framing, option.profile)}
+			{@const key = thumbnailKey(option.framing, option.profile, option.view)}
 			{@const ready = thumbVersion >= 0 && !!stage?.thumbnail(key)}
 			<button
 				type="button"

@@ -38,6 +38,21 @@ export const THUMB_FRAMINGS: Readonly<Record<FramingId, Readonly<Framing>>> = {
 	head: { targetY: 2.64, height: 1.55, width: 1.55, pitch: 3 * DEG, yaw: -0.3 }
 };
 
+/** Turn of a `back` thumbnail: 135°, so the back of the head and one side show (ponytail, braids, bun). */
+export const THUMB_BACK_YAW = (-135 * Math.PI) / 180;
+
+/**
+ * The head from 3/4 behind, a little wider and looking down a little more than
+ * the front shot, so the bun's knot on top and the ponytail's tail both fit.
+ */
+export const THUMB_BACK_FRAMING: Readonly<Framing> = {
+	targetY: 2.72,
+	height: 1.85,
+	width: 1.85,
+	pitch: 10 * DEG,
+	yaw: THUMB_BACK_YAW
+};
+
 export const FOV_DEG = 30;
 /** Seconds between framings. */
 export const FRAMING_SECONDS = 0.45;

@@ -13,6 +13,7 @@ import {
 	goldForbidden,
 	gridMove,
 	hairOptions,
+	hairViewFor,
 	isReservedGold,
 	presetOptions,
 	presetSelected,
@@ -148,6 +149,20 @@ describe('grid options', () => {
 		expect(rabo?.profile.colors.hair).toBe('#c9a27a');
 		expect(rabo?.framing).toBe('head');
 		expect(hair.filter((option) => option.selected).map((option) => option.id)).toEqual([base.hairStyle]);
+	});
+	it('hair styles that hang at the back (ponytail, braids, bun) get a back view; the rest stay front', () => {
+		const hair = hairOptions(draft(), AVATAR_ATLAS.hairStyles);
+		const back = hair.filter((option) => option.view === 'back').map((option) => option.id);
+		expect(back.sort()).toEqual(['coque', 'rabo', 'trancas']);
+		for (const option of hair) if (option.view !== 'back') expect(option.view).toBe('front');
+		expect(hairViewFor('longo')).toBe('front');
+		expect(hairViewFor('unknown')).toBe('front');
+		const rabo = hair.find((option) => option.id === 'rabo');
+		if (!rabo) throw new Error('rabo');
+		// A separate cache entry from the front picture of the same look; front keys are unchanged.
+		expect(thumbnailKey('head', rabo.profile, 'back')).not.toBe(thumbnailKey('head', rabo.profile));
+		expect(thumbnailKey('head', rabo.profile, 'front')).toBe(thumbnailKey('head', rabo.profile));
+		expect(faceOptions(draft()).every((option) => option.view === undefined)).toBe(true);
 	});
 	it('faces frame the head; presets and skins the body', () => {
 		expect(faceOptions(draft()).map((o) => [o.label, o.framing, o.selected])).toEqual([

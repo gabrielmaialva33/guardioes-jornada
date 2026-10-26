@@ -9,6 +9,7 @@
  * back to the classic style; picking a Kenney skin turns it to the skin style
  * and keeps the classic choices underneath, so going back restores them.
  */
+import { HAIR_DANGLES } from '../../animation/hair-sway.ts';
 import type { AvatarPreset, HairStyle } from '../../avatar/atlas.ts';
 import {
 	AVATAR_PARTS,
@@ -270,12 +271,25 @@ export interface EditorOption {
 	/** The draft after picking this option; its thumbnail shows exactly this profile. */
 	readonly profile: AvatarProfile;
 	readonly framing: FramingId;
+	/** Where the thumbnail looks from (default front). */
+	readonly view?: ThumbView;
 	readonly selected: boolean;
 }
 
-/** One cache entry per framing and visible look: the same look is never rendered twice. */
-export function thumbnailKey(framing: FramingId, profile: AvatarProfile): string {
-	return `${framing}|${profileKey(profile)}`;
+/**
+ * A thumbnail's side: `back` is a 3/4 view from behind, for the hair styles
+ * whose difference hangs at the back (ponytail, braids, bun).
+ */
+export type ThumbView = 'front' | 'back';
+
+/** One cache entry per framing, side and visible look: the same picture is never rendered twice. */
+export function thumbnailKey(framing: FramingId, profile: AvatarProfile, view: ThumbView = 'front'): string {
+	return `${framing}${view === 'back' ? ':back' : ''}|${profileKey(profile)}`;
+}
+
+/** Hair styles with dangling parts (hair contract v3): their thumbnails show the back. */
+export function hairViewFor(id: string): ThumbView {
+	return Object.hasOwn(HAIR_DANGLES, id) ? 'back' : 'front';
 }
 
 export function presetOptions(draft: AvatarProfile, presets: readonly AvatarPreset[]): EditorOption[] {
@@ -312,6 +326,7 @@ export function hairOptions(draft: AvatarProfile, styles: readonly HairStyle[]):
 		caption: style.name,
 		profile: setHairStyle(draft, style.id),
 		framing: 'head',
+		view: hairViewFor(style.id),
 		selected: draft.style === 'classic' && (draft.hairStyle ?? 'curto') === style.id
 	}));
 }
