@@ -40,6 +40,9 @@ function recorder() {
 			calls.push({ kind: 'step', id: surface, intensity: options.intensity });
 			return null;
 		},
+		decode: async () => null,
+		playBuffer: () => null,
+		loopBuffer: () => null,
 		loop(id, options = {}) {
 			calls.push({ kind: 'loop', id, x: options.x, y: options.y, z: options.z });
 			const state = {

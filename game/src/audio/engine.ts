@@ -22,6 +22,10 @@
  *
  * Sounds play their recorded files once their category is loaded, and their
  * procedural placeholder (synth.ts) until then.
+ *
+ * Extra sounds (`decode`, `playBuffer`, `loopBuffer`) are buffers outside the
+ * bank, for dev tools and study modes: same buses, same voice pool and stealing,
+ * no placeholder; their voices report the id `'extra'`.
  */
 import {
 	BUS_PARENT,
@@ -35,6 +39,7 @@ import {
 	type SoundBank,
 	type SoundDef,
 	type SoundId,
+	type Spatial,
 	STEP_SOUND,
 	type Surface,
 	variantUrls
@@ -97,8 +102,11 @@ export interface DuckOptions {
 	release?: number;
 }
 
+/** The bank id of a voice, or `'extra'` for a buffer played with `playBuffer`/`loopBuffer`. */
+export type VoiceId = SoundId | 'extra';
+
 export interface Voice {
-	readonly id: SoundId;
+	readonly id: VoiceId;
 	/** False once it ended, was stopped or was stolen. */
 	readonly playing: boolean;
 	stop(fade?: number): void;
@@ -107,6 +115,17 @@ export interface Voice {
 export interface LoopHandle extends Voice {
 	setGain(gain: number, fade?: number): void;
 	setPosition(x: number, y: number, z: number): void;
+}
+
+/** How an extra sound (a buffer outside the bank) is mixed. */
+export interface ExtraSound {
+	bus: Exclude<Bus, 'master'>;
+	/** Base linear gain (default 1). */
+	gain?: number;
+	/** Voice stealing, as SoundDef.priority (default 1). */
+	priority?: number;
+	/** Placed in the world when given and the options carry a position. */
+	spatial?: Spatial;
 }
 
 /** A camera or any Object3D: its world matrix gives the listener's position and orientation. */
@@ -126,6 +145,12 @@ export interface GameAudio {
 	loop(id: SoundId, options?: LoopOptions): LoopHandle | null;
 	/** One foot contact on a surface; call it from the animation's contact events. */
 	footstep(surface: Surface, options?: FootstepOptions): Voice | null;
+	/** Fetches and decodes a file outside the bank; null without audio, on abort or on failure. */
+	decode(url: string, signal?: AbortSignal): Promise<AudioBuffer | null>;
+	/** A one-shot of an extra buffer (dropped like `play` while locked or hidden). */
+	playBuffer(buffer: AudioBuffer, sound: ExtraSound, options?: PlayOptions): Voice | null;
+	/** A loop of an extra buffer; `setGain` scales `sound.gain`. */
+	loopBuffer(buffer: AudioBuffer, sound: ExtraSound, options?: LoopOptions): LoopHandle | null;
 	/** Call once per frame after the camera moved; allocates nothing. */
 	setListener(source: ListenerSource): void;
 	setBusVolume(bus: Bus, volume: number): void;
@@ -185,8 +210,15 @@ interface BusNodes {
 	duckTarget: number;
 }
 
+/** What a voice needs from its sound: the bank's SoundDef or an ExtraSound with defaults. */
+interface VoiceSpec {
+	bus: Exclude<Bus, 'master'>;
+	priority: number;
+	spatial?: Spatial;
+}
+
 interface VoiceRecord {
-	id: SoundId;
+	id: VoiceId;
 	priority: number;
 	started: number;
 	source: AudioBufferSourceNode;
@@ -668,30 +700,45 @@ class GameAudioEngine implements GameAudio {
 		loop: boolean,
 		fadeIn: number
 	): VoiceRecord | null {
-		const context = this.#context as AudioContext;
 		const buffers = this.#buffers(id, def);
 		if (!buffers || buffers.length === 0) return null;
-		const spatial = def.spatial && position && position.x !== undefined ? def.spatial : null;
+		const buffer = buffers.length === 1 ? buffers[0] : buffers[Math.floor(this.#random() * buffers.length)];
+		// Recorded loops carry their seamless points (encoder padding); placeholders loop whole.
+		const points = loop && def.loop && this.#recorded.has(id) ? def.loop : null;
+		return this.#startBuffer(id, buffer, def, gain, rate, position, loop, points, fadeIn);
+	}
+
+	#startBuffer(
+		id: VoiceId,
+		buffer: AudioBuffer,
+		spec: VoiceSpec,
+		gain: number,
+		rate: number,
+		position: Partial<Position> | undefined,
+		loop: boolean,
+		points: { start: number; end: number } | null,
+		fadeIn: number
+	): VoiceRecord | null {
+		const context = this.#context as AudioContext;
+		const spatial = spec.spatial && position && position.x !== undefined ? spec.spatial : null;
 		if (spatial && !loop) {
 			const dx = (position?.x ?? 0) - this.#lx;
 			const dy = (position?.y ?? 0) - this.#ly;
 			const dz = (position?.z ?? 0) - this.#lz;
 			if (dx * dx + dy * dy + dz * dz > spatial.max * spatial.max) return null;
 		}
-		if (!this.#claim(def.priority)) return null;
-		const bus = this.#buses.get(def.bus);
+		if (!this.#claim(spec.priority)) return null;
+		const bus = this.#buses.get(spec.bus);
 		if (!bus) return null;
 
-		const buffer = buffers.length === 1 ? buffers[0] : buffers[Math.floor(this.#random() * buffers.length)];
 		const source = context.createBufferSource();
 		source.buffer = buffer;
 		source.playbackRate.value = rate;
 		if (loop) {
 			source.loop = true;
-			// Recorded loops carry their seamless points (encoder padding); placeholders loop whole.
-			if (def.loop && this.#recorded.has(id)) {
-				source.loopStart = def.loop.start;
-				source.loopEnd = def.loop.end;
+			if (points) {
+				source.loopStart = points.start;
+				source.loopEnd = points.end;
 			}
 		}
 		const voiceGain = context.createGain();
@@ -716,7 +763,7 @@ class GameAudioEngine implements GameAudio {
 
 		const record: VoiceRecord = {
 			id,
-			priority: def.priority,
+			priority: spec.priority,
 			started: now,
 			source,
 			gain: voiceGain,
@@ -781,7 +828,61 @@ class GameAudioEngine implements GameAudio {
 		const def = this.#bank[id];
 		const base = def.gain * (options.gain ?? 1);
 		const record = this.#start(id, def, base, 1, options, true, Math.max(0, options.fadeIn ?? 1));
-		if (!record) return null;
+		return record ? this.#loopHandle(record, def.gain) : null;
+	}
+
+	decode(url: string, signal?: AbortSignal): Promise<AudioBuffer | null> {
+		const context = this.#context;
+		const fetcher = this.#fetch;
+		if (!context || !fetcher || this.#disposed || signal?.aborted) return Promise.resolve(null);
+		const abort = new AbortController();
+		const stop = () => abort.abort();
+		this.#lifetime.signal.addEventListener('abort', stop, { once: true });
+		signal?.addEventListener('abort', stop, { once: true });
+		return (async () => {
+			try {
+				const response = await fetcher(url, { signal: abort.signal });
+				if (!response.ok) return null;
+				const buffer = await context.decodeAudioData(await response.arrayBuffer());
+				return abort.signal.aborted ? null : buffer;
+			} catch {
+				return null;
+			} finally {
+				this.#lifetime.signal.removeEventListener('abort', stop);
+				signal?.removeEventListener('abort', stop);
+			}
+		})();
+	}
+
+	playBuffer(buffer: AudioBuffer, sound: ExtraSound, options: PlayOptions = {}): Voice | null {
+		if (!this.#canPlay()) return null;
+		const spec = extraSpec(sound);
+		const gain = (sound.gain ?? 1) * (options.gain ?? 1);
+		const record = this.#startBuffer('extra', buffer, spec, gain, options.rate ?? 1, options, false, null, 0);
+		return record ? this.#handle(record) : null;
+	}
+
+	loopBuffer(buffer: AudioBuffer, sound: ExtraSound, options: LoopOptions = {}): LoopHandle | null {
+		if (!this.#context || this.#disposed) return null;
+		const spec = extraSpec(sound);
+		const base = sound.gain ?? 1;
+		const fadeIn = Math.max(0, options.fadeIn ?? 1);
+		const record = this.#startBuffer(
+			'extra',
+			buffer,
+			spec,
+			base * (options.gain ?? 1),
+			1,
+			options,
+			true,
+			null,
+			fadeIn
+		);
+		return record ? this.#loopHandle(record, base) : null;
+	}
+
+	/** A loop's handle: `setGain` is relative to `base` (the sound's own gain). */
+	#loopHandle(record: VoiceRecord, base: number): LoopHandle {
 		const handle = this.#handle(record) as Voice & Partial<LoopHandle>;
 		handle.setGain = (gain: number, fade = 0.3) => {
 			const context = this.#context;
@@ -790,7 +891,7 @@ class GameAudioEngine implements GameAudio {
 			const param = record.gain.gain;
 			param.cancelScheduledValues(now);
 			param.setValueAtTime(param.value, now);
-			param.linearRampToValueAtTime(def.gain * Math.max(0, gain), now + Math.max(0.005, fade));
+			param.linearRampToValueAtTime(base * Math.max(0, gain), now + Math.max(0.005, fade));
 		};
 		handle.setPosition = (x: number, y: number, z: number) => {
 			if (record.panner && !record.done) setPannerPosition(record.panner, x, y, z);
@@ -807,6 +908,10 @@ class GameAudioEngine implements GameAudio {
 			stop: (fade = STEAL_FADE) => this.#fadeAndStop(record, fade)
 		};
 	}
+}
+
+function extraSpec(sound: ExtraSound): VoiceSpec {
+	return { bus: sound.bus, priority: sound.priority ?? 1, spatial: sound.spatial };
 }
 
 function setPannerPosition(panner: PannerNode, x: number, y: number, z: number) {

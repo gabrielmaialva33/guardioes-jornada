@@ -535,3 +535,61 @@ function okFetch(requested: string[] = []): GameAudioOptions['fetch'] {
 		};
 	};
 }
+
+describe('extra sounds (buffers outside the bank)', () => {
+	it('decodes a file, and gives null on a failure, an abort or no audio', async () => {
+		const requested: string[] = [];
+		const { audio, context } = await unlocked({ fetch: okFetch(requested) });
+		const buffer = await audio.decode('bed.webm');
+		expect(buffer).not.toBeNull();
+		expect(requested).toEqual(['bed.webm']);
+		context.decodeFails = () => true;
+		expect(await audio.decode('broken.webm')).toBeNull();
+		const abort = new AbortController();
+		abort.abort();
+		expect(await audio.decode('late.webm', abort.signal)).toBeNull();
+		const silent = createGameAudio({ createContext: () => null, page: null, window: null });
+		expect(await silent.decode('bed.webm')).toBeNull();
+	});
+
+	it('plays one-shots and loops on the chosen bus, placed when asked, as voice "extra"', async () => {
+		const { audio, context } = await unlocked();
+		const buffer = context.createBuffer(2, 4800, 48000) as unknown as AudioBuffer;
+		const spatial = { ref: 4, rolloff: 1.5, max: 70 };
+		const voice = audio.playBuffer(buffer, { bus: 'animals', gain: 0.5, spatial }, { x: 3, y: 0, z: 0 });
+		expect(voice?.id).toBe('extra');
+		const source = lastSource(context);
+		expect(source.buffer).toBe(buffer as unknown as FakeSource['buffer']);
+		expect(gainOf(source).gain.value).toBe(0.5);
+		const panner = [...gainOf(source).outputs][0] as FakePanner;
+		expect(panner.kind).toBe('panner');
+		expect(panner.positionX.value).toBe(3);
+		// Past its max distance nothing starts.
+		expect(audio.playBuffer(buffer, { bus: 'animals', spatial }, { x: 500, y: 0, z: 0 })).toBeNull();
+		const bed = audio.loopBuffer(buffer, { bus: 'ambience', gain: 0.8, priority: 9 }, { fadeIn: 0 });
+		expect(bed?.id).toBe('extra');
+		expect(lastSource(context).loop).toBe(true);
+		bed?.setGain(0.5, 0.1);
+		const param = gainOf(lastSource(context)).gain;
+		expect(param.events.at(-1)?.value).toBeCloseTo(0.4, 9);
+	});
+
+	it('shares the 16-voice pool and its stealing with the bank', async () => {
+		const { audio, context } = await unlocked();
+		const buffer = context.createBuffer(1, 4800, 48000) as unknown as AudioBuffer;
+		for (let k = 0; k < 16; k++) audio.loop('forest-day');
+		expect(audio.voices).toBe(16);
+		// Priority 1 cannot take a bed's voice (9)…
+		expect(audio.playBuffer(buffer, { bus: 'animals' })).toBeNull();
+		// …priority 9 takes the oldest one.
+		expect(audio.loopBuffer(buffer, { bus: 'ambience', priority: 9 })).not.toBeNull();
+		expect(audio.voices).toBeLessThanOrEqual(16);
+	});
+
+	it('drops extra one-shots while locked, like bank sounds', async () => {
+		const { audio, context } = setup();
+		const buffer = context.createBuffer(1, 4800, 48000) as unknown as AudioBuffer;
+		expect(audio.playBuffer(buffer, { bus: 'sfx' })).toBeNull();
+		expect(audio.loopBuffer(buffer, { bus: 'ambience' })).not.toBeNull();
+	});
+});
