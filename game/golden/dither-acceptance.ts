@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 
+const origin = process.env.GAME_MEASURE_URL ?? 'http://localhost:5196/';
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=gl'] });
 try {
 	const page = await browser.newPage(),
@@ -12,7 +13,7 @@ try {
 	page.on('console', (m) => {
 		if (m.type() === 'error') errors.push(m.text());
 	});
-	await page.goto('http://localhost:5196/golden/dither-fixture.html');
+	await page.goto(new URL('golden/dither-fixture.html', origin).href);
 	await page.waitForFunction(() => !!document.body.dataset.result);
 	const result = JSON.parse((await page.locator('body').getAttribute('data-result')) ?? '{}');
 	assert.deepEqual(errors, []);
@@ -22,13 +23,17 @@ try {
 	assert.equal(result.green, 8);
 	assert.equal(result.canopyHidden, 16);
 	assert.equal(result.canopyRestored, 16);
-	await page.goto('http://localhost:5196/golden/dither-fixture.html?negative=1');
+	assert.ok(result.front > 100);
+	assert.ok(Math.abs(result.front - result.back) <= 1);
+	assert.equal(result.transparentKept, 0);
+	await page.goto(new URL('golden/dither-fixture.html?negative=1', origin).href);
 	await page.waitForFunction(() => !!document.body.dataset.result);
 	const negative = JSON.parse((await page.locator('body').getAttribute('data-result')) ?? '{}');
 	assert.equal(negative.holes, 8);
 	assert.equal(negative.overlap, 8);
 	await writeFile(
-		join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/assets-dither.json'),
+		process.env.GAME_DITHER_OUTPUT ??
+			join(homedir(), '.cache/agents/2026-10-25-trilha-secreta/assets-dither.json'),
 		JSON.stringify({ result, negative }, null, 2)
 	);
 	console.info('Real GPU midpoint: 8 detail + 8 impostor pixels, zero holes or overlap.');

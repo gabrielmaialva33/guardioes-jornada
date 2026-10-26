@@ -16,6 +16,7 @@ import {
 	type Object3D,
 	PerspectiveCamera,
 	Scene,
+	Vector3,
 	WebGLRenderer
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -26,14 +27,18 @@ import {
 	CONTEXT,
 	createAvatarInput
 } from '../src/animation/avatar-animator.ts';
-import { EMOTES, type EmoteId } from '../src/animation/avatar-poses.ts';
+import { EMOTES, type EmoteId, HANG_GRIP } from '../src/animation/avatar-poses.ts';
 import { AVATAR_LAYOUT, BLOCKY_RIG } from '../src/animation/joints.ts';
 import { applyToRig, bindRig } from '../src/animation/rig.ts';
 import { AVATAR_HEIGHT, WALK_SPEED } from '../src/engine/constants.ts';
+import { Canoe } from '../src/mechanics/canoe.ts';
+import { Ladder } from '../src/mechanics/ladder.ts';
+import { createCanoeMesh, createLadderMesh, createZiplineMesh } from '../src/mechanics/meshes.ts';
+import { Zipline } from '../src/mechanics/zipline.ts';
 
 declare global {
 	interface Window {
-		sheet?: { png: string; rows: number } | { error: string };
+		sheet?: { png: string; rows: number; hangContactErrors: number[] } | { error: string };
 	}
 }
 
@@ -58,11 +63,13 @@ interface Row {
 	view: number;
 	/** The hair style shown (its real GLB node and dangling children), if any. */
 	hair?: HairRow;
+	mechanic?: 'hang' | 'row' | 'ladder';
 	/** Sets up the animator and returns the 4 captures as functions that advance it. */
 	run(animator: AvatarAnimator, capture: (caption: string) => void): void;
 }
 
 const advance = (animator: AvatarAnimator, input: AvatarInput, seconds: number) => {
+	input.reducedMotion ||= reduced;
 	for (let t = 0; t < seconds; t += DT) animator.update(DT, input);
 };
 
@@ -111,9 +118,58 @@ function still(input: AvatarInput, step: number, settle = 1.5) {
 }
 
 const walk = (overrides: Partial<AvatarInput>) =>
-	Object.assign(createAvatarInput(), { speed: WALK_SPEED, intent: 1 }, overrides);
+	Object.assign(createAvatarInput(), { speed: WALK_SPEED, intent: 1, reducedMotion: reduced }, overrides);
+
+const reduced = new URLSearchParams(location.search).has('reduced');
+function traversal(mode: 'hang' | 'row' | 'ladder') {
+	return (animator: AvatarAnimator, capture: (caption: string) => void) => {
+		const input = createAvatarInput();
+		input.grounded = false;
+		input.reducedMotion = reduced;
+		input.hanging = mode === 'hang';
+		input.rowing = mode === 'row';
+		input.climbing = mode === 'ladder';
+		input.sitting = input.rowing;
+		input.canoeSpeed = 4;
+		input.ladderRungSpacing = 0.45;
+		input.ladderDistance = 0;
+		advance(animator, input, 1);
+		for (const phase of [0, 0.25, 0.5, 0.75]) {
+			input.canoeStroke = phase * Math.PI * 2;
+			input.ladderDistance = phase * 0.9;
+			input.ziplineSpeed = phase * 14;
+			advance(animator, input, 0.12);
+			capture(
+				mode === 'hang'
+					? `v ${input.ziplineSpeed.toFixed(1)} u/s · ${(animator.hangSwing.value / DEG).toFixed(1)}°`
+					: `fase ${phase.toFixed(2)}`
+			);
+		}
+	};
+}
 
 const ROWS: Row[] = [
+	{
+		label: 'hang · tirolesa',
+		note: 'Mãos na barra; atraso pendular pela velocidade.',
+		view: 1.1,
+		mechanic: 'hang',
+		run: traversal('hang')
+	},
+	{
+		label: 'row · canoa',
+		note: 'Fase da remada, lado esquerdo (+x), pernas sentadas.',
+		view: 0.65,
+		mechanic: 'row',
+		run: traversal('row')
+	},
+	{
+		label: 'climb · escada',
+		note: 'Dois degraus de 0,45 u por ciclo; mãos alternadas.',
+		view: 1.1,
+		mechanic: 'ladder',
+		run: traversal('ladder')
+	},
 	{
 		label: 'narrow: walk',
 		note: 'pedras/ponte: braços abertos, passo curto',
@@ -230,6 +286,29 @@ async function main() {
 		hairNodes.set(style, { node, dangles });
 	}
 
+	const origin = { x: 0, y: 0, z: 0 };
+	const ladderMesh = createLadderMesh(
+		new Ladder({
+			id: 'sheet',
+			base: origin,
+			top: { x: 0, y: 8, z: 0 },
+			exit: { x: 0, y: 8, z: 2 },
+			radius: 1
+		})
+	);
+	const zip = new Zipline({ id: 'sheet', start: { x: 0, y: 1, z: -10 }, end: { x: 0, y: 0, z: 10 } });
+	const zipMesh = createZiplineMesh(zip);
+	zipMesh.pulley.position.set(0, 0, 0);
+	const canoe = new Canoe({
+		id: 'sheet',
+		channel: [origin, { x: 0, y: 0, z: 10 }],
+		halfWidth: 3,
+		landings: [{ id: 'sheet', water: origin, exit: { x: 2, y: 0, z: 0 } }]
+	});
+	const canoeMesh = createCanoeMesh(canoe);
+	scene.add(ladderMesh.root, zipMesh.pulley, canoeMesh.root);
+	const hangContactErrors: number[] = [];
+
 	const camera = new PerspectiveCamera(30, TILE_W / TILE_H, 0.1, 50);
 	const sheet = document.createElement('canvas');
 	sheet.width = LABEL_W + TILE_W * 4;
@@ -240,10 +319,14 @@ async function main() {
 	ink.fillRect(0, 0, sheet.width, sheet.height);
 	ink.fillStyle = '#e8f2ea';
 	ink.font = '600 15px sans-serif';
-	ink.fillText('P10b avatar animation: every new state/gesture at 4 phases', 10, 20);
+	ink.fillText(`P10 + P28 · avatar real · 4 fases${reduced ? ' · movimento reduzido' : ''}`, 10, 20);
 
 	ROWS.forEach((row, index) => {
 		const animator = new AvatarAnimator({ seed: 7 });
+		ladderMesh.root.visible = row.mechanic === 'ladder';
+		zipMesh.pulley.visible = row.mechanic === 'hang';
+		canoeMesh.root.visible = row.mechanic === 'row';
+		ground.visible = !row.mechanic;
 		for (const [style, { node }] of hairNodes) node.visible = style === row.hair;
 		const dangles = row.hair ? (hairNodes.get(row.hair)?.dangles ?? []) : [];
 		const distance = 8.6;
@@ -261,6 +344,24 @@ async function main() {
 			applyToRig(animator.pose, rig);
 			model.position.set(0, 0, 0);
 			model.rotation.set(0, 0, 0);
+			if (row.mechanic === 'row') {
+				model.position.y = canoeMesh.seatOffset;
+				canoe.stroke = animator.rowPhase * Math.PI * 2;
+				canoe.speed = 4;
+				canoeMesh.update(reduced);
+			}
+			if (row.mechanic === 'ladder') ladderMesh.root.position.y = -animator.climbPhase * 0.9;
+			if (row.mechanic === 'hang') {
+				model.updateMatrixWorld(true);
+				for (const name of ['arm-left', 'arm-right']) {
+					const hand = model.getObjectByName(name)?.localToWorld(new Vector3(0, -0.9, 0));
+					if (!hand) throw new Error('Missing hand');
+					const scale = AVATAR_HEIGHT / (BLOCKY_RIG.height ?? 2.7);
+					hangContactErrors.push(
+						Math.hypot(hand.y - HANG_GRIP.height * scale, hand.z - HANG_GRIP.forward * scale)
+					);
+				}
+			}
 			for (const dangle of dangles) dangle.rotation.set(animator.hair.pitch, 0, animator.hair.roll, 'YXZ');
 			renderer.render(scene, camera);
 			const left = LABEL_W + column * TILE_W;
@@ -273,7 +374,7 @@ async function main() {
 			column++;
 		});
 	});
-	window.sheet = { png: sheet.toDataURL('image/png'), rows: ROWS.length };
+	window.sheet = { png: sheet.toDataURL('image/png'), rows: ROWS.length, hangContactErrors };
 }
 
 function wrap(ink: CanvasRenderingContext2D, text: string, x: number, y: number, width: number) {

@@ -33,3 +33,24 @@ it('pulls in only when the desired camera is inside a crown; traversed crowns st
 	expect(c.occlusion({ x: 0, y: 7, z: -8 }, { x: 0, y: 0, z: 1 }, 16)).toBeNull();
 	expect(c.occlusion({ x: 0, y: 7, z: 0 }, { x: 0, y: 0, z: 1 }, 1)).toBeNull();
 });
+it('fades the same tree when only its trunk crosses the view, restoring it after the camera moves', () => {
+	const values: number[] = [];
+	const c = new CanopyVisibility([
+		{
+			...crown,
+			trunk: { x: 0, z: 0, bottom: 0, top: 5, radius: 0.8 },
+			setFade: (_id, opacity) => {
+				values.push(opacity);
+				return true;
+			}
+		}
+	]);
+	c.update({ x: 0, y: 2, z: 7 }, { x: 0, y: 2, z: -7 }, 0.15);
+	expect(values.at(-1)).toBe(0);
+	c.update({ x: 3, y: 2, z: 7 }, { x: 3, y: 2, z: -7 }, 0.15);
+	expect(values.at(-1)).toBe(1);
+	c.update({ x: 0, y: -2, z: 7 }, { x: 0, y: -2, z: -7 }, 0.15);
+	expect(values.at(-1)).toBe(1);
+	// The foliage popper remains independent: the trunk is already in the physics BVH.
+	expect(c.occlusion({ x: 0, y: 2, z: -7 }, { x: 0, y: 0, z: 1 }, 7)).toBeNull();
+});

@@ -9,6 +9,31 @@ export interface CanopyVolume {
 	rz: number;
 	id: number;
 	setFade: (id: number, opacity: number) => boolean;
+	trunk?: { x: number; z: number; bottom: number; top: number; radius: number };
+}
+/** Finite trunk cylinder, used for visibility only; it never changes camera/character collision. */
+function crossesTrunk(c: CanopyVolume, a: Vec3, b: Vec3): boolean {
+	const t = c.trunk;
+	if (!t) return false;
+	let lo = 0,
+		hi = 1;
+	const dy = b.y - a.y;
+	if (Math.abs(dy) < 1e-9) {
+		if (a.y < t.bottom || a.y > t.top) return false;
+	} else {
+		const u = (t.bottom - a.y) / dy,
+			v = (t.top - a.y) / dy;
+		lo = Math.max(lo, Math.min(u, v));
+		hi = Math.min(hi, Math.max(u, v));
+	}
+	if (lo > hi) return false;
+	const dx = b.x - a.x,
+		dz = b.z - a.z,
+		den = dx * dx + dz * dz;
+	const u = den > 1e-12 ? Math.max(lo, Math.min(hi, ((t.x - a.x) * dx + (t.z - a.z) * dz) / den)) : lo;
+	const x = a.x + dx * u - t.x,
+		z = a.z + dz * u - t.z;
+	return x * x + z * z <= t.radius * t.radius;
 }
 /** First segment parameter intersecting an ellipsoid; the trunk below it is excluded. */
 export function segmentEntry(c: CanopyVolume, a: Vec3, b: Vec3): number | null {
@@ -64,7 +89,8 @@ export class CanopyVisibility {
 		const step = reducedMotion ? 1 : Math.max(0, dt) / 0.15;
 		for (let i = 0; i < this.volumes.length; i++) {
 			const c = this.volumes[i];
-			const selected = this.#desired[i] === 1 || segmentEntry(c, head, camera) !== null;
+			const selected =
+				this.#desired[i] === 1 || segmentEntry(c, head, camera) !== null || crossesTrunk(c, head, camera);
 			const target = selected ? 0 : 1,
 				previous = this.#opacity[i];
 			const next = target < previous ? Math.max(target, previous - step) : Math.min(target, previous + step);

@@ -5,7 +5,7 @@
  * one script and the page is served from Playwright routes.
  *
  * Usage (from the repo root):
- *   node game/golden/avatar-sheet.ts [--out avatar-p10.png]
+ *   node game/golden/avatar-sheet.ts [--out avatar-p28.png] [--reduced]
  *
  * Writes `<root>/sheets/avatar/<out>` (GUARDIOES_GOLDEN_DIR overrides the root).
  */
@@ -57,15 +57,32 @@ try {
 			});
 		return route.fulfill({ status: 404, body: '' });
 	});
-	await page.goto('http://avatar-sheet.local/');
+	await page.goto(`http://avatar-sheet.local/${args.has('reduced') ? '?reduced' : ''}`);
 	await page.addScriptTag({ url: '/sheet.js' });
 	await page.waitForFunction(() => window.sheet !== undefined, null, { timeout: 120_000 });
 	const sheet = await page.evaluate(() => window.sheet);
 	if (!sheet || 'error' in sheet) throw new Error(sheet ? sheet.error : 'no sheet');
+	if (sheet.hangContactErrors.some((error) => !Number.isFinite(error) || error > 0.02))
+		throw new Error(`Hang grip misses bar: ${sheet.hangContactErrors}`);
 	await ensureRoot();
 	await mkdir(dirname(out), { recursive: true });
 	await writeFile(out, Buffer.from(sheet.png.slice(sheet.png.indexOf(',') + 1), 'base64'));
-	console.log(`${sheet.rows} rows x 4 phases -> ${out}`);
+	await writeFile(
+		`${out}.json`,
+		JSON.stringify(
+			{
+				rows: sheet.rows,
+				phases: 4,
+				reduced: args.has('reduced'),
+				hangContactErrors: sheet.hangContactErrors
+			},
+			null,
+			2
+		)
+	);
+	console.log(
+		`${sheet.rows} rows x 4 phases -> ${out}; grip error max ${Math.max(...sheet.hangContactErrors).toFixed(6)} u`
+	);
 } finally {
 	await browser.close();
 }

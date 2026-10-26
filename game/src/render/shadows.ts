@@ -74,8 +74,8 @@ export const LIGHT_INTENSITY: Readonly<Record<LightVariant, { hemisphere: number
 	night: { hemisphere: 0.6, sun: 0.45 }
 };
 
-/** Sun azimuth, degrees from +z toward +x: 180 puts the sun behind the spawn's view (it faces +z). */
-export const SUN_AZIMUTH_DEG = 180;
+/** Sun azimuth, degrees from +z toward +x: 245 places the afternoon key west-south-west. */
+export const SUN_AZIMUTH_DEG = 245;
 
 /** How far the light sits from the focus along its direction. */
 const SUN_DISTANCE = 60;

@@ -2,6 +2,8 @@
 import { Color, type IUniform, type MeshLambertMaterial, ShaderChunk, type Texture, Vector3 } from 'three';
 import { testing } from '../scene/testing.ts';
 import { LIGHT } from '../style/palette.ts';
+import { patchLeafCoverage } from './leaf-coverage.ts';
+import { patchLook } from './look.ts';
 export interface StylizedOptions {
 	vegetation?: boolean;
 	shadeReceiver?: boolean;
@@ -38,6 +40,7 @@ export function visualStep(): number {
 	return Number.isFinite(v) ? Math.max(0, Math.min(4, v)) : 4;
 }
 export function patchStylizedShader(shader: ShaderSource, options: StylizedOptions = {}) {
+	patchLook(shader);
 	Object.assign(shader.uniforms, lighting, {
 		uRim: { value: options.rim ? 0.09 : 0 },
 		uShadeReceiver: {
@@ -92,7 +95,7 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
   float noise = sin(vStylizedWorld.x * 2.7 + uVisualTime * 0.18) * sin(vStylizedWorld.z * 2.1 - uVisualTime * 0.12);
   float spot = smoothstep(0.25, 0.85, noise) * (1.0-shade) * uSunSpots;
   reflectedLight.directDiffuse *= mix(0.45, 1.0, clamp(shade + spot * 0.7, 0.0, 1.0));
-  reflectedLight.indirectDiffuse *= mix(vec3(0.77,0.88,0.82), vec3(1.0), shade);
+  reflectedLight.indirectDiffuse *= mix(vec3(0.63,0.76,1.08), vec3(1.0), shade);
  }
  #include <aomap_fragment>
  `
@@ -105,6 +108,12 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
  vec3 outgoingLight =`
 	);
 	shader.fragmentShader = shader.fragmentShader.replace(
+		'#include <opaque_fragment>',
+		`float sunShare=clamp(dot(reflectedLight.directDiffuse,vec3(.2126,.7152,.0722))/(dot(outgoingLight,vec3(.2126,.7152,.0722))+.001),0.,1.);
+outgoingLight=mix(outgoingLight,outgoingLight*vec3(.64,.73,1.28),.35*(1.-sunShare));
+#include <opaque_fragment>`
+	);
+	shader.fragmentShader = shader.fragmentShader.replace(
 		'#include <fog_fragment>',
 		`
  #ifdef USE_FOG
@@ -114,16 +123,25 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
    float linearMist = smoothstep(fogNear, fogFar, vFogDepth);
   #endif
   float heightMist = 0.32 * exp(-max(vStylizedWorld.y-uMistBase,0.0)*0.22) * smoothstep(8.0,60.0,vFogDepth) * uHeightFog;
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, max(linearMist, heightMist));
+  vec3 lookFog=sRGBTransferOETF(vec4(lookGrade(sRGBTransferEOTF(vec4(fogColor,1.)).rgb),1.)).rgb;
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, lookFog, max(linearMist, heightMist));
  #endif
  `
 	);
 	if (options.canopyBase !== undefined) patchTreeVisibility(shader, options.canopyBase);
-	if (options.cover)
+	if (options.cover) {
 		shader.vertexShader = shader.vertexShader.replace(
 			'#include <beginnormal_vertex>',
 			'#include <beginnormal_vertex>\nobjectNormal = vec3(0.,1.,0.);'
 		);
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <normal_fragment_begin>',
+			ShaderChunk.normal_fragment_begin.replace(
+				'normal *= faceDirection;',
+				'// Ground-cover normals face the hemisphere on both sides.'
+			)
+		);
+	}
 	if (options.terrain) {
 		shader.vertexShader = shader.vertexShader.replace(
 			'varying vec3 vStylizedWorld;',
@@ -140,11 +158,11 @@ export function patchStylizedShader(shader: ShaderSource, options: StylizedOptio
 		shader.fragmentShader = shader.fragmentShader.replace(
 			'#include <color_fragment>',
 			`#include <color_fragment>
-  float bank = 1.0 - smoothstep(0.0, 2.0, vShore.y);
+  float bank = 1.0 - smoothstep(-0.25, 1.15, vShore.y);
   float wet = (1.0-smoothstep(0.12,0.55,abs(vStylizedWorld.y-vShore.x))) * bank;
   diffuseColor.rgb *= 1.0 - 0.22 * wet;
-  float foam = (1.0-smoothstep(0.025,0.10,abs(vStylizedWorld.y-vShore.x))) * bank;
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.67,0.82,0.72), foam * 0.75);
+  float foam = (1.0-smoothstep(0.02,0.08,abs(vStylizedWorld.y-vShore.x))) * bank;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.67,0.82,0.72), foam * 0.25);
   `
 		);
 	}
@@ -167,7 +185,7 @@ attribute float instanceFade;
 		`#include <begin_vertex>
 vCanopyFade=1.0;
 #ifdef USE_INSTANCING
-vCanopyFade=mix(1.0,instanceFade,smoothstep(uCanopyBase,uCanopyBase+0.7,position.y));
+vCanopyFade=instanceFade;
 vec4 treeCenter=modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
 vCanopyFade*=1.0-smoothstep(uTreeRange-6.0,uTreeRange+6.0,length(treeCenter.xz-uGameEye.xz));
 #endif`
@@ -194,6 +212,7 @@ export function stylize<T extends MeshLambertMaterial>(material: T, options: Sty
 	material.onBeforeCompile = (shader, renderer) => {
 		previous(shader, renderer);
 		patchStylizedShader(shader, options);
+		if (options.vegetation && material.alphaTest > 0) patchLeafCoverage(shader);
 	};
 	material.customProgramCacheKey = () =>
 		`${previousKey}|guardioes-lambert-v2:${!!options.vegetation}:${!!options.cover}:${!!options.terrain}:${options.canopyBase !== undefined}`;

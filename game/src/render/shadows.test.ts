@@ -5,11 +5,19 @@ import {
 	Mesh,
 	MeshLambertMaterial,
 	PCFShadowMap,
-	type ShadowMapType
+	type ShadowMapType,
+	Vector3
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { LIGHT } from '../style/palette.ts';
-import { BlobShadows, createBlobTexture, SHADOW_TIERS, ShadowRig, sunDirection } from './shadows.ts';
+import {
+	BlobShadows,
+	createBlobTexture,
+	SHADOW_TIERS,
+	ShadowRig,
+	SUN_AZIMUTH_DEG,
+	sunDirection
+} from './shadows.ts';
 
 function mockRenderer() {
 	return {
@@ -40,11 +48,13 @@ describe('ShadowRig', () => {
 	it('lights from the palette elevation on every tier, low included', () => {
 		const rig = new ShadowRig(mockRenderer());
 		const direction = rig.sun.position.clone().sub(rig.sun.target.position).normalize();
-		expect(direction.distanceTo(sunDirection(LIGHT.daylight.sunElevationDeg, 180))).toBeLessThan(1e-6);
+		expect(direction.distanceTo(sunDirection(LIGHT.daylight.sunElevationDeg, SUN_AZIMUTH_DEG))).toBeLessThan(
+			1e-6
+		);
 		expect(rig.sun.color.equals(new Color(LIGHT.daylight.sun))).toBe(true);
 		rig.setVariant('night');
 		const night = rig.sun.position.clone().sub(rig.sun.target.position).normalize();
-		expect(night.distanceTo(sunDirection(LIGHT.night.sunElevationDeg, 180))).toBeLessThan(1e-6);
+		expect(night.distanceTo(sunDirection(LIGHT.night.sunElevationDeg, SUN_AZIMUTH_DEG))).toBeLessThan(1e-6);
 	});
 
 	it('medium: 1024 map, autoUpdate off, renders only when something moved', () => {
@@ -60,14 +70,20 @@ describe('ShadowRig', () => {
 		expect(renderer.shadowMap.needsUpdate).toBe(true);
 		renderer.shadowMap.needsUpdate = false; // three clears it after rendering
 		expect(idle(rig, 120, 10, 10)).toBe(0);
-		// Jitter of less than a texel around a texel centre: nothing. With the sun at
-		// azimuth 180°, light-space "right" is −x, so x = k · texel is a texel centre.
+		// Jitter along light-space right, centred on a texel: independent of the art-directed azimuth.
 		const texel = (2 * SHADOW_TIERS.medium.extent) / SHADOW_TIERS.medium.mapSize;
-		const centre = Math.round(10 / texel) * texel;
-		rig.update(centre, 0, 10);
+		const right = new Vector3(0, 1, 0)
+			.cross(sunDirection(LIGHT.daylight.sunElevationDeg, SUN_AZIMUTH_DEG))
+			.normalize();
+		const centre = right.clone().multiplyScalar(100 * texel);
+		rig.update(centre.x, centre.y, centre.z);
 		renderer.shadowMap.needsUpdate = false;
 		let jitter = 0;
-		for (let i = 0; i < 30; i++) if (rig.update(centre + (i % 2 ? 0.3 : -0.3) * texel, 0, 10)) jitter++;
+		for (let i = 0; i < 30; i++) {
+			const offset = (i % 2 ? 0.3 : -0.3) * texel;
+			if (rig.update(centre.x + right.x * offset, centre.y + right.y * offset, centre.z + right.z * offset))
+				jitter++;
+		}
 		expect(jitter).toBe(0);
 		// Walking at 9.6 u/s on 60 Hz: re-renders every frame, so the shadow stays under the feet.
 		let renders = 0;
@@ -92,7 +108,9 @@ describe('ShadowRig', () => {
 		rig.update(3.3, 0, -7.9);
 		const target = rig.sun.target.position.clone();
 		const direction = rig.sun.position.clone().sub(target).normalize();
-		expect(direction.distanceTo(sunDirection(LIGHT.daylight.sunElevationDeg, 180))).toBeLessThan(1e-6);
+		expect(direction.distanceTo(sunDirection(LIGHT.daylight.sunElevationDeg, SUN_AZIMUTH_DEG))).toBeLessThan(
+			1e-6
+		);
 		// The target sits within one texel (plus the coarse depth step) of the focus.
 		expect(Math.hypot(target.x - 3.3, target.z + 7.9)).toBeLessThan(4);
 	});

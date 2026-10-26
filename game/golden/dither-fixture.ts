@@ -2,6 +2,8 @@
 import {
 	AdditiveBlending,
 	Box3,
+	DirectionalLight,
+	DoubleSide,
 	InstancedBufferAttribute,
 	InstancedMesh,
 	Matrix4,
@@ -15,6 +17,7 @@ import {
 	WebGLRenderer,
 	WebGLRenderTarget
 } from 'three';
+import { patchLeafCoverage } from '../src/render/leaf-coverage.ts';
 import { lighting, patchTreeVisibility } from '../src/render/stylized.ts';
 import type { SurvivalWorld } from '../src/survival/types.ts';
 import { createTreeImpostors } from '../src/world-runtime/tree-impostors.ts';
@@ -32,7 +35,7 @@ const detailMaterial = new MeshBasicMaterial({
 	depthTest: false,
 	depthWrite: false
 });
-detailMaterial.onBeforeCompile = (shader) => patchTreeVisibility(shader, -3);
+detailMaterial.onBeforeCompile = (shader) => patchTreeVisibility(shader, 3);
 lighting.uTreeRange.value = 48;
 lighting.uGameEye.value.set(48, 0, 0);
 const detail = new InstancedMesh(geometry, detailMaterial, 1);
@@ -117,7 +120,41 @@ try {
 	renderer.readRenderTargetPixels(target, 0, 0, 4, 4, pixels);
 	let canopyRestored = 0;
 	for (let i = 0; i < pixels.length; i += 4) if (pixels[i] > 127) canopyRestored++;
-	document.body.dataset.result = JSON.stringify({ red, green, holes, overlap, canopyHidden, canopyRestored });
+	const leafScene = new Scene(),
+		leafMaterial = new MeshLambertMaterial({ color: '#ffffff', side: DoubleSide, alphaTest: 0.5 });
+	leafMaterial.onBeforeCompile = patchLeafCoverage;
+	const leaf = new Mesh(geometry, leafMaterial),
+		sun = new DirectionalLight('#ffffff', Math.PI);
+	sun.position.set(0, 0, 10);
+	leafScene.add(leaf, sun);
+	renderer.clear();
+	renderer.render(leafScene, camera);
+	renderer.readRenderTargetPixels(target, 0, 0, 4, 4, pixels);
+	const front = pixels[20];
+	camera.position.z = -1;
+	camera.lookAt(0, 0, 0);
+	renderer.clear();
+	renderer.render(leafScene, camera);
+	renderer.readRenderTargetPixels(target, 0, 0, 4, 4, pixels);
+	const back = pixels[20];
+	leafMaterial.opacity = 0;
+	renderer.clear();
+	renderer.render(leafScene, camera);
+	renderer.readRenderTargetPixels(target, 0, 0, 4, 4, pixels);
+	let transparentKept = 0;
+	for (let i = 0; i < pixels.length; i += 4) if (pixels[i] > 0) transparentKept++;
+	leafMaterial.dispose();
+	document.body.dataset.result = JSON.stringify({
+		red,
+		green,
+		holes,
+		overlap,
+		canopyHidden,
+		canopyRestored,
+		front,
+		back,
+		transparentKept
+	});
 } finally {
 	target.dispose();
 	detail.dispose();
