@@ -90,6 +90,7 @@ export class Soundscape {
 	readonly #next = emptyMarks();
 	readonly #own: PlayOptions = { gain: 1, rate: 1 };
 	readonly #at: PlayOptions = { x: 0, y: 0, z: 0, gain: 1, rate: 1 };
+	readonly #riverAt = { x: 0, y: 0, z: 0 };
 	readonly #step: FootstepOptions = { foot: 'left', intensity: 1 };
 	readonly #waterfall: { x: number; y: number; z: number } | null;
 	readonly #cutting: { x: number; y: number; z: number } | null;
@@ -295,31 +296,9 @@ export class Soundscape {
 		const lx = e[12];
 		const lz = e[14];
 		const map = this.#map;
-		if (this.#river && map) {
+		if (this.#river && map && nearestRiverPoint(map.world.river.points, lx, lz, this.#riverAt))
 			// The river emitter sits on the centre-line point nearest the listener.
-			const points = map.world.river.points;
-			let best = Number.POSITIVE_INFINITY;
-			let bx = 0;
-			let by = 0;
-			let bz = 0;
-			for (let k = 1; k < points.length; k++) {
-				const a = points[k - 1];
-				const b = points[k];
-				const dx = b.x - a.x;
-				const dz = b.z - a.z;
-				const t = Math.max(0, Math.min(1, ((lx - a.x) * dx + (lz - a.z) * dz) / (dx * dx + dz * dz || 1)));
-				const x = a.x + t * dx;
-				const z = a.z + t * dz;
-				const d = (lx - x) * (lx - x) + (lz - z) * (lz - z);
-				if (d < best) {
-					best = d;
-					bx = x;
-					by = a.water + (b.water - a.water) * t;
-					bz = z;
-				}
-			}
-			this.#river.setPosition(bx, by, bz);
-		}
+			this.#river.setPosition(this.#riverAt.x, this.#riverAt.y, this.#riverAt.z);
 		for (let k = 0; k < this.#callers.length; k++) {
 			const caller = this.#callers[k];
 			caller.wait -= dt;
@@ -338,4 +317,34 @@ export class Soundscape {
 			this.audio.play(caller.id, at);
 		}
 	}
+}
+
+/**
+ * The point of the river centre-line nearest (x, z), written to `out` (y is the
+ * water surface there). False when the river has fewer than two points.
+ */
+export function nearestRiverPoint(
+	points: readonly { readonly x: number; readonly z: number; readonly water: number }[],
+	x: number,
+	z: number,
+	out: { x: number; y: number; z: number }
+): boolean {
+	let best = Number.POSITIVE_INFINITY;
+	for (let k = 1; k < points.length; k++) {
+		const a = points[k - 1];
+		const b = points[k];
+		const dx = b.x - a.x;
+		const dz = b.z - a.z;
+		const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+		const px = a.x + t * dx;
+		const pz = a.z + t * dz;
+		const d = (x - px) * (x - px) + (z - pz) * (z - pz);
+		if (d < best) {
+			best = d;
+			out.x = px;
+			out.y = a.water + (b.water - a.water) * t;
+			out.z = pz;
+		}
+	}
+	return best < Number.POSITIVE_INFINITY;
 }
