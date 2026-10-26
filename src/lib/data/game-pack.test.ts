@@ -87,6 +87,23 @@ const AUDIO_PATHS = [
 ];
 
 describe('optional independent packs', () => {
+	it('pins both streaming Workers and serves their exact pack URLs offline after app cache cleanup', async () => {
+		const workers = ['assets/stream-worker-a1.js', 'assets/world-gen-worker-b2.js'];
+		const manifest = await audioPack(['entry.js', ...workers]);
+		const storage = memoryCaches(),
+			requested: string[] = [];
+		await new GamePacks({ root, storage, fetch: pathFetch(requested) }).download(manifest);
+		expect(requested).toEqual(expect.arrayContaining(workers));
+		for (const version of ['A', 'B', 'C']) {
+			for (const name of obsoleteCaches(await storage.keys(), cachePrefix(root.pathname), version))
+				await storage.delete(name);
+		}
+		for (const path of workers) {
+			expect(
+				await (await matchGamePack(storage, root, new URL(gameFileUrl(root, manifest.packId, path))))?.text()
+			).toBe(path);
+		}
+	});
 	it('persists a verified pack and serves it without the server after A, B and C app cleanups', async () => {
 		const storage = memoryCaches();
 		const a = await pack('pack A');
