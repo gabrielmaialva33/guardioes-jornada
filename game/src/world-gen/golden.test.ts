@@ -11,6 +11,8 @@ import { DETAIL_VERSION, MACRO_VERSION, WORLD_SEED } from './constants.ts';
  * values must come out of every engine (the Chrome Worker benchmark prints them).
  * F1 prep re-pinned only (4, 0), the one golden chunk in the east stitch band;
  * versions stay 1 because nothing has been saved yet (saves start in F3).
+ * F1 part 1 (the east portal) left all nine as they were and added (4, 1),
+ * the chunk the portal opens into.
  */
 export const GOLDEN_CHUNKS: [number, number][] = [
 	[4, 0],
@@ -21,18 +23,22 @@ export const GOLDEN_CHUNKS: [number, number][] = [
 	[20, 9],
 	[30, 30],
 	[-20, 400],
-	[2500, -3100]
+	[2500, -3100],
+	[4, 1]
 ];
 export const GOLDEN: Record<number, number[]> = {
 	[WORLD_SEED]: [
-		0x01dfad0c, 0x7954776b, 0x25870fb0, 0x3d65491b, 0x710db001, 0xcad9938e, 0x555b0596, 0xaee93750, 0x022d955d
+		0x01dfad0c, 0x7954776b, 0x25870fb0, 0x3d65491b, 0x710db001, 0xcad9938e, 0x555b0596, 0xaee93750,
+		0x022d955d, 0x3da719cd
 	],
 	1: [
-		0xb2fc9bc8, 0x406c495b, 0xf9b618ee, 0xf12ba31e, 0x299a6b62, 0x82bd2047, 0xd7d5fe66, 0xaec0c1ab, 0x32be8ff5
+		0xb2fc9bc8, 0x406c495b, 0xf9b618ee, 0xf12ba31e, 0x299a6b62, 0x82bd2047, 0xd7d5fe66, 0xaec0c1ab,
+		0x32be8ff5, 0x44760b74
 	],
 	/** 0xdeadbeef */
 	3735928559: [
-		0x29ef7572, 0xf41a3b8a, 0xe36a52f4, 0x74491596, 0x5b1b8584, 0x97983496, 0xa558f4a2, 0x4399c02a, 0xa88fa091
+		0x29ef7572, 0xf41a3b8a, 0xe36a52f4, 0x74491596, 0x5b1b8584, 0x97983496, 0xa558f4a2, 0x4399c02a,
+		0xa88fa091, 0xd635d462
 	]
 };
 

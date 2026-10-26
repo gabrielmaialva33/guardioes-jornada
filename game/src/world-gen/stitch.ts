@@ -8,13 +8,17 @@
  * edge (the segment x = 160, z 0..160; the band rounds its two corners):
  * 1. Target: the Reserva's edge height at the clamped z, as a box-filtered
  *    profile (±8 u) plus the edge's own detail fading out within 8 u of the
- *    seam, so cliffs and noise never leak out (§4.5 step 3).
+ *    seam, so cliffs and noise never leak out (§4.5 step 3). The portal's
+ *    opening (RESERVA_EAST_GAP) keeps its own height unfiltered, so the
+ *    mirante's causeway carries on east as a ridge.
  * 2. Blend: procedural + (target − procedural) · w, with
  *    w = 1 − smoothstep(0, 40, distance to the edge).
  * 3. Slope limit (§4.5 step 4, survival's "thermal" as a filter): a FIFO
  *    worklist in a fixed order clamps every free vertex to within BAND_SLOPE
  *    of its four neighbours (1.25 u diagonally), with the seam (the Reserva's
  *    own heights) and the band's outer ring (pure procedural, w = 0) fixed.
+ *    Only the seam inside the portal's opening constrains it: elsewhere the
+ *    Reserva's edge rail stands at x = 160 and nobody walks across.
  *
  * Step 3 reads neighbours, so the band is computed once per seed as a whole
  * table, independent of which chunk asks first: still a pure function of
@@ -24,7 +28,7 @@ import { clamp } from '../survival/noise.ts';
 import { RESERVE, STITCH_BAND } from './constants.ts';
 import { coastX, macroFields, newMacroPoint, samplePoint, serraFoot } from './macro.ts';
 import { smooth } from './math.ts';
-import { RESERVA_EAST_COLUMNS } from './reserva-edge.ts';
+import { RESERVA_EAST_COLUMNS, RESERVA_EAST_GAP } from './reserva-edge.ts';
 import { CARVE_FAR, carve, newRiverSample, riverLattice } from './rivers.ts';
 
 const EDGE_X = RESERVE.x1;
@@ -48,6 +52,11 @@ const ROWS = RESERVE.z1 - RESERVE.z0 + 2 * STITCH_BAND + 1;
 const ABSENT = 0;
 const FIXED = 1;
 const FREE = 2;
+/** A seam vertex behind the edge rail: fixed to the Reserva's height, but no walking constraint. */
+const FENCED = 3;
+
+/** z of the seam inside the portal's opening. */
+const inGap = (z: number) => z >= RESERVA_EAST_GAP.z0 && z <= RESERVA_EAST_GAP.z1;
 
 /** Strictly inside the Reserva's square: hand-made, never generated. */
 export const insideReserva = (x: number, z: number) =>
@@ -83,6 +92,10 @@ export class EastStitch {
 		const last = edge.length - 1;
 		const smoothed = new Float64Array(edge.length);
 		for (let z = 0; z <= last; z++) {
+			if (inGap(z + RESERVE.z0)) {
+				smoothed[z] = edge[z];
+				continue;
+			}
 			let sum = 0;
 			for (let k = -BOX; k <= BOX; k++) sum += edge[clamp(z + k, 0, last)];
 			smoothed[z] = sum / (2 * BOX + 1);
@@ -99,7 +112,7 @@ export class EastStitch {
 				const k = b * COLS + a;
 				if (insideReserva(x, z)) state[k] = ABSENT;
 				else if (x === EDGE_X && z >= RESERVE.z0 && z <= RESERVE.z1) {
-					state[k] = FIXED;
+					state[k] = inGap(z) ? FIXED : FENCED;
 					h[k] = edge[z - RESERVE.z0];
 				} else {
 					weight[k] = eastWeight(x, z);
@@ -180,7 +193,7 @@ export class EastStitch {
 			let hi = Number.POSITIVE_INFINITY;
 			for (let t = 0; t < 8; t++) {
 				const o = k + offsets[t];
-				if (state[o] === ABSENT) continue;
+				if (state[o] === ABSENT || state[o] === FENCED) continue;
 				lo = Math.max(lo, h[o] - limits[t]);
 				hi = Math.min(hi, h[o] + limits[t]);
 			}
@@ -228,7 +241,8 @@ export class EastStitch {
 		if (a < 0 || b < 0 || a >= COLS || b >= ROWS) return Number.NaN;
 		const k = b * COLS + a;
 		const s = this.#state[k];
-		if (s === FREE || (s === FIXED && x === EDGE_X && z >= RESERVE.z0 && z <= RESERVE.z1)) return this.#h[k];
+		if (s === FREE || s === FENCED || (s === FIXED && x === EDGE_X && z >= RESERVE.z0 && z <= RESERVE.z1))
+			return this.#h[k];
 		return Number.NaN;
 	}
 }

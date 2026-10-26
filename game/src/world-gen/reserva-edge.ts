@@ -5,10 +5,11 @@
  * x = 160 exactly and hands x = 159 to the aprons of chunks (4, 0..3).
  *
  * Float32Arrays of the level's heights: the shortest decimals that round to
- * them, rounded back on load, so every value is the level's exactly. stitch.test.ts
- * compares them with buildStoryWorld() and fails when the level changes (for
- * example when F2 opens the Reserva with edgeRise = 0): regenerate them with
- * the script named in the failure, then re-pin chunk (4, 0)'s goldens.
+ * them, rounded back on load, so every value is the level's exactly.
+ * stitch.test.ts compares them with buildStoryWorld() and fails when the
+ * level changes: regenerate this file with
+ * ~/.cache/agents/2026-10-25-trilha-secreta/world-gen/scripts/reserva-edge-table.ts
+ * (p9-world-gen-f0.md), then re-pin the golden chunks of the band.
  */
 export const RESERVA_EAST_COLUMNS: Readonly<Record<159 | 160, Float32Array>> = {
 	159: Float32Array.of(
@@ -78,15 +79,15 @@ export const RESERVA_EAST_COLUMNS: Readonly<Record<159 | 160, Float32Array>> = {
 		9.6569195,
 		9.653591,
 		9.64908,
-		9.641844,
-		9.6317425,
-		9.62137,
-		9.613875,
-		9.612292,
-		9.614937,
-		9.616604,
-		9.61812,
-		9.620375,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
 		9.624254,
 		9.631509,
 		9.64652,
@@ -241,15 +242,15 @@ export const RESERVA_EAST_COLUMNS: Readonly<Record<159 | 160, Float32Array>> = {
 		9.840532,
 		9.835873,
 		9.830368,
-		9.822655,
-		9.812494,
-		9.802355,
-		9.79542,
-		9.794779,
-		9.798518,
-		9.801029,
-		9.803148,
-		9.805778,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
+		15,
 		9.809816,
 		9.817313,
 		9.834017,
@@ -338,3 +339,10 @@ export const RESERVA_EAST_COLUMNS: Readonly<Record<159 | 160, Float32Array>> = {
 		10.069912
 	)
 };
+
+/**
+ * The east portal's opening in the Reserva's edge (level.portal.gap): the
+ * only stretch of x = 160 a walker crosses. Elsewhere the edge rail stands, so
+ * the band's slope limit ignores the seam there.
+ */
+export const RESERVA_EAST_GAP = { z0: 66, z1: 74 } as const;

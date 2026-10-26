@@ -3,12 +3,15 @@ import { buildStoryWorld } from '../level/build.ts';
 import { WALK_SLOPE } from '../survival/types.ts';
 import { generateArea, generateChunk, heightWithApron } from './chunk.ts';
 import { CHUNK_SIZE, WORLD_SEED } from './constants.ts';
-import { RESERVA_EAST_COLUMNS } from './reserva-edge.ts';
+import { RESERVA_EAST_COLUMNS, RESERVA_EAST_GAP } from './reserva-edge.ts';
 import { EastStitch, eastWeight, insideReserva } from './stitch.ts';
 
 const SEEDS = [WORLD_SEED, 1, 0xdeadbeef];
-const story = buildStoryWorld().world;
+const { world: story, level } = buildStoryWorld();
 const reserva = (x: number, z: number) => story.heights[z * story.grid + x];
+const inGap = (z: number) => z >= RESERVA_EAST_GAP.z0 && z <= RESERVA_EAST_GAP.z1;
+/** A seam vertex behind the Reserva's edge rail (outside the portal's opening). */
+const fenced = (x: number, z: number) => x === 160 && z >= 0 && z <= 160 && !inGap(z);
 
 /** The stitched ground over the band's table, x 120..200, z −40..200 (NaN inside the Reserva). */
 function band(seed: number, stitch = true) {
@@ -23,8 +26,10 @@ describe('east stitch band', () => {
 			for (let z = 0; z <= 160; z++)
 				expect(
 					RESERVA_EAST_COLUMNS[x][z],
-					`level/build.ts changed: rerun world-gen/scripts/reserva-edge-table.ts (p9 report §9) into reserva-edge.ts, then re-pin chunk (4, 0)`
+					`level/build.ts changed: rerun world-gen/scripts/reserva-edge-table.ts (p9 report §9) into reserva-edge.ts, then re-pin the band chunks`
 				).toBe(reserva(x, z));
+		expect(RESERVA_EAST_GAP).toEqual({ z0: level.portal.gap.z0, z1: level.portal.gap.z1 });
+		expect(level.portal.gap.x).toBe(160);
 	});
 
 	it.each(SEEDS)('meets the Reserva at x 160 with no step (seed %i)', (seed) => {
@@ -37,8 +42,8 @@ describe('east stitch band', () => {
 				const seam = c.heights[j * c.grid];
 				worst = Math.max(worst, Math.abs(seam - reserva(160, z)));
 				expect(Math.abs(seam - reserva(160, z))).toBeLessThanOrEqual(0.25);
-				// And on into the band: one walkable step east of the seam.
-				expect(Math.abs(c.heights[j * c.grid + 1] - seam)).toBeLessThanOrEqual(WALK_SLOPE);
+				// Through the portal's opening, on into the band: one walkable step east of the seam.
+				if (inGap(z)) expect(Math.abs(c.heights[j * c.grid + 1] - seam)).toBeLessThanOrEqual(WALK_SLOPE);
 				// The apron west of the seam is the Reserva's own x = 159, for seamless normals.
 				if (z > 0 && z < 160) expect(heightWithApron(c, -1, j)).toBe(reserva(159, z));
 			}
@@ -64,6 +69,8 @@ describe('east stitch band', () => {
 					if (Number.isNaN(h(x2, z2)) || (eastWeight(x, z) === 0 && eastWeight(x2, z2) === 0)) continue;
 					// Pairs on the seam itself are the Reserva's own.
 					if (x === 160 && x2 === 160 && z >= 0 && z2 <= 160) continue;
+					// Behind the Reserva's edge rail (outside the portal) nobody walks across the seam.
+					if (fenced(x, z) || fenced(x2, z2)) continue;
 					checked++;
 					expect(Math.abs(h(x2, z2) - h(x, z)), `(${x},${z})→(${x2},${z2})`).toBeLessThanOrEqual(limit);
 				}
@@ -74,6 +81,25 @@ describe('east stitch band', () => {
 		for (let z = 0; z <= 160; z++) rise += h(200, z) - h(160, z);
 		expect(rise / 161).toBeGreaterThan(8);
 	});
+
+	it.each(SEEDS)(
+		'carries the portal on east: from the mirante top through the gap to x 200 (seed %i)',
+		(seed) => {
+			const { gap } = level.portal;
+			const chunk = generateChunk(4, 1, seed);
+			expect(gap.z0).toBeGreaterThanOrEqual(40);
+			expect(gap.z1).toBeLessThanOrEqual(80);
+			for (let z = gap.z0; z <= gap.z1; z++) {
+				const row: number[] = [];
+				for (let x = 134; x <= 160; x++) row.push(reserva(x, z));
+				// The seam inside the gap: no step at all (≤ 0.25 u asked).
+				expect(Math.abs(chunk.heights[(z - 40) * chunk.grid] - reserva(160, z))).toBeLessThanOrEqual(0.25);
+				for (let x = 161; x <= 200; x++) row.push(chunk.heights[(z - 40) * chunk.grid + x - 160]);
+				for (let k = 1; k < row.length; k++)
+					expect(Math.abs(row[k] - row[k - 1]), `x ${133 + k}, z ${z}`).toBeLessThanOrEqual(WALK_SLOPE);
+			}
+		}
+	);
 
 	it.each(SEEDS)(
 		'leaves the ground outside the band, and the closed sides, as they were (seed %i)',
