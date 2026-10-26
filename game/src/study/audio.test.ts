@@ -10,9 +10,17 @@ import {
 	studyMix
 } from './audio.ts';
 import type { StudyCatalog, StudySoundGroup } from './data.ts';
-import { STUDY_PREFIX } from './gate.ts';
+import { STUDY_PREFIX, type StudyContext } from './gate.ts';
 
-const STUDY = '?debug&estudo=greenhell';
+const STUDY = '?debug';
+/** The owner's dev browser: the study is on by default. */
+const DEV_PAGE: StudyContext = {
+	dev: true,
+	browser: true,
+	test: false,
+	webdriver: false,
+	softwareTest: false
+};
 
 /** Made-up paths: the real ones live only in the served catalog. */
 const group = (id: string, count = 2): StudySoundGroup => ({
@@ -125,6 +133,7 @@ async function start(host: Partial<StudyAudioHost> = {}, ids = ALL) {
 	const study = startStudyAudio({
 		audio: fake.audio,
 		search: STUDY,
+		context: DEV_PAGE,
 		random: () => 0,
 		opus: true,
 		catalog: async () => catalog(ids),
@@ -141,10 +150,13 @@ afterEach(() => {
 });
 
 describe('gate', () => {
-	it('starts only with ?estudo=greenhell, and not for &som=nosso', () => {
+	it('follows the study gate (off with ?estudo=off and in automated runs) and stays off for &som=nosso', () => {
 		const { audio } = fakeAudio();
-		const host = { audio, catalog: async () => catalog([]) };
-		expect(startStudyAudio({ ...host, search: '?debug' })).toBeNull();
+		const host = { audio, context: DEV_PAGE, catalog: async () => catalog([]) };
+		expect(startStudyAudio({ ...host, search: '?debug&estudo=off' })).toBeNull();
+		expect(
+			startStudyAudio({ ...host, search: '?debug', context: { ...DEV_PAGE, webdriver: true } })
+		).toBeNull();
 		expect(startStudyAudio({ ...host, search: `${STUDY}&som=nosso` })).toBeNull();
 		const study = startStudyAudio({ ...host, search: STUDY });
 		expect(study).not.toBeNull();

@@ -95,6 +95,7 @@ export interface StudyMemberDebug {
 	x: number;
 	y: number;
 	z: number;
+	yaw: number;
 	distance: number;
 	visible: boolean;
 }
@@ -1170,6 +1171,7 @@ export class StudyFaunaRuntime implements StudyFauna {
 				x: Number(a.x.toFixed(2)),
 				y: Number(a.y.toFixed(2)),
 				z: Number(a.z.toFixed(2)),
+				yaw: Number(a.yaw.toFixed(3)),
 				distance: Number(a.distance.toFixed(1)),
 				visible: a.visible
 			})),

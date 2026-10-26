@@ -25,7 +25,7 @@ import { ANIMAL_SPATIAL } from '../audio/bank.ts';
 import type { ExtraSound, GameAudio, LoopHandle, PlayOptions, Voice } from '../audio/engine.ts';
 import type { SurvivalWorld } from '../survival/types.ts';
 import { loadStudyCatalog, type StudyCatalog } from './data.ts';
-import { studyEnabled, studyUrl } from './gate.ts';
+import { type StudyContext, studyEnabled, studyUrl } from './gate.ts';
 import { riverDistanceField } from './herds.ts';
 
 export type StudyHour = 'day' | 'night';
@@ -130,6 +130,8 @@ export interface StudyAudioHost {
 	/** Our forest bed, muted while their beds play alone. */
 	ownBed?: LoopHandle | null;
 	search?: string;
+	/** The gate's context (tests); default: this page's. */
+	context?: StudyContext;
 	random?: () => number;
 	/** WebM/Opus playable (else the `.m4a` twins). Default: asked of an <audio> element. */
 	opus?: boolean;
@@ -152,13 +154,13 @@ export interface StudyAudioDebug {
 }
 
 /**
- * The study sounds, or null unless this is the dev server with
- * `?estudo=greenhell` (and not `&som=nosso`).
+ * The study sounds, or null unless the study gate is open (gate.ts: on by default
+ * on the dev server, `?estudo=off` closes it) and the mix is not `&som=nosso`.
  */
 export function startStudyAudio(host: StudyAudioHost): StudyAudioRuntime | null {
 	if (!import.meta.env.DEV) return null;
 	const search = host.search ?? currentSearch();
-	if (!studyEnabled(search) || studyMix(search) === 'ours') return null;
+	if (!studyEnabled(search, host.context) || studyMix(search) === 'ours') return null;
 	return new StudyAudioRuntime(host, search);
 }
 
