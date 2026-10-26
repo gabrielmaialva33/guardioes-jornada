@@ -43,7 +43,7 @@ try {
 	await page.keyboard.down('KeyD');
 	await page.waitForTimeout(120);
 	await page.keyboard.up('KeyD');
-	await page.screenshot({path:join(output,'water-stride.png')});
+	await page.screenshot({ path: join(output, 'water-stride.png') });
 	await open('mirante');
 	await page.keyboard.press('KeyE');
 	await page.waitForFunction(() => globalThis.__gameDebug?.().avatarContext?.gesture === 'binoculars');
@@ -63,7 +63,7 @@ try {
 	);
 	result.hair = await page.evaluate(() => globalThis.__gameDebug?.());
 	const hair = result.hair as { avatarContext: { hairPitch: number; hairAppliedPitch: number } };
-	assert.ok(Math.abs(hair.avatarContext.hairPitch-hair.avatarContext.hairAppliedPitch)<1e-9);
+	assert.ok(Math.abs(hair.avatarContext.hairPitch - hair.avatarContext.hairAppliedPitch) < 1e-9);
 	await page.screenshot({ path: join(output, 'hair-swing.png') });
 	const cdp = await context.newCDPSession(page);
 	await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
