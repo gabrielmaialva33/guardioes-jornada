@@ -247,6 +247,7 @@ async function settle(page: Page, pose: Pose, tier: Tier) {
 
 async function capture(page: Page, pose: Pose, tier: Tier, dir: string, errors: string[]) {
 	const counters = await settle(page, pose, tier);
+	if (errors.length) throw new Error(`pose ${pose.id}: browser errors: ${errors.join(' | ')}`);
 	if (hooked && counters.last.goldenReady !== true)
 		throw new Error(`pose ${pose.id}: runtime reset during capture`);
 	const png = join(dir, `${pose.id}.png`);

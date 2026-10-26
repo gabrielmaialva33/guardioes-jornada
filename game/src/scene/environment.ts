@@ -36,6 +36,7 @@ export interface SceneEnvironment {
 		signal: AbortSignal
 	): Promise<{
 		canopies?: CanopyVisibility;
+		stats?: () => { near: number; far: number; overlap: number; atlasTextures: number };
 		pools: PoolSet;
 		setQuality?: (quality: Quality) => void;
 		dispose(): void;

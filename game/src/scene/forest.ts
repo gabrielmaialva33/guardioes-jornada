@@ -35,7 +35,7 @@ export async function loadForest(
 	};
 
 	try {
-		const textures = new SharedModelTextures();
+		const textures = new SharedModelTextures({ 'foliage-atlas': 256 });
 		const loads = await Promise.allSettled(
 			FOREST_KINDS.map(async (name) => {
 				const model = await loadModel(customFiles[name], signal);

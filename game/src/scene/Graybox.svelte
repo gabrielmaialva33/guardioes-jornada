@@ -28,6 +28,8 @@
 		applyFog,
 		createHemisphere,
 		debugSnapshot,
+		collectTextures,
+		textureBytes,
 		dprLimit,
 		fogSettings,
 		lodProfilesFor,
@@ -192,6 +194,11 @@
 			...debugSnapshot(),
 			goldenReady,
 			visualTime,
+			textureBytes: (() => {
+				const textures = collectTextures(scene);
+				if (lighting.uShadeMap.value) textures.add(lighting.uShadeMap.value);
+				return textureBytes(textures);
+			})(),
 			worldKind: environment.kind,
 			testing,
 			simulationTime,
@@ -216,6 +223,7 @@
 			avatarAtlasSource: ATLAS_SOURCE,
 			proxyDraws: proxies.object.children.length,
 			floraDraws: forest?.pools.drawCalls ?? 0,
+			geometryLods: forest?.stats?.(),
 			cameraMode: controller.camera.mode,
 			cameraDistance: controller.frame.pose.distance,
 			canopiesFading: forest?.canopies?.fading ?? 0,
@@ -518,6 +526,7 @@
 	useTask(
 		() => {
 			lighting.uSunSpots.value = motion.matches ? 0 : 1;
+			lighting.uGameEye.value.copy(camera.position);
 			proxies.prepareFrame?.(
 				camera,
 				motion.matches ? 0 : visualTime,

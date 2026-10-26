@@ -55,6 +55,8 @@ try {
 		assert.equal(snapshot.quality, 'low');
 		assert.ok(maxDraws <= 150);
 		assert.ok(maxTriangles <= 200000);
+		assert.ok(states.every((s) => (s.textureBytes ?? 0) <= 4 * 1024 * 1024));
+		assert.ok(states.every((s) => (s.geometryLods?.overlap ?? 0) === 0));
 		assert.ok(maxP95 <= 33.3);
 		await page.screenshot({ path: join(output, `${pose}.png`) });
 		console.info(pose, JSON.stringify(result[pose]));

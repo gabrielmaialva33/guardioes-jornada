@@ -3,6 +3,7 @@ export interface GameDebug {
 	life?: LifeDebug;
 	goldenReady?: boolean;
 	visualTime?: number;
+	textureBytes?: number;
 	worldKind: string;
 	testing?: boolean;
 	simulationTime?: number;
@@ -25,6 +26,7 @@ export interface GameDebug {
 	avatarAtlasSource: string;
 	proxyDraws: number;
 	floraDraws: number;
+	geometryLods?: { near: number; far: number; overlap: number; atlasTextures: number };
 	floraInstances: number;
 	qualityReason: string;
 	shadowRenders: number;

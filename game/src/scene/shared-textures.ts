@@ -2,6 +2,10 @@
 import { type Group, Mesh, Texture } from 'three';
 export class SharedModelTextures {
 	readonly #atlases = new Map<string, Texture>();
+	constructor(readonly maxSizes: Readonly<Record<string, number>> = {}) {}
+	get count() {
+		return this.#atlases.size;
+	}
 	adopt(model: Group) {
 		model.traverse((node) => {
 			if (!(node instanceof Mesh)) return;
@@ -12,6 +16,30 @@ export class SharedModelTextures {
 				const key = `${texture.name}:${texture.flipY}:${texture.wrapS}:${texture.wrapT}`,
 					shared = this.#atlases.get(key);
 				if (!shared) {
+					const size = this.maxSizes[texture.name],
+						image = texture.image;
+					if (
+						size &&
+						typeof document !== 'undefined' &&
+						image &&
+						typeof image.width === 'number' &&
+						image.width > size
+					) {
+						const canvas = document.createElement('canvas');
+						canvas.width = canvas.height = size;
+						const context = canvas.getContext('2d');
+						if (
+							context &&
+							(image instanceof ImageBitmap ||
+								image instanceof HTMLImageElement ||
+								image instanceof HTMLCanvasElement)
+						) {
+							context.drawImage(image, 0, 0, size, size);
+							texture.image = canvas;
+							texture.needsUpdate = true;
+							if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) image.close();
+						}
+					}
 					this.#atlases.set(key, texture);
 					continue;
 				}
